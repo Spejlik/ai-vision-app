@@ -103,29 +103,31 @@ elif menu == "⚙️ Nastavení":
         
         # Rozdělíme obrazovku na dvě části
         col_foto, col_nastaveni = st.columns([3, 1])
-        
         with col_foto:
             st.write("### 🖱️ 1. Nakreslete oblast (ROI)")
-            # Tady kreslíš rámeček
-            roi_crop = st_cropper(img, realtime_update=True, box_color='#FF9800', aspect_ratio=None)
+            # PŘIDÁME: realtime_update=True a zachycení objektu
+            roi_obj = st_cropper(img, realtime_update=True, box_color='#FF9800', aspect_ratio=None, key="main_cropper")
             
         with col_nastaveni:
             st.write("### 📝 2. Uložte oblast")
-            # Náhled toho, co jsi vyřízl
-            st.image(roi_crop, use_container_width=True, caption="Náhled")
+            st.image(roi_obj, use_container_width=True, caption="Náhled")
+            new_roi_name = st.text_input("Název inspekce", placeholder="např. ot2", key="roi_name_input")
             
-            # Pole pro název
-            new_roi_name = st.text_input("Název inspekce", placeholder="např. količek P1")
-            
-            # --- TADY JE TO CHYBĚJÍCÍ TLAČÍTKO ---
             if st.button("➕ PŘIDAT INSPEKCI", use_container_width=True, type="primary"):
-                if new_roi_name:
-                    # Uložíme do databáze (souřadnice x,y,w,h získáme z cropperu)
-                    database.save_roi_template(produkt, new_roi_name, 0, 0, 100, 100)
-                    st.success(f"Uloženo: {new_roi_name}")
-                    st.rerun() # Stránka se obnoví a můžeš přidat další
+                # ZÍSKÁNÍ SOUŘADNIC: st_cropper ukládá data do session_state pod klíčem 'main_cropper'
+                if 'main_cropper' in st.session_state and st.session_state['main_cropper']:
+                    coords = st.session_state['main_cropper']['coords']
+                    x, y, w, h = coords['left'], coords['top'], coords['width'], coords['height']
+                    
+                    if new_roi_name:
+                        # Uložení skutečných souřadnic z obrázku image_d448f2.jpg
+                        database.save_roi_template(produkt, new_roi_name, x, y, w, h)
+                        st.success(f"Zóna {new_roi_name} byla úspěšně přidána!")
+                        st.rerun()
+                    else:
+                        st.error("Chybí název inspekce!")
                 else:
-                    st.error("Napište název!")
+                    st.error("Nepodařilo se načíst souřadnice z ořezu.")
 
     # 3. Seznam už uložených věcí
     st.divider()
