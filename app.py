@@ -96,20 +96,20 @@ if menu == "🏠 Monitor":
 
         st.divider()
 
-        # TLAČÍTKO START (Raketa), které jsi postrádal
+        # TLAČÍTKO START (Raketa)
         if mode == "MANUAL":
-            st.markdown("### 🎮 OVLÁDÁNÍ")
+            st.markdown("---")
             if st.button("🚀 START INSPEKCE", use_container_width=True, type="primary"):
                 import time
-                # Vytvoříme unikátní ID cyklu (tečku nahoře)
+                # Vygenerujeme unikátní ID cyklu pro jednu tečku
                 current_cycle = str(int(time.time()))
                 
-                # Definuj, co všechno se má v jednom cyklu zkontrolovat
+                # Seznam bodů, které se mají zkontrolovat
                 seznam_roi = ["Odtok A", "Zebro B", "Domecek C", "Kolicek D"]
                 
                 for name in seznam_roi:
                     conf, stat, _ = logic.get_ai_prediction(name)
-                    # Uložíme s cycle_id, aby se nahoře objevila jen JEDNA tečka
+                    # Ukládáme s cycle_id
                     database.save_result(current_cycle, "MQB L", name, conf, stat, f"img/guma_{stat.lower()}.jpg")
                 
                 st.rerun()

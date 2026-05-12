@@ -40,3 +40,13 @@ def get_last_cycles(limit=15):
     data = c.fetchall()
     conn.close()
     return data
+    
+def get_history(limit=8):
+    """Tato funkce vrací jednotlivé ROI karty (to, co ti teď hází chybu)"""
+    conn = sqlite3.connect('inspections.db')
+    c = conn.cursor()
+    # Seřadíme podle ID sestupně, abychom viděli nejnovější výsledky
+    c.execute("SELECT * FROM results ORDER BY id DESC LIMIT ?", (limit,))
+    data = c.fetchall()
+    conn.close()
+    return data    
