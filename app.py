@@ -68,10 +68,25 @@ if menu == "🏠 Monitor":
         if mode == "MANUAL":
             st.write("")
             if st.button("🚀 START INSPEKCE", use_container_width=True, type="primary"):
-                current_cycle = str(int(time.time()))
-                for name in ["Kolicek D", "Domecek C", "Zebro B", "Odtok A"]:
-                    conf, stat, _ = logic.get_ai_prediction(name)
-                    database.save_result(current_cycle, "MQB L", name, conf, stat, f"img/guma_{stat.lower()}.jpg")
+            current_cycle = str(int(time.time()))
+            
+            # 1. TADY JE TA ZMĚNA: Načteme si šablony, které jsi nakreslil v nastavení
+            # "MQB L" musí odpovídat názvu produktu v nastavení
+            templates = database.get_roi_templates("MQB Skříň ventilátoru L")
+            
+            if not templates:
+                st.error("❌ Nejdříve nastavte ROI zóny v sekci Nastavení!")
+            else:
+                for t in templates:
+                    # t[2] je název ROI (třeba 'Zebro_P1'), t[3]-t[6] jsou souřadnice
+                    roi_name = t[2]
+                    
+                    # 2. Spustíme AI predikci pro konkrétní ROI
+                    conf, stat, _ = logic.get_ai_prediction(roi_name)
+                    
+                    # 3. Uložíme výsledek
+                    database.save_result(current_cycle, "MQB L", roi_name, conf, stat, f"img/guma_{stat.lower()}.jpg")
+                
                 st.rerun()
 
 elif menu == "🧠 Učení a Trénink":
