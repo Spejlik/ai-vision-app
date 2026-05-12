@@ -1,55 +1,41 @@
 import streamlit as st
 
-import streamlit as st
-
 def apply_custom_css():
     st.markdown("""
         <style>
-        /* 1. TOTÁLNÍ ZÁKAZ SCROLLU A ROZTAŽENÍ */
+        /* 1. ZÁKAZ SCROLLU A PEVNÁ VÝŠKA */
         html, body, [data-testid="stAppViewContainer"] {
             overflow: hidden !important;
             height: 100vh !important;
+            background-color: #f0f2f6; /* Světle šedé průmyslové pozadí */
         }
         
-        /* Úprava hlavního kontejneru, aby vyplnil obrazovku bez mezer */
         .main .block-container {
-            padding-top: 1.5rem !important;
-            padding-bottom: 0rem !important;
+            padding-top: 1rem !important;
             max-width: 98% !important;
         }
 
-        /* 2. VIDITELNOST TEXTU V SIDEBARU */
+        /* 2. SIDEBAR - Tmavě modrý (profesionální kontrast) */
         [data-testid="stSidebar"] {
-            background-color: #1A1C24 !important;
-        }
-        /* Vynucení bílé barvy pro popisky (Uživatel, PIN, Navigace) */
-        [data-testid="stSidebar"] label p, [data-testid="stSidebar"] stMarkdown p {
+            background-color: #1e293b !important;
             color: white !important;
-            font-weight: bold !important;
-            font-size: 16px !important;
         }
-        /* Barva textu v menu navigace */
-        [data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {
+        [data-testid="stSidebar"] * {
             color: white !important;
         }
 
-        /* 3. HORNÍ LIŠTA - AUTO/MANUAL TEXT */
-        /* Oprava pro radio buttony, aby byly jasně vidět */
-        [data-testid="stHorizontalBlock"] label p {
-            color: #38bdf8 !important; /* Světle modrá pro lepší kontrast */
-            font-size: 18px !important;
-            font-weight: bold !important;
+        /* 3. KARTY ROI - Světlé s výrazným okrajem */
+        .roi-card {
+            background-color: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
         
-        /* 4. ÚPRAVA INPUTŮ (aby nebyly zářivě bílé, ale čitelné) */
-        input {
-            background-color: #262730 !important;
-            color: white !important;
-            border: 1px solid #38bdf844 !important;
-        }
-
-        /* Skrytí nuly/titulků u obrázků */
-        [data-testid="stImageCaption"] { display: none !important; }
+        /* 4. SKRYTÍ DEPLOY TLAČÍTKA A MENU */
+        #MainMenu, footer, header {visibility: hidden;}
         </style>
     """, unsafe_allow_html=True)
 
