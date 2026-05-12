@@ -17,21 +17,27 @@ with st.sidebar:
     menu = st.radio("Navigace", ["🏠 Hlavní obrazovka", "📊 Statistiky", "⚙️ Nastavení"])
 
 # --- HORNÍ LIŠTA (Header) ---
-head_col1, head_col2, head_col3 = st.columns([3, 2, 2])
+# Změna poměru sloupců: víc místa pro název (5), méně pro zbytek
+head_col1, head_col2, head_col3 = st.columns([5, 2, 2])
+
 with head_col1:
-    st.markdown(f"## 🛠️ MQB Skříň ventilátoru L")
+    st.markdown(f"<h1 style='margin:0;'>🛠️ MQB Skříň ventilátoru L</h1>", unsafe_allow_html=True)
+
 with head_col2:
-    # Přepínač AUTO/MANUAL
-    mode = st.segmented_control(
-        "Režim stroje", ["AUTO", "MANUAL"], default="MANUAL"
+    # Použijeme horizontální radio, které je v CSS lépe ovladatelné
+    mode = st.radio(
+        "Režim stroje", 
+        ["AUTO", "MANUAL"], 
+        horizontal=True, 
+        label_visibility="collapsed" # Schováme popisek, aby nezabíral místo
     )
+
 with head_col3:
-    # Grafické znázornění posledních kontrol (indikátory nahoře)
-    history = database.get_history(limit=20)
+    # Indikátory v jedné řadě bez zalamování
+    history = database.get_history(limit=15)
     if history:
-        # Vytvoříme řadu malých barevných čtverečků
         circles = "".join(["🟢" if r[4] == "OK" else "🔴" for r in history])
-        st.markdown(f"**Poslední výsledky:**\n\n{circles}")
+        st.markdown(f"<div style='font-size:20px; text-align:right;'>{circles}</div>", unsafe_allow_html=True)
 
 st.divider()
 

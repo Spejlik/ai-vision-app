@@ -8,6 +8,23 @@ def apply_custom_css():
         header { visibility: hidden; }
         footer { visibility: hidden; }
         
+        /* Oprava textu v segmented_control (přepínač AUTO/MANUAL) */
+        div[data-testid="stBaseButton-segmented_control"] p {
+            color: white !important;
+        }
+        
+        /* Odstranění okrajů a scrollbarů pro čistý vzhled */
+        .main .block-container {
+            padding-top: 2rem !important;
+            padding-bottom: 0rem !important;
+            max-width: 95% !important;
+        }
+
+        /* Zákaz rolování v aplikaci pro "kiosk" vzhled */
+        body {
+            overflow: hidden;
+        }
+        
         /* Hlavní barvy - Dark Mode */
         .stApp {
             background-color: #0E1117;
