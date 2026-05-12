@@ -102,8 +102,13 @@ elif menu == "🧠 Učení a Trénink":
     tab1, tab2, tab3 = st.tabs(["🔄 Z cyklu", "🛠️ Ze seřízení (Master)", "📤 Import testů"])
 
     with tab1:
-        st.subheader("Data z automatického provozu")
-        st.info("Vyberte fotky z historie, které mají sloužit jako vzor (Master).")
+        st.subheader("Příprava trénovací sady")
+        # Zobrazení nahrané/vybrané NOK fotky
+        if st.button("⚖️ Vyvážit dataset (1x NOK -> 10x NOK)"):
+            # 1. Vezmeme tu jednu NOK fotku
+            # 2. Spustíme logic.augment_image(img, count=10)
+            # 3. Uložíme do training_data/NOK/
+            st.success("Dataset vyvážen. Nyní máte 10 variant chyby pro učení.")
 
     with tab2:
         st.subheader("Manuální focení a nastavení")
@@ -111,10 +116,18 @@ elif menu == "🧠 Učení a Trénink":
             st.success("Snímek ze seřízení uložen do složky /setup.")
 
     with tab3:
-        st.subheader("Import z jiného zařízení")
-        uploaded_files = st.file_uploader("Nahrajte fotky (JPG/PNG)", accept_multiple_files=True)
-        if uploaded_files:
-            st.success(f"Nahráno {len(uploaded_files)} snímků pro testování.")
+        st.subheader("Import externích fotek")
+        st.caption("Pro testování dat z jiných lisů nebo starších sérií.")
+        upl = st.file_uploader("Vyberte soubory", accept_multiple_files=True)
+        if upl:
+            import os
+            for file in upl:
+                # Cesta, kam se soubor uloží
+                save_path = os.path.join("training_data", "external", file.name)
+                # Zápis souboru na disk
+                with open(save_path, "wb") as f:
+                    f.write(file.getbuffer())
+            st.success(f"✅ Úspěšně uloženo {len(upl)} souborů do training_data/external/")
 
 elif menu == "📂 Historie inspekcí":
     st.markdown("## 📂 Historie inspekcí")

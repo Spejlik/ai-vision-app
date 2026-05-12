@@ -32,3 +32,18 @@ def get_real_image_base64(name, status):
         with open(path, "rb") as f:
             return base64.b64encode(f.read()).decode()
     return ""
+    
+def augment_image(image, count=10):
+    """Vytvoří 'count' variant obrázku pro trénování."""
+    variants = []
+    for _ in range(count):
+        # Náhodná změna jasu
+        brightness = np.random.uniform(0.9, 1.1)
+        aug_img = cv2.convertScaleAbs(image, alpha=brightness, beta=0)
+        
+        # Náhodný drobný posun
+        M = np.float32([[1, 0, np.random.randint(-2, 2)], [0, 1, np.random.randint(-2, 2)]])
+        aug_img = cv2.warpAffine(aug_img, M, (image.shape[1], image.shape[2]))
+        
+        variants.append(aug_img)
+    return variants    
