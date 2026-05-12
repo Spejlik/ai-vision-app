@@ -1,66 +1,39 @@
 import streamlit as st
-import styles
-import logic
-import database
+import styles, logic, database
 
 st.set_page_config(page_title="AI Vision Hunter", layout="wide")
 database.init_db()
 styles.apply_custom_css()
 
-# SIDEBAR
 with st.sidebar:
-    st.markdown("<h2 style='text-align:center;'>👁️ AI Vision</h2>", unsafe_allow_html=True)
-    st.divider()
+    st.markdown("## 👁️ AI Vision")
     menu = st.radio("Navigace", ["📷 Monitor", "📂 Historie"])
-    st.divider()
     projekt = st.selectbox("Produkt", ["361 MEB Housing"])
 
-# OBSAH
 if menu == "📷 Monitor":
     col_main, col_status = st.columns([4, 1.2])
-
     with col_main:
-        st.write(f"### Aktivní projekt: {projekt}")
-        
+        st.write(f"### Projekt: {projekt}")
         if st.button("🚀 Spustit novou kontrolu"):
-            rois = ["Konektor", "Zobáček P1", "Zobáček P2", "Zámek"]
-            for name in rois:
+            for name in ["Konektor", "Zobáček P1", "Zobáček P2", "Zámek"]:
                 conf, status, color = logic.get_ai_prediction(name)
-                # Uložíme cestu (v DB necháme cestu, v náhledu base64)
-                img_path = f"img/{name}_{status}.jpg" # zjednodušeno pro DB
+                img_path = f"img/guma_{status.lower()}.jpg"
                 database.save_result(projekt, name, conf, status, img_path)
             st.rerun()
 
-        # ZOBRAZENÍ KARET
         cols = st.columns(4)
         history = database.get_history(limit=4)
         if history:
-    for i, record in enumerate(reversed(history)):
-        with cols[i % 4]:
-            # Získáme base64 data
-            b64_img = logic.get_real_image_base64(record[2], record[4])
-            color = "#44ff44" if record[4] == "OK" else "#ff4444"
-            
-            # Pokud b64_img není prázdný, vykreslíme kartu přes tvou HTML funkci
-            if b64_img:
-                styles.draw_roi_card(record[2], record[3], record[4], color, b64_img)
-            else:
-                st.error(f"Chybí foto: {record[2]}")
+            for i, record in enumerate(reversed(history)):
+                with cols[i % 4]:
+                    b64 = logic.get_real_image_base64(record[2], record[4])
+                    color = "#44ff44" if record[4] == "OK" else "#ff4444"
+                    styles.draw_roi_card(record[2], record[3], record[4], color, b64)
+        else:
+            st.info("Spusťte kontrolu raketou.")
 
     with col_status:
-        st.markdown(f"""
-            <div style="background-color: #1A1C24; padding: 20px; border-radius: 12px; border-left: 4px solid #38bdf8; margin-top: 50px;">
-                <h4 style="margin-top:0;">🔄 Průběh cyklu</h4>
-                <p>✅ <b>Pozice 1</b>: OK</p>
-                <p style="color:#38bdf8;">🔵 <b>Pozice 2</b>: Active</p>
-                <div style="background-color:#000; border-radius:10px; height:8px; width:100%;">
-                    <div style="background-color:#38bdf8; width:65%; height:8px; border-radius:10px;"></div>
-                </div>
-                <hr style="opacity:0.1;">
-                <small>Cycle Time</small><br><b>4.2s</b>
-            </div>
-        """, unsafe_allow_html=True)
-
+        st.markdown('<div style="background:#1A1C24;padding:20px;border-radius:12px;border-left:4px solid #38bdf8;margin-top:50px;"><h4>🔄 Průběh</h4><p>✅ Pozice 1</p><p style="color:#38bdf8;">🔵 Pozice 2</p><div style="background:#000;height:8px;width:100%;border-radius:10px;"><div style="background:#38bdf8;width:65%;height:8px;border-radius:10px;"></div></div><hr style="opacity:0.1;"><b>Cycle: 4.2s</b></div>', unsafe_allow_html=True)
 else:
     st.write("### 📂 Historie")
-    # Zde můžete nechat tabulku nebo upravit náhledy
+    st.table(database.get_history(limit=20))
