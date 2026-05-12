@@ -1,53 +1,55 @@
 import streamlit as st
 
+import streamlit as st
+
 def apply_custom_css():
-    # POUŽÍVÁME ČISTÝ STRING (bez f na začátku), aby Python neřešil složené závorky {}
     st.markdown("""
         <style>
-        /* Skrytí systémových prvků */
-        header { visibility: hidden; }
-        footer { visibility: hidden; }
-        
-        /* Oprava textu v segmented_control (přepínač AUTO/MANUAL) */
-        div[data-testid="stBaseButton-segmented_control"] p {
-            color: white !important;
+        /* 1. TOTÁLNÍ ZÁKAZ SCROLLU A ROZTAŽENÍ */
+        html, body, [data-testid="stAppViewContainer"] {
+            overflow: hidden !important;
+            height: 100vh !important;
         }
         
-        /* Odstranění okrajů a scrollbarů pro čistý vzhled */
+        /* Úprava hlavního kontejneru, aby vyplnil obrazovku bez mezer */
         .main .block-container {
-            padding-top: 2rem !important;
+            padding-top: 1.5rem !important;
             padding-bottom: 0rem !important;
-            max-width: 95% !important;
+            max-width: 98% !important;
         }
 
-        /* Zákaz rolování v aplikaci pro "kiosk" vzhled */
-        body {
-            overflow: hidden;
-        }
-        
-        /* Hlavní barvy - Dark Mode */
-        .stApp {
-            background-color: #0E1117;
-            color: #FFFFFF;
-        }
-
-        /* Sidebar styling */
-        section[data-testid="stSidebar"] {
+        /* 2. VIDITELNOST TEXTU V SIDEBARU */
+        [data-testid="stSidebar"] {
             background-color: #1A1C24 !important;
         }
-        section[data-testid="stSidebar"] * {
-            color: #FFFFFF !important;
+        /* Vynucení bílé barvy pro popisky (Uživatel, PIN, Navigace) */
+        [data-testid="stSidebar"] label p, [data-testid="stSidebar"] stMarkdown p {
+            color: white !important;
+            font-weight: bold !important;
+            font-size: 16px !important;
+        }
+        /* Barva textu v menu navigace */
+        [data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {
+            color: white !important;
         }
 
-        /* Karty ROI */
-        .roi-card {
-            background-color: #1A1C24;
-            border: 1px solid #38bdf844;
-            border-radius: 12px;
-            padding: 15px;
-            text-align: center;
-            margin-bottom: 10px;
+        /* 3. HORNÍ LIŠTA - AUTO/MANUAL TEXT */
+        /* Oprava pro radio buttony, aby byly jasně vidět */
+        [data-testid="stHorizontalBlock"] label p {
+            color: #38bdf8 !important; /* Světle modrá pro lepší kontrast */
+            font-size: 18px !important;
+            font-weight: bold !important;
         }
+        
+        /* 4. ÚPRAVA INPUTŮ (aby nebyly zářivě bílé, ale čitelné) */
+        input {
+            background-color: #262730 !important;
+            color: white !important;
+            border: 1px solid #38bdf844 !important;
+        }
+
+        /* Skrytí nuly/titulků u obrázků */
+        [data-testid="stImageCaption"] { display: none !important; }
         </style>
     """, unsafe_allow_html=True)
 

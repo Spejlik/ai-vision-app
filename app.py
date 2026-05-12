@@ -32,12 +32,18 @@ with head_col2:
         label_visibility="collapsed" # Schováme popisek, aby nezabíral místo
     )
 
-with head_col3:
-    # Indikátory v jedné řadě bez zalamování
-    history = database.get_history(limit=15)
-    if history:
-        circles = "".join(["🟢" if r[4] == "OK" else "🔴" for r in history])
-        st.markdown(f"<div style='font-size:20px; text-align:right;'>{circles}</div>", unsafe_allow_html=True)
+with head_col1:
+    # Použijeme h2 místo h1 a zakážeme zalomení (white-space: nowrap)
+    st.markdown("<h2 style='margin:0; white-space: nowrap;'>🛠️ MQB Skříň ventilátoru L</h2>", unsafe_allow_html=True)
+
+# U přepínače AUTO/MANUAL v head_col2:
+with head_col2:
+    mode = st.radio(
+        "Režim", # Krátký popisek
+        ["AUTO", "MANUAL"], 
+        horizontal=True,
+        label_visibility="collapsed" # Tohle uvolní místo
+    )
 
 st.divider()
 
