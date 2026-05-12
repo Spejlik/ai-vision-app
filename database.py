@@ -91,13 +91,12 @@ def save_roi_template(product_name, roi_name, x, y, w, h):
     conn.close()
 
 def get_roi_templates(product_name):
-    """Vrátí seznam všech definovaných ROI pro daný produkt"""
     conn = sqlite3.connect('inspections.db')
     c = conn.cursor()
     c.execute("SELECT * FROM roi_templates WHERE product_name = ?", (product_name,))
-    data = c.fetchall()
+    rows = c.fetchall()
     conn.close()
-    return data
+    return rows
 
 def delete_roi_template(roi_id):
     """Smaže konkrétní ROI šablonu z databáze"""

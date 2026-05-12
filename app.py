@@ -128,7 +128,25 @@ elif menu == "⚙️ Nastavení":
                         st.error("Chybí název inspekce!")
                 else:
                     st.error("Nepodařilo se načíst souřadnice z ořezu.")
-
+                    st.divider()
+    st.subheader(f"📋 Aktivní kontroly pro: {produkt}")
+    
+    # 1. Načteme uložené šablony z databáze
+    current_templates = database.get_roi_templates(produkt)
+    
+    if current_templates:
+        # 2. Vykreslíme každou šablonu jako řádek v seznamu
+        for t in current_templates:
+            # t[0]=id, t[1]=produkt, t[2]=název, t[3-6]=x,y,w,h
+            with st.container():
+                c1, c2, c3 = st.columns([3, 2, 1])
+                c1.write(f"🟢 **{t[2]}**") # Název ROI
+                c2.write(f"Pozice: {t[3]},{t[4]} | Rozměr: {t[5]}x{t[6]}")
+                if c3.button("🗑️ Smazat", key=f"del_{t[0]}"):
+                    database.delete_roi_template(t[0])
+                    st.rerun()
+    else:
+        st.info("Zatím zde nejsou žádné definované kontroly. Použijte tlačítko PŘIDAT INSPEKCI výše.")
     # 3. Seznam už uložených věcí
     st.divider()
     st.subheader("📋 Aktivní kontroly v projektu")
