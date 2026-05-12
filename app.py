@@ -68,24 +68,24 @@ if menu == "🏠 Monitor":
         if mode == "MANUAL":
             st.write("")
             if st.button("🚀 START INSPEKCE", use_container_width=True, type="primary"):
-            current_cycle = str(int(time.time()))
+                current_cycle = str(int(time.time()))
             
-            # 1. TADY JE TA ZMĚNA: Načteme si šablony, které jsi nakreslil v nastavení
-            # "MQB L" musí odpovídat názvu produktu v nastavení
-            templates = database.get_roi_templates("MQB Skříň ventilátoru L")
+                # 1. TADY JE TA ZMĚNA: Načteme si šablony, které jsi nakreslil v nastavení
+                # "MQB L" musí odpovídat názvu produktu v nastavení
+                templates = database.get_roi_templates("MQB Skříň ventilátoru L")
             
-            if not templates:
-                st.error("❌ Nejdříve nastavte ROI zóny v sekci Nastavení!")
-            else:
-                for t in templates:
-                    # t[2] je název ROI (třeba 'Zebro_P1'), t[3]-t[6] jsou souřadnice
-                    roi_name = t[2]
+                if not templates:
+                    st.error("❌ Nejdříve nastavte ROI zóny v sekci Nastavení!")
+                else:
+                    for t in templates:
+                        # t[2] je název ROI (třeba 'Zebro_P1'), t[3]-t[6] jsou souřadnice
+                        roi_name = t[2]
                     
-                    # 2. Spustíme AI predikci pro konkrétní ROI
-                    conf, stat, _ = logic.get_ai_prediction(roi_name)
+                        # 2. Spustíme AI predikci pro konkrétní ROI
+                        conf, stat, _ = logic.get_ai_prediction(roi_name)
                     
-                    # 3. Uložíme výsledek
-                    database.save_result(current_cycle, "MQB L", roi_name, conf, stat, f"img/guma_{stat.lower()}.jpg")
+                        # 3. Uložíme výsledek
+                        database.save_result(current_cycle, "MQB L", roi_name, conf, stat, f"img/guma_{stat.lower()}.jpg")
                 
                 st.rerun()
 
@@ -145,25 +145,79 @@ elif menu == "📂 Historie inspekcí":
     # Zde kód pro historii...
 
 elif menu == "⚙️ Nastavení":
-    st.title("⚙️ Konfigurace inspekcí")
-    produkt = st.selectbox("Produkt", ["MQB Skříň ventilátoru L", "Octavia III - Kryt"])
-    master_file = st.file_uploader("Nahrajte Master snímek", type=["jpg", "png"])
-    if master_file:
-        img_m = Image.open(master_file)
-        c1, c2 = st.columns([3, 1])
-        with c1:
-            roi_crop = st_cropper(img_m, box_color='#FF9800')
-        with c2:
-            new_name = st.text_input("Název nové inspekce")
-            if st.button("➕ PŘIDAT INSPEKCI"):
-                database.save_roi_template(produkt, new_name, 0, 0, roi_crop.width, roi_crop.height)
-                st.success("Uloženo.")
+    st.title("⚙️ Konfigurátor inspekcí")
+    
+    # 1. Výběr produktu (Název projektu)
+    projekt = st.selectbox("Vyberte projekt (produkt)", 
+                           ["MQB Skříň ventilátoru L", "Octavia III - Kryt"], 
+                           key="cfg_prod")
     
     st.divider()
-    templates = database.get_roi_templates(produkt)
+    
+    # 2. Definiční zóna (Master fotka a Cropper)
+    st.subheader("🖼️ Definice šablon (Master snímek)")
+    master_file = st.file_uploader("Nahrajte Master snímek z kamery", type=["jpg", "jpeg", "png"], key="cfg_master")
+    
+    # Lokální proměnná, do které uložíme souřadnice z cropperu
+    box_data = None
+
+    if master_file:
+        img_master = Image.open(master_file)
+        
+        c1, c2 = st.columns([3, 1])
+        
+        with c1:
+            st.info("🖱️ Nakreslete na fotce oblast zájmu (ROI).")
+            # --- ZDE JE TEN ROZDÍL ---
+            # realtime_update=False zajistí, že se data z cropperu neposílají při každém pixelu, ale až při uložení
+            roi_crop = st_cropper(img_master, realtime_update=False, box_color='#FF9800', aspect_ratio=None, key="cfg_cropper")
+            
+            # Stáhneme data o pozici boxu
+            if hasattr(st.session_state, 'cfg_cropper') and st.session_state.cfg_cropper:
+                box_data = st.session_state.cfg_cropper['coords']
+
+        with c2:
+            st.write("### ➕ Přidat novou ROI")
+            # Náhled ořezu
+            st.image(roi_crop, use_container_width=True, caption="Náhled ořezu")
+            
+            # Formulář pro uložení
+            new_roi_name = st.text_input("Název této inspekce", placeholder="např. Kontrola_količka", key="cfg_new_name")
+            
+            if st.button("➕ PŘIDAT INSPEKCI", use_container_width=True, type="primary"):
+                # Kontrola dat
+                if not box_data or not new_roi_name:
+                    st.error("❌ Musíte nakreslit ROI a zadat název!")
+                else:
+                    # Uložíme šablonu (předpis) do DB
+                    database.save_roi_template(
+                        projekt, 
+                        new_roi_name, 
+                        box_data['left'], 
+                        box_data['top'], 
+                        box_data['width'], 
+                        box_data['height']
+                    )
+                    st.success(f"Inspekce '{new_roi_name}' byla uložena do šablony.")
+                    st.toast(f"Propsáno do databáze ✅")
+                    # Po uložení stránku obnovíme, aby se ROI ukázala v seznamu níže
+                    st.rerun()
+
+    # 3. Seznam existujících inspekcí (Vizuální potvrzení)
+    st.divider()
+    st.subheader(f"📋 Aktivní inspekce pro: `{projekt}`")
+    
+    # Načteme šablony z DB
+    templates = database.get_roi_templates(projekt)
+    
     if templates:
         for t in templates:
-            with st.expander(f"🟢 {t[2]}"):
-                if st.button("🗑️ Smazat", key=f"del_{t[0]}"):
+            # t[0]=id, t[2]=název, t[3-6]=x,y,w,h
+            with st.expander(f"🟢 {t[2]} (Pozice: {t[3]}, {t[4]})"):
+                col_a, col_b = st.columns([3, 1])
+                col_a.write(f"Rozměry: **{t[5]}x{t[6]}** px")
+                if col_b.button("🗑️ Smazat", key=f"del_{t[0]}"):
                     database.delete_roi_template(t[0])
                     st.rerun()
+    else:
+        st.info("Zatím nejsou definovány žádné ROI zóny. Nakreslete je na Master snímku výše.")
