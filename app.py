@@ -104,45 +104,93 @@ elif menu == "🧠 Učení a Trénink":
         else:
             st.warning("Nejdříve vytvořte ROI v sekci Nastavení, aby AI věděla, co má učit.")
 
-# --- 3. NASTAVENÍ (KONFIGURÁTOR) ---
 elif menu == "⚙️ Nastavení":
     st.title("⚙️ Konfigurace projektu")
-    produkt = st.selectbox("Produkt", ["MQB Skříň ventilátoru L", "Octavia III - Kryt"])
     
-    master_file = st.file_uploader("Nahrajte Master snímek", type=["jpg", "png"])
+    # Výběr produktu
+    produkt = st.selectbox("Aktivní produkt", ["MQB Skříň ventilátoru L", "Octavia III - Kryt"])
+    
+    st.divider()
+    
+    # Nahrání Master snímku
+    master_file = st.file_uploader("Nahrajte Master snímek z kamery", type=["jpg", "png"], key="master_upl")
     
     if master_file:
-        img = Image.open(master_file)
-        c_foto, c_form = st.columns([3, 1])
+        img_pil = Image.open(master_file)
+        # Převedeme na OpenCV formát pro kreslení
+        import cv2
+        import numpy as np
+        img_cv = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
         
-        with c_foto:
-            st.write("### 🖱️ 1. Nakreslete oblast")
-            # Důležité: key="main_cropper" pro session_state
-            roi_obj = st_cropper(img, realtime_update=True, box_color='#FF9800', key="main_cropper")
+        # Načteme už uložené ROI z databáze
+        templates = database.get_roi_templates(produkt)
+        
+        # --- KRESLENÍ VŠECH ULOŽENÝCH ROI (PRO PŘEHLED) ---
+        if templates:
+            for t in templates:
+                # t[3-6] jsou x, y, w, h
+                x, y, w, h = t[3], t[4], t[5], t[6]
+                # Nakreslíme červený obdélník přímo do OpenCV obrázku
+                cv2.rectangle(img_cv, (x, y), (x + w, y + h), (0, 0, 255), 3)
+                # Přidáme název ROI
+                cv2.putText(img_cv, t[2], (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+        
+        # Převedeme zpět na PIL pro zobrazení ve Streamlitu
+        img_overview_pil = Image.fromarray(cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB))
+        
+        # Rozhraní: Levý sloupec (Přehled), Pravý sloupec (Editor)
+        col_view, col_edit = st.columns([2, 1])
+        
+        with col_view:
+            st.write("### 🗺️ Přehled všech aktivních ROI")
+            # Zobrazíme obrázek se všemi nakreslenými ROI
+            st.image(img_overview_pil, use_container_width=True)
             
-        with c_form:
-            st.write("### 📝 2. Uložte")
-            st.image(roi_obj, use_container_width=True)
-            name = st.text_input("Název (např. klapka_1)")
+        with col_edit:
+            st.write("### ➕ Přidat/Editovat")
             
-            if st.button("➕ PŘIDAT INSPEKCI", use_container_width=True, type="primary"):
-                if name and 'main_cropper' in st.session_state:
-                    box = st.session_state['main_cropper']['coords']
-                    database.save_roi_template(produkt, name, box['left'], box['top'], box['width'], box['height'])
-                    st.success("ROI uložena!")
+            # Tlačítko pro spuštění editoru
+            if st.button("➕ Kreslit novou oblast", use_container_width=True):
+                st.session_state.show_editor = True
+            
+            if st.session_state.get('show_editor', False):
+                st.info("🖱️ Nakresli novou oblast na master snímku.")
+                # TADY je ten samostatný st_cropper pro kreslení
+                roi_crop = st_cropper(img_pil, realtime_update=True, box_color='#FF9800', aspect_ratio=None, key="new_roi_cropper")
+                
+                name = st.text_input("Název nové inspekce", placeholder="klapka_P1", key="new_roi_name")
+                
+                # Uložíme souřadnice ze st_cropperu do session_state
+                if 'new_roi_cropper' in st.session_state:
+                    coords = st.session_state['new_roi_cropper']['coords']
+                    
+                    if st.button("💾 ULOŽIT NOVOU OBLAST", use_container_width=True, type="primary"):
+                        if name:
+                            # Uložíme skutečné souřadnice (x, y, w, h) do DB
+                            database.save_roi_template(produkt, name, coords['left'], coords['top'], coords['width'], coords['height'])
+                            st.success(f"Zóna {name} byla přidána do projektu.")
+                            # Vyčistíme editor a obnovíme stránku
+                            st.session_state.show_editor = False
+                            st.rerun()
+                        else:
+                            st.error("Zadejte název!")
+                
+                if st.button("❌ Zrušit", use_container_width=True):
+                    st.session_state.show_editor = False
                     st.rerun()
 
-    # VÝPIS SEZNAMU (To, co ti chybělo)
+    # --- SEZNAM ROI POD ČAROU ---
     st.divider()
-    st.subheader("📋 Aktivní kontroly v tomto projektu")
-    templates = database.get_roi_templates(produkt)
-    if templates:
-        for t in templates:
-            with st.expander(f"🔍 {t[2]}"):
-                col1, col2 = st.columns([3, 1])
-                col1.write(f"Pozice: {t[3]},{t[4]} | Velikost: {t[5]}x{t[6]}px")
-                if col2.button("🗑️ Smazat", key=f"del_{t[0]}"):
-                    database.delete_roi_template(t[0])
+    st.subheader(f"📋 Seznam definovaných ROI pro: {produkt}")
+    current_rois = database.get_roi_templates(produkt)
+    
+    if current_rois:
+        for r in current_rois:
+            with st.expander(f"🟢 {r[2]}"):
+                c1, c2 = st.columns([3, 1])
+                c1.write(f"Pozice: {r[3]},{r[4]} | Rozměr: {r[5]}x{r[6]}")
+                if c2.button("🗑️ Smazat", key=f"del_{r[0]}"):
+                    database.delete_roi_template(r[0])
                     st.rerun()
     else:
         st.info("Zatím žádné ROI.")
