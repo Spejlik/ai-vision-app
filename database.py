@@ -4,16 +4,26 @@ import time
 def init_db():
     conn = sqlite3.connect('inspections.db')
     c = conn.cursor()
-    # Tabulka musí mít sloupec cycle_id
+    
+    # 1. Tabulka pro výsledky (tu už tam máš)
     c.execute('''CREATE TABLE IF NOT EXISTS results
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  timestamp TEXT,
+                  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                   cycle_id TEXT,
                   part_name TEXT,
                   roi_name TEXT,
                   confidence REAL,
                   status TEXT,
                   image_path TEXT)''')
+
+    # 2. NOVÁ TABULKA pro šablony ROI (tohle tam přidej)
+    # Sem se uloží souřadnice, které nakreslíš myší v nastavení
+    c.execute('''CREATE TABLE IF NOT EXISTS roi_templates
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  product_name TEXT,
+                  roi_name TEXT,
+                  x INTEGER, y INTEGER, w INTEGER, h INTEGER)''')
+    
     conn.commit()
     conn.close()
 
@@ -58,4 +68,16 @@ def get_cycle_details(cycle_id):
     c.execute("SELECT * FROM results WHERE cycle_id = ?", (cycle_id,))
     data = c.fetchall()
     conn.close()
-    return data    
+    return data
+
+def create_config_tables():
+    conn = sqlite3.connect('inspections.db')
+    c = conn.cursor()
+    # Tabulka pro definici inspekčních zón
+    c.execute('''CREATE TABLE IF NOT EXISTS roi_templates
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  product_name TEXT,
+                  roi_name TEXT,
+                  x INTEGER, y INTEGER, w INTEGER, h INTEGER)''')
+    conn.commit()
+    conn.close()    

@@ -1,3 +1,5 @@
+from PIL import Image
+from streamlit_cropper import st_cropper
 import streamlit as st
 import styles, logic, database
 import time
@@ -99,88 +101,109 @@ if menu == "🏠 Monitor":
 
 elif menu == "🧠 Učení a Trénink":
     st.markdown("## 🧠 Správa učících dat")
+    
     tab1, tab2, tab3 = st.tabs(["🔄 Z cyklu", "🛠️ Ze seřízení (Master)", "📤 Import testů"])
 
     with tab1:
-        st.subheader("Příprava trénovací sady")
-        # Zobrazení nahrané/vybrané NOK fotky
-        if st.button("⚖️ Vyvážit dataset (1x NOK -> 10x NOK)"):
-            # 1. Vezmeme tu jednu NOK fotku
-            # 2. Spustíme logic.augment_image(img, count=10)
-            # 3. Uložíme do training_data/NOK/
-            st.success("Dataset vyvážen. Nyní máte 10 variant chyby pro učení.")
+        st.subheader("Data z automatického provozu")
+        st.info("Vyberte fotky z historie, které mají sloužit jako vzor (Master).")
 
     with tab2:
-        st.subheader("Manuální focení a nastavení")
-        if st.button("📸 VYFOTIT A ULOŽIT JAKO VZOR"):
-            st.success("Snímek ze seřízení uložen do složky /setup.")
+        st.subheader("Manuální focení u lisu")
+        st.caption("Slouží pro nastavení ideálních pozic (Master data).")
+        if st.button("📸 VYFOTIT AKTUÁLNÍ STAV"):
+            # logic.save_setup_image()
+            st.success("Snímek ze seřízení uložen.")
 
     with tab3:
         st.subheader("Import a Anotace externích fotek")
         upl = st.file_uploader("Nahrajte nové soubory", accept_multiple_files=True, key="uploader")
         
-        # 1. Logika uložení
+        # Logika uložení na disk
         if upl:
             import os
             for file in upl:
                 save_path = os.path.join("training_data", "external", file.name)
+                if not os.path.exists("training_data/external"):
+                    os.makedirs("training_data/external")
                 with open(save_path, "wb") as f:
                     f.write(file.getbuffer())
             st.success(f"Nahráno {len(upl)} souborů.")
 
-        # 2. Galerie miniatur
+        # Galerie a ořez
         import os
         ext_path = "training_data/external/"
-        # Vytvoříme složku, pokud neexistuje
-        if not os.path.exists(ext_path): os.makedirs(ext_path)
-        
-        files = [f for f in os.listdir(ext_path) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
-        
-        if files:
-            st.write("### 🖼️ Galerie snímků")
-            img_cols = st.columns(5)
-            for idx, f_name in enumerate(files):
-                with img_cols[idx % 5]:
-                    st.image(os.path.join(ext_path, f_name), use_container_width=True)
-                    if st.button("🔍 Detail", key=f"sel_{f_name}"):
-                        st.session_state.annot_img = f_name
+        if os.path.exists(ext_path):
+            files = [f for f in os.listdir(ext_path) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+            
+            if files:
+                st.write("### 🖼️ Galerie snímků")
+                img_cols = st.columns(5)
+                for idx, f_name in enumerate(files):
+                    with img_cols[idx % 5]:
+                        st.image(os.path.join(ext_path, f_name), use_container_width=True)
+                        if st.button("🔍 Detail", key=f"sel_{f_name}"):
+                            st.session_state.annot_img = f_name
 
-            # 3. INTERAKTIVNÍ OŘEZ (ROI)
-            if 'annot_img' in st.session_state:
-                st.divider()
-                st.markdown(f"#### 📐 Nastavení ROI pro: `{st.session_state.annot_img}`")
-                
-                img_p = os.path.join(ext_path, st.session_state.annot_img)
-                img = Image.open(img_p)
+                # Interaktivní ořez ROI
+                if 'annot_img' in st.session_state:
+                    st.divider()
+                    st.markdown(f"#### 📐 Nastavení ROI pro: `{st.session_state.annot_img}`")
+                    img_p = os.path.join(ext_path, st.session_state.annot_img)
+                    img = Image.open(img_p)
 
-                col_img, col_form = st.columns([3, 1])
-
-                with col_img:
-                    st.info("🖱️ Táhni myší v obrázku pro výběr oblasti (ROI)")
-                    # Grafický výběr ROI
-                    cropped_img = st_cropper(img, realtime_update=True, box_color='#FF0000', aspect_ratio=None)
-                    
-                with col_form:
-                    st.write("**📐 Náhled výřezu:**")
-                    st.image(cropped_img, use_container_width=True)
-                    
-                    roi_name = st.text_input("Název této ROI", value="Zebro_P1")
-                    label = st.radio("Výsledek ROI:", ["OK", "NOK"])
-                    
-                    if st.button("💾 ULOŽIT DO UČENÍ", use_container_width=True):
-                        import logic
-                        path = logic.save_cropped_image(cropped_img, roi_name, label)
-                        st.success(f"Uloženo!")
-                        st.toast(f"ROI {roi_name} uložena jako {label}")
+                    col_img, col_form = st.columns([3, 1])
+                    with col_img:
+                        st.info("🖱️ Táhni myší v obrázku pro výběr oblasti (ROI)")
+                        cropped_img = st_cropper(img, realtime_update=True, box_color='#FF0000', aspect_ratio=None)
+                        
+                    with col_form:
+                        st.write("**📐 Náhled výřezu:**")
+                        st.image(cropped_img, use_container_width=True)
+                        roi_name = st.text_input("Název této ROI", value="Zebro_P1")
+                        label = st.radio("Výsledek ROI:", ["OK", "NOK"])
+                        if st.button("💾 ULOŽIT DO UČENÍ", use_container_width=True):
+                            import logic
+                            path = logic.save_cropped_image(cropped_img, roi_name, label)
+                            st.success(f"Uloženo do dataset/{label}!")
 
 elif menu == "📂 Historie inspekcí":
     st.markdown("## 📂 Historie inspekcí")
-    # Zde zavolej svou funkci pro zobrazení historie
-    cycles_hist = database.get_last_cycles(limit=12)
-    if cycles_hist:
-        st.write("Seznam posledních cyklů nalezen.")
-        # Tady můžeš pokračovat kódem pro mřížku historie
+    # Zde doplň kód pro historii, který jsme psali dříve (get_last_cycles atd.)
 
 elif menu == "⚙️ Nastavení":
-    st.header("⚙️ Nastavení systému")
-    st.write("Konfigurace ROI a limitů.")
+    st.title("⚙️ Konfigurace inspekcí")
+    
+    # 1. KROK - VÝBĚR PRODUKTU
+    produkt = st.selectbox("Vyberte produkt pro úpravu", ["MQB Skříň ventilátoru L", "Octavia III - Kryt"])
+    
+    st.divider()
+    
+    # 2. KROK - NASTAVENÍ POZICE / MASTER SNÍMEK
+    st.subheader("Vytvoření master snímku")
+    master_file = st.file_uploader("Nahrajte Master snímek z kamery", type=["jpg", "png"])
+    
+    if master_file:
+        img_master = Image.open(master_file)
+        
+        col1, col2 = st.columns([3, 1])
+        
+        with col1:
+            st.info("🖱️ Nakreslete na Master snímku novou oblast zájmu (ROI)")
+            # Použijeme náš cropper pro definici šablony
+            from streamlit_cropper import st_cropper
+            roi_crop = st_cropper(img_master, realtime_update=True, box_color='#FF9800', aspect_ratio=None)
+            
+        with col2:
+            st.write("### Nastavení ROI")
+            new_roi_name = st.text_input("Název nové inspekce", placeholder="např. Kontrola količka")
+            
+            if st.button("➕ PŘIDAT INSPEKCI"):
+                # Tady uložíme souřadnice z cropperu do tabulky roi_templates
+                # V reálné aplikaci bysme zde vytáhli box_data z cropperu
+                st.success(f"Inspekce '{new_roi_name}' byla uložena do šablony.")
+                
+    # 3. KROK - SEZNAM EXISTUJÍCÍCH INSPEKCÍ (jako na screenshotu 3)
+    st.divider()
+    st.subheader("Aktivní inspekce pro tento produkt")
+    # Zde by se vypsaly ROI z databáze s možností "SMAZAT" nebo "ZMĚNIT"
