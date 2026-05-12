@@ -1,13 +1,12 @@
 import sqlite3
-import time
 
 def init_db():
     conn = sqlite3.connect('inspections.db')
     c = conn.cursor()
-    # Tabulka produktů
+    # Tabulka pro seznam produktů
     c.execute('''CREATE TABLE IF NOT EXISTS products 
                  (id INTEGER PRIMARY KEY, name TEXT UNIQUE)''')
-    # Tabulka ROI (propojená s produkty)
+    # Tabulka pro ROI (vázaná na jméno produktu)
     c.execute('''CREATE TABLE IF NOT EXISTS roi_templates 
                  (id INTEGER PRIMARY KEY, product_name TEXT, name TEXT, 
                   x INTEGER, y INTEGER, w INTEGER, h INTEGER)''')
@@ -20,7 +19,7 @@ def add_product(name):
         conn.execute("INSERT INTO products (name) VALUES (?)", (name,))
         conn.commit()
     except:
-        pass # Produkt už existuje
+        pass # Pokud jméno už existuje, nic se neděje
     conn.close()
 
 def get_products():
@@ -28,6 +27,13 @@ def get_products():
     res = conn.execute("SELECT name FROM products").fetchall()
     conn.close()
     return [r[0] for r in res]
+
+def delete_product(name):
+    conn = sqlite3.connect('inspections.db')
+    conn.execute("DELETE FROM products WHERE name = ?", (name,))
+    conn.execute("DELETE FROM roi_templates WHERE product_name = ?", (name,))
+    conn.commit()
+    conn.close()]
 
 def save_result(cycle_id, part_name, roi_name, confidence, status, img_path):
     conn = sqlite3.connect('inspections.db')
