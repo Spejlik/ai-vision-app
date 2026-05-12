@@ -39,16 +39,11 @@ with head_col2:
     mode = st.radio("Režim", ["AUTO", "MANUAL"], horizontal=True, label_visibility="collapsed")
 
 with head_col3:
-    # Teď taháme historii cyklů, ne jednotlivých ROI
     cycles = database.get_last_cycles(limit=15)
     if cycles:
-        # Vytvoříme HTML řetězec s fixním kontejnerem
-        dots_html = "".join([f'<span style="color:{"#22c55e" if c[2]=="OK" else "#ef4444"}; margin-left:4px;">●</span>' for c in cycles])
-        st.markdown(f"""
-            <div style="font-size:30px; text-align:right; line-height:1; white-space:nowrap; overflow:hidden;">
-                {dots_html}
-            </div>
-        """, unsafe_allow_html=True)
+        # Každá tečka je samostatný span v divu s třídou dots-container
+        dots_html = "".join([f'<span style="color:{"#22c55e" if c[2]=="OK" else "#ef4444"};">●</span>' for c in cycles])
+        st.markdown(f'<div class="dots-container">{dots_html}</div>', unsafe_allow_html=True)
 
 st.divider()
 

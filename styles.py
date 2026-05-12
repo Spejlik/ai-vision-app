@@ -3,66 +3,63 @@ import streamlit as st
 def apply_custom_css():
     st.markdown("""
         <style>
-        /* 1. GLOBÁLNÍ ZÁKAZ SCROLLU NA VŠECH VRSTVÁCH */
-        html, body, [data-testid="stAppViewContainer"], 
-        [data-testid="stMainViewContainer"], 
-        .main .block-container,
-        [data-testid="stVerticalBlock"] {
-            overflow: hidden !important;
-            height: 100vh !important;
-            max-height: 100vh !important;
+        /* 1. SIDEBAR - ČITELNOST */
+        [data-testid="stSidebar"] {
+            background-color: #1e293b !important;
+        }
+        /* Vynucení bílé barvy pro všechny texty v sidebaru */
+        [data-testid="stSidebar"] *, [data-testid="stSidebarLabel"] {
+            color: white !important;
+        }
+        /* Zvýraznění aktivní navigace */
+        [data-testid="stSidebarNav"] li {
+            background-color: transparent !important;
         }
 
-        /* 2. ODSTRANĚNÍ VNĚJŠÍCH OKRAJŮ A MEZER */
+        /* 2. TEČKY V HLAVIČCE - FIX OŘEZÁVÁNÍ */
+        .dots-container {
+            font-size: 28px;
+            text-align: right;
+            line-height: 1;
+            white-space: nowrap;
+            overflow: visible !important; /* Důležité: aby tečky nebyly půlky */
+            padding: 10px 0;
+            display: flex;
+            justify-content: flex-end;
+            gap: 4px;
+        }
+        
+        /* 3. ZÁKAZ SCROLLU A ROZLOŽENÍ */
+        html, body, [data-testid="stAppViewContainer"] {
+            overflow: hidden !important;
+            height: 100vh !important;
+        }
         .main .block-container {
-            padding-top: 1rem !important;
-            padding-bottom: 0rem !important;
-            padding-left: 2rem !important;
-            padding-right: 2rem !important;
+            padding-top: 1.5rem !important;
             max-width: 98% !important;
         }
 
-        /* 3. DESIGN KARET (Zmenšení, aby se vešly) */
+        /* 4. KARTY ROI */
         .roi-card {
             background-color: white;
-            border: 2px solid #e2e8f0;
+            border: 1px solid #e2e8f0;
             border-radius: 8px;
-            padding: 8px; /* Méně paddingu pro úsporu místa */
+            padding: 8px;
             text-align: center;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            margin-bottom: 5px;
-        }
-        
-        .roi-card img {
-            max-height: 120px; /* Limit výšky obrázku */
-            object-fit: contain;
-        }
-
-        /* 4. SIDEBAR - Kontrastní vzhled */
-        [data-testid="stSidebar"] {
-            background-color: #1e293b !important;
-            min-width: 250px !important;
-        }
-
-        /* 5. SKRYTÍ MENU A DEPLOY TLAČÍTKA */
-        #MainMenu, footer, header, [data-testid="stHeader"] {
-            display: none !important;
         }
         </style>
     """, unsafe_allow_html=True)
 
 def draw_roi_card(name, confidence, status, color, img_path, size="normal"):
-    # Dynamické nastavení výšky podle počtu karet
-    img_height = "80px" if size == "small" else "120px"
-    font_size = "18px" if size == "small" else "24px"
-    
+    img_height = "100px" if size == "small" else "140px"
     img_html = f'<img src="data:image/jpeg;base64,{img_path}" style="max-height:{img_height}; width:auto; border-radius:4px;">' if img_path else ""
     
     st.markdown(f"""
         <div class="roi-card">
-            <div style="font-size: 10px; color: gray;">{name}</div>
-            <div style="font-size: {font_size}; color: {color}; font-weight: bold; line-height:1;">{confidence}%</div>
-            <div style="background:{color}22; color:{color}; font-size:10px; font-weight:bold; border-radius:3px; margin:2px 0;">{status}</div>
-            {img_html}
+            <div style="font-size: 11px; color: #64748b; font-weight: bold;">{name}</div>
+            <div style="font-size: 24px; color: {color}; font-weight: bold; margin: 4px 0;">{confidence}%</div>
+            <div style="background:{color}22; color:{color}; font-size:12px; font-weight:bold; border-radius:4px; padding:2px;">{status}</div>
+            <div style="margin-top:8px;">{img_html}</div>
         </div>
     """, unsafe_allow_html=True)
