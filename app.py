@@ -22,7 +22,8 @@ with st.sidebar:
     st.divider()
     
     st.markdown("### 🛠️ MENU")
-    menu = st.radio("Navigace", ["🏠 Monitor", "📊 Statistiky", "⚙️ Nastavení"])
+    # Tady definujeme JEDNU navigaci se správným názvem
+    menu = st.radio("Navigace", ["🏠 Monitor", "🧠 Učení a Trénink", "📂 Historie inspekcí", "⚙️ Nastavení"])
     
     st.divider()
     if st.button("Odhlásit se"):
@@ -118,8 +119,9 @@ if menu == "🏠 Monitor":
             st.success("🤖 AUTO REŽIM")
             st.caption("Čekám na signál z lisu...")
 
-elif menu == "📊 Statistiky":
+elif menu == "📂 Historie inspekcí":
     st.markdown("<h2 style='color:#1e293b;'>📂 Historie inspekcí</h2>", unsafe_allow_html=True)
+    # ... tvůj kód pro historii (get_last_cycles atd.) ...
     
     # 1. Načtení seznamu unikátních cyklů (teček)
     cycles = database.get_last_cycles(limit=12)
@@ -180,3 +182,29 @@ elif menu == "📊 Statistiky":
 else:
     st.header("Nastavení systému")
     st.write("Konfigurace ROI zón a limitů.")
+    
+elif menu == "🧠 Učení a Trénink":
+    st.title("🧠 Správa učících dat")
+    
+    tab1, tab2, tab3 = st.tabs(["🔄 Data z cyklu", "🛠️ Data ze seřízení", "📤 Externí import"])
+
+    with tab1:
+        st.subheader("Fotky z automatického provozu")
+        # Zde zobrazíme poslední fotky z DB a tlačítko "Přidat do učení"
+        st.info("Vyberte fotky z historie, které mají sloužit jako vzor (Master).")
+
+    with tab2:
+        st.subheader("Manuální focení a nastavení")
+        if st.button("📸 VYFOTIT A ULOŽIT JAKO VZOR"):
+            # Tady logic.py vyfotí aktuální snímek a uloží ho do složky /setup
+            st.success("Snímek uložen do složky pro seřizování.")
+
+    with tab3:
+        st.subheader("Import z jiného zařízení")
+        uploaded_files = st.file_uploader("Nahrajte fotky (JPG/PNG)", accept_multiple_files=True)
+        if uploaded_files:
+            for file in uploaded_files:
+                # Uložíme do složky /external
+                with open(f"training_data/external/{file.name}", "wb") as f:
+                    f.write(file.getbuffer())
+            st.success(f"Nahráno {len(uploaded_files)} snímků pro testování.")
