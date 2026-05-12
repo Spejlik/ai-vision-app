@@ -142,8 +142,7 @@ elif menu == "⚙️ Nastavení":
         
         if master_file:
             st.session_state.master_image = Image.open(master_file)
-            # ... zde pokračuje zbytek kódu s cropperem a ukládáním ROI ...
-
+            
         # --- SEZNAM ULOŽENÝCH ROI ---
         st.divider()
         st.subheader(f"📋 Aktivní ROI pro: {produkt}")
