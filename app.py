@@ -110,103 +110,49 @@ elif menu == "⚙️ Nastavení":
     # 1. Výběr produktu
     produkt = st.selectbox("Aktivní produkt", ["MQB Skříň ventilátoru L", "Octavia III - Kryt"])
     
+    # --- SEZNAM ROI S NÁHLEDY A EDITACÍ ---
     st.divider()
-    
-    # 2. Nahrání Master snímku
-    master_file = st.file_uploader("Nahrajte Master snímek", type=["jpg", "png"], key="master_upl")
-    
-    if master_file:
-        img_pil = Image.open(master_file)
-        
-        # --- OPRAVA MĚŘÍTKA ---
-        # Aby ROI sedělo, musíme cropperu říct, že pracujeme s reálnou šířkou
-        orig_width, orig_height = img_pil.size
-        
-        col_foto, col_form = st.columns([3, 1])
-        
-        with col_foto:
-            st.write(f"### 🖱️ 1. Definice ROI (Originál: {orig_width}x{orig_height}px)")
-            
-            # KLÍČOVÉ NASTAVENÍ: 
-            # use_container_width=True + should_resize_out=False
-            # To zajistí, že to co vidíš, odpovídá realitě v databázi
-            roi_obj = st_cropper(
-                img_pil, 
-                realtime_update=True, 
-                box_color='#FF9800', 
-                aspect_ratio=None, 
-                key="main_cropper",
-                should_resize_out=False, # VRACÍ REÁLNÉ PIXELY
-                use_container_width=True  # ROZTÁHNE PŘES CELÝ SLOUPEC
-            )
-            
-        with col_form:
-            st.write("### 📝 2. Uložit")
-            # Náhled výřezu (aby user viděl, co přesně ukládá)
-            if roi_obj:
-                st.image(roi_obj, use_container_width=True, caption="Náhled")
-            
-            name = st.text_input("Název ROI (např. količek_1)")
-            
-            if st.button("➕ PŘIDAT INSPEKCI", use_container_width=True, type="primary"):
-                # Vytáhneme souřadnice přímo ze session_state cropperu
-                if 'main_cropper' in st.session_state and name:
-                    coords = st.session_state['main_cropper']['coords']
-                    
-                    # Uložíme REÁLNÉ souřadnice z fotky
-                    database.save_roi_template(
-                        produkt, 
-                        name, 
-                        int(coords['left']), 
-                        int(coords['top']), 
-                        int(coords['width']), 
-                        int(coords['height'])
-                    )
-                    st.success(f"ROI '{name}' uložena!")
-                    time.sleep(0.5)
-                    st.rerun()
-                else:
-                    st.error("Chybí název nebo oblast!")
-
-    # --- SEZNAM (VÝPIS) ---
-    st.divider()
-    st.subheader("📋 Aktivní ROI v projektu")
-    templates = database.get_roi_templates(produkt)
-    if templates:
-        for t in templates:
-            with st.expander(f"🔍 {t[2]}"):
-                c1, c2 = st.columns([4, 1])
-                c1.write(f"Pozice: [{t[3]}, {t[4]}] | Velikost: {t[5]}x{t[6]}px")
-                if c2.button("🗑️ Smazat", key=f"del_{t[0]}"):
-                    database.delete_roi_template(t[0])
-                    st.rerun()
-
-    # --- SEZNAM ROI POD ČAROU ---
-    # --- SEZNAM ROI S OPRAVENÝMI KLÍČI ---
-    st.divider()
-    st.subheader(f"📋 Seznam definovaných ROI pro: {produkt}")
+    st.subheader(f"📋 Aktivní ROI pro: {produkt}")
     
     current_rois = database.get_roi_templates(produkt)
     
-    if current_rois:
+    if current_rois and master_file:
+        # Otevřeme master fotku pro generování náhledů
+        img_master = Image.open(master_file)
+        
         for r in current_rois:
-            # r[0] je unikátní ID z databáze (např. 14, 15, 16...)
-            # Vytvoříme unikátní klíč pro každé smazací tlačítko
-            unique_key = f"del_btn_{r[0]}" 
-            
+            # r = [id, produkt, název, x, y, w, h]
             with st.expander(f"🟢 {r[2]} (ID: {r[0]})"):
-                col_info, col_del = st.columns([4, 1])
+                col_img, col_info, col_actions = st.columns([1, 2, 1])
                 
+                # 1. Zobrazení výřezu (FOTKA)
+                with col_img:
+                    # Vyřízneme oblast z master fotky pro náhled
+                    left, top, right, bottom = r[3], r[4], r[3]+r[5], r[4]+r[6]
+                    roi_preview = img_master.crop((left, top, right, bottom))
+                    st.image(roi_preview, use_container_width=True)
+                
+                # 2. Informace
                 with col_info:
-                    st.write(f"**Pozice:** [{r[3]}, {r[4]}] | **Velikost:** {r[5]}x{r[6]} px")
+                    st.write(f"**Název:** {r[2]}")
+                    st.write(f"**Pozice:** [{r[3]}, {r[4]}]")
+                    st.write(f"**Velikost:** {r[5]}x{r[6]} px")
                 
-                with col_del:
-                    # Tady je oprava: unikátní klíč pro každé tlačítko
-                    if st.button("🗑️ Smazat", key=unique_key, use_container_width=True):
+                # 3. Akce (Smazat / Editovat)
+                with col_actions:
+                    # Smazání
+                    if st.button("🗑️ Smazat", key=f"del_{r[0]}", use_container_width=True):
                         database.delete_roi_template(r[0])
-                        st.success(f"ROI s ID {r[0]} smazána.")
-                        time.sleep(0.5)
                         st.rerun()
+                    
+                    # "Editace" - v praxi to smaže a předvyplní název nahoře
+                    if st.button("📝 Upravit", key=f"edit_{r[0]}", use_container_width=True):
+                        st.session_state.edit_name = r[2]
+                        database.delete_roi_template(r[0])
+                        st.info("ROI byla odstraněna, nyní ji nakreslete znovu a uložte.")
+                        st.rerun()
+    elif not master_file:
+        st.warning("Pro zobrazení náhledů fotek musíte mít nahoře vybraný Master snímek.")
     else:
         st.info("Zatím žádné ROI.")
 
