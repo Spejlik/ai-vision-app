@@ -1,9 +1,8 @@
 from PIL import Image
 from streamlit_cropper import st_cropper
 import streamlit as st
-import styles, logic, database
-import time
 import os
+import database, logic
 
 # 1. Nastavení stránky
 st.set_page_config(
