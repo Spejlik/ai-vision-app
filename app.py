@@ -128,30 +128,31 @@ elif menu == "⚙️ Nastavení":
             name = st.text_input("Název ROI", key="roi_name_input")
             
             if st.button("➕ ULOŽIT DO PROJEKTU", use_container_width=True, type="primary"):
-                if 'main_cropper' in st.session_state and name:
-                    # Bezpečné získání dat
-                    c_data = st.session_state['main_cropper']
-                    box = c_data.get('coords')
-                    cw = c_data.get('width')
-                    ch = c_data.get('height')
+                # 1. Zkontrolujeme, jestli máme data v session_state
+                cropper_state = st.session_state.get('main_cropper')
+                
+                if cropper_state and name:
+                    box = cropper_state.get('coords')
+                    # Pokud nemáme cw/ch z cropperu, použijeme rozměry obrázku (poměr 1:1)
+                    cw = cropper_state.get('width', img_pil.size[0])
+                    ch = cropper_state.get('height', img_pil.size[1])
                     
-                    if box and cw and ch:
+                    if box:
                         orig_w, orig_h = img_pil.size
                         rx, ry = orig_w/cw, orig_h/ch
                         
-                        # Uložení do DB
-                        database.save_roi_template(
-                            produkt, name, 
-                            int(box['left']*rx), int(box['top']*ry), 
-                            int(box['width']*rx), int(box['height']*ry)
-                        )
-                        st.success(f"ROI '{name}' uložena!")
-                        time.sleep(0.5)
+                        # Vypočítáme reálné souřadnice
+                        real_x = int(box['left'] * rx)
+                        real_y = int(box['top'] * ry)
+                        real_w = int(box['width'] * rx)
+                        real_h = int(box['height'] * ry)
+                        
+                        database.save_roi_template(produkt, name, real_x, real_y, real_w, real_h)
+                        st.success(f"ROI '{name}' byla úspěšně uložena!")
+                        time.sleep(0.6)
                         st.rerun()
-                    else:
-                        st.error("Chyba: Zaměřte oblast na fotce!")
                 else:
-                    st.error("Chyba: Zadejte název ROI!")
+                    st.error("Chyba: Nejdříve pohněte rámečkem nebo zadejte název!")
 
     # --- SEZNAM ROI POD ČAROU ---
     st.divider()
