@@ -35,12 +35,17 @@ if menu == "📷 Monitor":
         cols = st.columns(4)
         history = database.get_history(limit=4)
         if history:
-            for i, record in enumerate(reversed(history)):
-                with cols[i % 4]:
-                    # record: (timestamp, projekt, roi_name, confidence, status, img_path)
-                    b64_img = logic.get_real_image_base64(record[2], record[4])
-                    color = "#44ff44" if record[4] == "OK" else "#ff4444"
-                    styles.draw_roi_card(record[2], record[3], record[4], color, b64_img)
+    for i, record in enumerate(reversed(history)):
+        with cols[i % 4]:
+            # Získáme base64 data
+            b64_img = logic.get_real_image_base64(record[2], record[4])
+            color = "#44ff44" if record[4] == "OK" else "#ff4444"
+            
+            # Pokud b64_img není prázdný, vykreslíme kartu přes tvou HTML funkci
+            if b64_img:
+                styles.draw_roi_card(record[2], record[3], record[4], color, b64_img)
+            else:
+                st.error(f"Chybí foto: {record[2]}")
 
     with col_status:
         st.markdown(f"""
