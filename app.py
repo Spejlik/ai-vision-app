@@ -47,45 +47,33 @@ with head_col3:
 
 st.divider()
 
-# --- HLAVNÍ MONITOROVACÍ PLOCHA ---
+# --- DYNAMICKÁ MONITOROVACÍ PLOCHA ---
 if menu == "🏠 Monitor":
-    # Změna poměru na 75% : 25%
-    col_left, col_right = st.columns([3, 1])
+    col_left, col_right = st.columns([4, 1.2])
 
     with col_left:
-        latest_results = database.get_history(limit=4)
+        # Získáme všechny ROI pro aktuální kontrolu (např. 4, 6 nebo 8)
+        latest_results = database.get_history(limit=8) # Zde limit podle max kapacity obrazovky
+        
         if latest_results:
-            # Matice 2x2 pomocí vnořených sloupců
-            row1_col1, row1_col2 = st.columns(2)
-            row2_col1, row2_col2 = st.columns(2)
+            n_results = len(latest_results)
             
-            # Mapování výsledků do buněk
-            slots = [row1_col1, row1_col2, row2_col1, row2_col2]
+            # STRIKTNÍ LOGIKA MŘÍŽKY:
+            # 1-4 inspekce -> 2 sloupce
+            # 5-8 inspekcí -> 4 sloupce
+            # 9+ inspekcí -> 4 sloupce + zmenšení karet
+            n_cols = 2 if n_results <= 4 else 4
+            
+            cols = st.columns(n_cols)
             
             for i, res in enumerate(latest_results):
-                with slots[i]:
+                with cols[i % n_cols]:
                     b64_img = logic.get_real_image_base64(res[2], res[4])
                     status_color = "#22c55e" if res[4] == "OK" else "#ef4444"
-                    styles.draw_roi_card(res[2], res[3], res[4], status_color, b64_img)
-
-    with col_right:
-        # Kompaktní stavový box
-        current_status = latest_results[0][4] if latest_results else "WAIT"
-        bg_color = "#22c55e" if current_status == "OK" else "#ef4444"
-        
-        st.markdown(f"""
-            <div style="background:{bg_color}; color:white; padding:20px; border-radius:10px; text-align:center;">
-                <h1 style="font-size:45px; margin:0;">{current_status}</h1>
-                <p style="margin:0; font-size:12px;">STATUS</p>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        # Ovládání (v MANUAL režimu)
-        if mode == "MANUAL":
-            st.write("")
-            if st.button("🚀 START", use_container_width=True):
-                # Tady volání tvé logiky
-                st.rerun()
+                    
+                    # Předáme dynamickou velikost do stylu (menší pro více karet)
+                    card_size = "small" if n_results > 4 else "normal"
+                    styles.draw_roi_card(res[2], res[3], res[4], status_color, b64_img, size=card_size)
 
 elif menu == "📊 Statistiky":
     st.header("Statistiky výroby")

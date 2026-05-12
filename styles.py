@@ -51,15 +51,18 @@ def apply_custom_css():
         </style>
     """, unsafe_allow_html=True)
 
-def draw_roi_card(name, confidence, status, color, img_path):
-    # Tady f-string nevadí, protože proměnné jsou v jednoduchých uvozovkách
-    img_html = f'<img src="data:image/jpeg;base64,{img_path}" style="width:100%; border-radius:6px; margin-top:10px;">' if img_path else ""
+def draw_roi_card(name, confidence, status, color, img_path, size="normal"):
+    # Dynamické nastavení výšky podle počtu karet
+    img_height = "80px" if size == "small" else "120px"
+    font_size = "18px" if size == "small" else "24px"
+    
+    img_html = f'<img src="data:image/jpeg;base64,{img_path}" style="max-height:{img_height}; width:auto; border-radius:4px;">' if img_path else ""
+    
     st.markdown(f"""
         <div class="roi-card">
-            <div style="color: #888; font-size: 11px;">DETEKCE</div>
-            <div style="font-weight: bold; font-size: 16px;">{name}</div>
-            <div style="font-size: 28px; color: {color}; font-weight: bold;">{confidence}%</div>
-            <div style="background-color: {color}22; color: {color}; padding: 3px; border-radius: 4px; font-weight: bold;">{status}</div>
+            <div style="font-size: 10px; color: gray;">{name}</div>
+            <div style="font-size: {font_size}; color: {color}; font-weight: bold; line-height:1;">{confidence}%</div>
+            <div style="background:{color}22; color:{color}; font-size:10px; font-weight:bold; border-radius:3px; margin:2px 0;">{status}</div>
             {img_html}
         </div>
     """, unsafe_allow_html=True)
