@@ -122,18 +122,33 @@ elif menu == "⚙️ Nastavení":
             
             # TLAČÍTKO: Musí být takto odsazené, aby bylo v pravém sloupci
             if st.button("➕ ULOŽIT DO PROJEKTU", use_container_width=True, type="primary"):
-                if name and 'main_cropper' in st.session_state:
-                    # Výpočet měřítka
-                    box = st.session_state['main_cropper']['coords']
-                    canvas_w = st.session_state['main_cropper']['width']
-                    canvas_h = st.session_state['main_cropper']['height']
-                    orig_w, orig_h = img_pil.size
-                    rx, ry = orig_w/canvas_w, orig_h/canvas_h
+                # Kontrola, zda cropper už poslal data
+                if 'main_cropper' in st.session_state and st.session_state['main_cropper'] is not None:
+                    cropper_data = st.session_state['main_cropper']
+                    
+                    # Bezpečné vytažení souřadnic a rozměrů plátna
+                    box = cropper_data.get('coords')
+                    canvas_w = cropper_data.get('width')
+                    canvas_h = cropper_data.get('height')
 
-                    database.save_roi_template(produkt, name, int(box['left']*rx), int(box['top']*ry), int(box['width']*rx), int(box['height']*ry))
-                    st.success("ROI uložena!")
-                    time.sleep(0.5)
-                    st.rerun()
+                    if box and canvas_w and canvas_h and name:
+                        orig_w, orig_h = img_pil.size
+                        
+                        # Výpočet poměru (ratio)
+                        rx, ry = orig_w / canvas_w, orig_h / canvas_h
+                        
+                        # Přepočet na reálné pixely fotky
+                        real_x = int(box['left'] * rx)
+                        real_y = int(box['top'] * ry)
+                        real_w = int(box['width'] * rx)
+                        real_h = int(box['height'] * ry)
+
+                        database.save_roi_template(produkt, name, real_x, real_y, real_w, real_h)
+                        st.success(f"ROI '{name}' uložena!")
+                        time.sleep(0.5)
+                        st.rerun()
+                    else:
+                        st.error("Chybí název nebo nebyla správně zaměřena oblast!"))
 
     # --- SEZNAM ROI POD ČAROU ---
     st.divider()
