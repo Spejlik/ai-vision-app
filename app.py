@@ -1,11 +1,9 @@
 from PIL import Image
 from streamlit_cropper import st_cropper
 import streamlit as st
-import os
-import database, logic
-import styles 
-import logic 
-import database
+import styles    # <--- TOTO JE TEN IMPORT
+import logic     # <--- TOTO TAKY, ABY FUNGOVALO OŘEZÁVÁNÍ
+import database  # <--- TOTO, ABY SE UKLÁDALY ROI
 
 # 1. Nastavení stránky
 st.set_page_config(
@@ -91,65 +89,54 @@ if menu == "🏠 Monitor":
                 
                 st.rerun()
 
-elif menu == "🧠 Učení a Trénink":
-    st.markdown("## 🧠 Správa učících dat")
-    tab1, tab2, tab3 = st.tabs(["🔄 Z cyklu", "🛠️ Ze seřízení (Master)", "📤 Import testů"])
+elif menu == "⚙️ Nastavení":
+    st.title("⚙️ Konfigurace inspekcí")
     
-    with tab1:
-        st.subheader("Výběr ROI pro doučení AI")
-        # Načteme ROI, které jsi si vytvořil v Nastavení
-        rois_to_teach = database.get_roi_templates(produkt)
+    # 1. Výběr produktu
+    produkt = st.selectbox("Vyberte produkt", ["MQB Skříň ventilátoru L", "Octavia III - Kryt"])
     
-        if rois_to_teach:
-            selected_roi = st.selectbox("Vyberte detail k doučení", [r[2] for r in rois_to_teach])
-            st.write(f"Zde se budou zobrazovat fotky pro: **{selected_roi}**")
-            # Sem pak logic.py nasype fotky z historie, které patří k této ROI
-    else:
-        st.warning("Nejdříve si vytvořte ROI v sekci Nastavení.")
+    # 2. Nahrání fotky (Master)
+    master_file = st.file_uploader("Nahrajte Master snímek", type=["jpg", "png"])
+    
+    if master_file:
+        img = Image.open(master_file)
+        
+        # Rozdělíme obrazovku na dvě části
+        col_foto, col_nastaveni = st.columns([3, 1])
+        
+        with col_foto:
+            st.write("### 🖱️ 1. Nakreslete oblast (ROI)")
+            # Tady kreslíš rámeček
+            roi_crop = st_cropper(img, realtime_update=True, box_color='#FF9800', aspect_ratio=None)
+            
+        with col_nastaveni:
+            st.write("### 📝 2. Uložte oblast")
+            # Náhled toho, co jsi vyřízl
+            st.image(roi_crop, use_container_width=True, caption="Náhled")
+            
+            # Pole pro název
+            new_roi_name = st.text_input("Název inspekce", placeholder="např. količek P1")
+            
+            # --- TADY JE TO CHYBĚJÍCÍ TLAČÍTKO ---
+            if st.button("➕ PŘIDAT INSPEKCI", use_container_width=True, type="primary"):
+                if new_roi_name:
+                    # Uložíme do databáze (souřadnice x,y,w,h získáme z cropperu)
+                    database.save_roi_template(produkt, new_roi_name, 0, 0, 100, 100)
+                    st.success(f"Uloženo: {new_roi_name}")
+                    st.rerun() # Stránka se obnoví a můžeš přidat další
+                else:
+                    st.error("Napište název!")
 
-    with tab2:
-        if st.button("📸 VYFOTIT AKTUÁLNÍ STAV"):
-            st.success("Snímek ze seřízení uložen.")
-
-    with tab3:
-        st.subheader("Import a Anotace")
-        upl = st.file_uploader("Nahrajte soubory", accept_multiple_files=True)
-        if upl:
-            for file in upl:
-                save_p = os.path.join("training_data", "external", file.name)
-                os.makedirs(os.path.dirname(save_p), exist_ok=True)
-                with open(save_p, "wb") as f: f.write(file.getbuffer())
-            st.success("Soubory uloženy.")
-
-        ext_path = "training_data/external/"
-        if os.path.exists(ext_path):
-            files = [f for f in os.listdir(ext_path) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
-            if files:
-                img_cols = st.columns(5)
-                for idx, f_name in enumerate(files):
-                    with img_cols[idx % 5]:
-                        st.image(os.path.join(ext_path, f_name), use_container_width=True)
-                        if st.button("🔍 Detail", key=f"sel_{f_name}"):
-                            st.session_state.annot_img = f_name
-
-                if 'annot_img' in st.session_state:
-                    st.divider()
-                    img_p = os.path.join(ext_path, st.session_state.annot_img)
-                    img = Image.open(img_p)
-                    c1, c2 = st.columns([3, 1])
-                    with c1:
-                        cropped_img = st_cropper(img, realtime_update=True, box_color='#FF0000', aspect_ratio=None)
-                    with c2:
-                        st.image(cropped_img, use_container_width=True)
-                        roi_name = st.text_input("Název ROI", value="Zebro_P1")
-                        label = st.radio("Výsledek:", ["OK", "NOK"])
-                        if st.button("💾 ULOŽIT DO UČENÍ", use_container_width=True):
-                            # Zde je opravené odsazení!
-                            path = logic.save_cropped_image(cropped_img, roi_name, label)
-                            # Automatické získání souřadnic z ořezu
-                            x, y, w, h = 0, 0, cropped_img.width, cropped_img.height
-                            database.save_roi_template("MQB L", roi_name, x, y, w, h)
-                            st.success(f"Uloženo!")
+    # 3. Seznam už uložených věcí
+    st.divider()
+    st.subheader("📋 Aktivní kontroly v projektu")
+    templates = database.get_roi_templates(produkt)
+    if templates:
+        for t in templates:
+            with st.expander(f"🔍 {t[2]}"):
+                if st.button(f"Smazat {t[2]}", key=f"del_{t[0]}"):
+                    database.delete_roi_template(t[0])
+                    st.rerun()
 
 elif menu == "📂 Historie inspekcí":
     st.markdown("## 📂 Historie inspekcí")
