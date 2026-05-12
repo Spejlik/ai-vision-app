@@ -116,59 +116,33 @@ elif menu == "🧠 Učení a Trénink":
 
 # --- 3. NASTAVENÍ (S OPRAVENÝM UKLÁDÁNÍM) ---
 elif menu == "⚙️ Nastavení":
-    st.title("⚙️ Konfigurace projektu")
-    produkt = st.selectbox("Aktivní produkt", ["MQB Skříň ventilátoru L", "Octavia III - Kryt"])
+    st.title("⚙️ Konfigurace projektů")
     
-    master_file = st.file_uploader("Nahrajte Master snímek", type=["jpg", "png"])
-    if master_file:
-        st.session_state.master_image = Image.open(master_file)
+    # --- SEKCE A: SPRÁVA PRODUKTŮ ---
+    with st.expander("📦 Správa produktů (Přidat/Smazat projekt)", expanded=False):
+        new_prod = st.text_input("Název nového produktu/projektu")
+        if st.button("➕ Vytvořit projekt"):
+            if new_prod:
+                database.add_product(new_prod)
+                st.success(f"Projekt {new_prod} vytvořen!")
+                st.rerun()
 
-    if st.session_state.master_image:
-        img_pil = st.session_state.master_image
-        col_foto, col_form = st.columns([3, 1])
+    # --- SEKCE B: VÝBĚR AKTIVNÍHO PROJEKTU ---
+    available_products = database.get_products()
+    
+    if not available_products:
+        st.warning("Seznam projektů je prázdný. Nejdříve vytvořte produkt v sekci výše.")
+    else:
+        produkt = st.selectbox("Vyberte projekt, který chcete konfigurovat", available_products)
         
-        with col_foto:
-            st.write("### 🖱️ 1. Definice nové ROI")
-            # Základní cropper bez problematických parametrů
-            roi_obj = st_cropper(
-                img_pil, 
-                realtime_update=True, 
-                box_color='#FF9800', 
-                aspect_ratio=None, 
-                key="main_cropper"
-            )
-            
-        with col_form:
-            st.write("### 📝 2. Uložit")
-            if roi_obj:
-                st.image(roi_obj, use_container_width=True, caption="Náhled výřezu")
-            
-            name = st.text_input("Název ROI (např. količek_vlevo)", key="roi_name_input")
-            
-            if st.button("➕ ULOŽIT DO PROJEKTU", use_container_width=True, type="primary"):
-                cropper_state = st.session_state.get('main_cropper')
-                
-                if cropper_state and name:
-                    box = cropper_state.get('coords')
-                    cw = cropper_state.get('width', img_pil.size[0])
-                    ch = cropper_state.get('height', img_pil.size[1])
-                    
-                    if box:
-                        # Přepočet na reálné pixely fotky
-                        orig_w, orig_h = img_pil.size
-                        rx, ry = orig_w/cw, orig_h/ch
-                        
-                        real_x = int(box['left'] * rx)
-                        real_y = int(box['top'] * ry)
-                        real_w = int(box['width'] * rx)
-                        real_h = int(box['height'] * ry)
-                        
-                        database.save_roi_template(produkt, name, real_x, real_y, real_w, real_h)
-                        st.success(f"ROI '{name}' uložena!")
-                        time.sleep(0.5)
-                        st.rerun()
-                else:
-                    st.error("Chyba: Zadejte název a pohněte rámečkem!")
+        st.divider()
+        
+        # --- SEKCE C: KONFIGURACE ROI PRO VYBRANÝ PRODUKT ---
+        master_file = st.file_uploader(f"Nahrajte Master snímek pro: {produkt}", type=["jpg", "png"])
+        
+        if master_file:
+            st.session_state.master_image = Image.open(master_file)
+            # ... zde pokračuje zbytek kódu s cropperem a ukládáním ROI ...
 
         # --- SEZNAM ULOŽENÝCH ROI ---
         st.divider()

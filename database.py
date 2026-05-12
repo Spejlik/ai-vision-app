@@ -4,28 +4,30 @@ import time
 def init_db():
     conn = sqlite3.connect('inspections.db')
     c = conn.cursor()
-    
-    # 1. Tabulka pro výsledky (tu už tam máš)
-    c.execute('''CREATE TABLE IF NOT EXISTS results
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                  cycle_id TEXT,
-                  part_name TEXT,
-                  roi_name TEXT,
-                  confidence REAL,
-                  status TEXT,
-                  image_path TEXT)''')
-
-    # 2. NOVÁ TABULKA pro šablony ROI (tohle tam přidej)
-    # Sem se uloží souřadnice, které nakreslíš myší v nastavení
-    c.execute('''CREATE TABLE IF NOT EXISTS roi_templates
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  product_name TEXT,
-                  roi_name TEXT,
+    # Tabulka produktů
+    c.execute('''CREATE TABLE IF NOT EXISTS products 
+                 (id INTEGER PRIMARY KEY, name TEXT UNIQUE)''')
+    # Tabulka ROI (propojená s produkty)
+    c.execute('''CREATE TABLE IF NOT EXISTS roi_templates 
+                 (id INTEGER PRIMARY KEY, product_name TEXT, name TEXT, 
                   x INTEGER, y INTEGER, w INTEGER, h INTEGER)''')
-    
     conn.commit()
     conn.close()
+
+def add_product(name):
+    conn = sqlite3.connect('inspections.db')
+    try:
+        conn.execute("INSERT INTO products (name) VALUES (?)", (name,))
+        conn.commit()
+    except:
+        pass # Produkt už existuje
+    conn.close()
+
+def get_products():
+    conn = sqlite3.connect('inspections.db')
+    res = conn.execute("SELECT name FROM products").fetchall()
+    conn.close()
+    return [r[0] for r in res]
 
 def save_result(cycle_id, part_name, roi_name, confidence, status, img_path):
     conn = sqlite3.connect('inspections.db')
