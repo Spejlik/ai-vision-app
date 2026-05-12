@@ -123,14 +123,13 @@ elif menu == "⚙️ Nastavení":
         
         with col_foto:
             st.write("### 🖱️ 1. Definice nové ROI")
-            # OPRAVA: Odstraněn problematický parametr should_resize_out
+            # Tady nesmí být nic jiného než tyto parametry:
             roi_obj = st_cropper(
                 img_pil, 
                 realtime_update=True, 
                 box_color='#FF9800', 
                 aspect_ratio=None, 
-                key="main_cropper",
-                use_container_width=True
+                key="main_cropper"
             )
             
         with col_form:
@@ -140,19 +139,13 @@ elif menu == "⚙️ Nastavení":
             
             name = st.text_input("Název ROI", key="roi_name_input")
             
-            if st.button("➕ ULOŽIT DO PROJEKTU", use_container_width=True, type="primary"):
-                if 'main_cropper' in st.session_state and name:
-                    # Výpočet souřadnic
-                    box = st.session_state['main_cropper']['coords']
-                    # POZOR: Pokud cropper vrací relativní hodnoty, přepočítáme na pixely
-                    database.save_roi_template(
-                        produkt, name, 
-                        int(box['left']), int(box['top']), 
-                        int(box['width']), int(box['height'])
-                    )
-                    st.success(f"ROI '{name}' uložena!")
-                    time.sleep(0.5)
-                    st.rerun()
+            if st.button("🚨 VYMAZAT VŠECHNY ROI (RESET)"):
+                import sqlite3
+                conn = sqlite3.connect('inspections.db')
+                conn.execute("DELETE FROM roi_templates")
+                conn.commit()
+                conn.close()
+                st.warning("Všechny ROI byly smazány. Začněte znovu.")
 
     # --- 3. SEZNAM S NÁHLEDY (Zde byla chyba NameError) ---
     st.divider()

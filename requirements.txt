@@ -1,0 +1,5 @@
+streamlit
+streamlit-cropper
+Pillow
+opencv-python
+numpy
