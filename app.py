@@ -34,108 +34,134 @@ elif menu == "🧠 Učení a Trénink":
 elif menu == "⚙️ Nastavení":
     st.title("⚙️ Konfigurace projektů")
     
-    # Vnitřní navigace pro dotykový displej
+    # 1. Inicializace stavu kroků a dat, pokud neexistují
     if 'set_step' not in st.session_state:
         st.session_state.set_step = 1
+    if 'active_p' not in st.session_state:
+        st.session_state.active_p = None
 
+    # 2. Horní navigace (Tlačítka)
     c1, c2, c3 = st.columns(3)
-    if c1.button("📦 1. PROJEKTY", use_container_width=True): st.session_state.set_step = 1
-    if c2.button("🖼️ 2. MASTER", use_container_width=True): st.session_state.set_step = 2
-    if c3.button("🔍 3. ROI", use_container_width=True): st.session_state.set_step = 3
+    if c1.button("📦 1. PROJEKTY", use_container_width=True): 
+        st.session_state.set_step = 1
+    if c2.button("🖼️ 2. MASTER", use_container_width=True): 
+        st.session_state.set_step = 2
+    if c3.button("🔍 3. ROI", use_container_width=True): 
+        st.session_state.set_step = 3
 
     st.divider()
 
     # --- STRÁNKA 1: SPRÁVA PRODUKTŮ ---
     if st.session_state.set_step == 1:
-        st.subheader("📦 Správa produktů")
+        st.subheader("📦 KROK 1: Výběr a správa produktů")
+        
+        # Přidání nového
         new_p = st.text_input("Název nového produktu")
-        if st.button("➕ PŘIDAT PRODUKT", use_container_width=True, type="primary"):
+        if st.button("➕ VYTVOŘIT PROJEKT", use_container_width=True):
             if new_p:
                 database.add_product(new_p)
-                st.success("Přidáno")
+                st.success(f"Produkt {new_p} vytvořen!")
                 st.rerun()
         
         st.write("---")
-        current_prods = database.get_products()
-        for p in current_prods:
-            col_p, col_d = st.columns([4, 1])
-            col_p.write(f"📁 {p}")
-            if col_d.button("🗑️", key=f"del_{p}"):
-                database.delete_product(p)
-                st.rerun()
-
-    # --- STRÁNKA 2: VÝBĚR A MASTER ---
-    elif st.session_state.set_step == 2:
+        # Výběr aktivního (Ukládáme do session_state!)
         all_prods = database.get_products()
         if all_prods:
-            st.session_state.active_p = st.selectbox("Vyberte produkt", all_prods)
-            master_f = st.file_uploader("Nahrajte Master snímek", type=["jpg", "png"])
+            st.session_state.active_p = st.selectbox(
+                "Zvolte aktivní produkt pro konfiguraci:", 
+                all_prods, 
+                index=all_prods.index(st.session_state.active_p) if st.session_state.active_p in all_prods else 0
+            )
+            st.info(f"Aktuálně vybráno: **{st.session_state.active_p}**")
+        else:
+            st.warning("Seznam projektů je prázdný.")
+
+    # --- STRÁNKA 2: NAHRÁNÍ MASTER SNÍMKU ---
+    elif st.session_state.set_step == 2:
+        st.subheader("🖼️ KROK 2: Nahrání Master snímku")
+        if st.session_state.active_p:
+            st.write(f"Konfigurujete produkt: **{st.session_state.active_p}**")
+            master_f = st.file_uploader("Nahrajte referenční fotografii", type=["jpg", "png"])
             if master_f:
                 st.session_state.master_image = Image.open(master_f)
-                st.success("Snímek nahrán. Přejděte na krok 3.")
+                st.success("Snímek nahrán do paměti. Přejděte na Krok 3.")
         else:
-            st.warning("Nejdříve vytvořte produkt v kroku 1.")
+            st.error("Chyba: Nejdříve vyberte produkt v Kroku 1!")
 
     # --- STRÁNKA 3: DEFINICE ROI ---
     elif st.session_state.set_step == 3:
-        # Kontrola, zda máme data z předchozích kroků
         active_p = st.session_state.get('active_p')
         img = st.session_state.get('master_image')
 
         if active_p and img:
-            st.subheader(f"🔍 Nastavení kontrol pro: {active_p}")
+            st.subheader(f"🔍 KROK 3: Nastavení kontrol pro {active_p}")
+            col_l, col_r = st.columns([2, 1])
             
-            c_foto, c_form = st.columns([2, 1])
+            with col_l:
+                # Cropper vrací i souřadnice v reálném čase
+                roi_data = st_cropper(img, realtime_update=True, box_color='#FF9800', key="cropper_v3")
             
-            with c_foto:
-                # Cropper musí mít unikátní klíč a přístup k img
-                roi = st_cropper(img, realtime_update=True, box_color='#FF9800', key="cropper_main")
-            
-            with c_form:
+            with col_r:
                 st.write("### 📝 Uložit novou ROI")
-                roi_name = st.text_input("Název součástky/kontroly", key="input_roi_name")
+                
+                # Používáme klíč pro automatické uložení do session_state
+                roi_name = st.text_input("Název kontroly", key="roi_name_buffer")
                 
                 if st.button("💾 ULOŽIT DO DATABÁZE", use_container_width=True, type="primary"):
-                    c_data = st.session_state.get('cropper_main')
-                    if c_data and roi_name:
-                        box = c_data.get('coords')
-                        cw = c_data.get('width')
-                        ch = c_data.get('height')
+                    # Vyzvedneme data z cropperu
+                    c_state = st.session_state.get('cropper_v3')
+                    
+                    if c_state and roi_name:
+                        box = c_state.get('coords')
+                        cw, ch = c_state.get('width'), c_state.get('height')
                         
                         if box and cw and ch:
                             iw, ih = img.size
                             rx, ry = iw/cw, ih/ch
                             
+                            # Volání databáze
                             database.save_roi_template(
-                                active_p, roi_name, 
-                                int(box['left']*rx), int(box['top']*ry), 
+                                active_p, roi_name,
+                                int(box['left']*rx), int(box['top']*ry),
                                 int(box['width']*rx), int(box['height']*ry)
                             )
-                            st.success(f"ROI '{roi_name}' uložena!")
-                            time.sleep(0.5)
+                            st.success(f"Uloženo: {roi_name}")
+                            time.sleep(1)
                             st.rerun()
                         else:
-                            st.error("Pohněte rámečkem na fotce!")
+                            st.error("Chyba souřadnic! Pohněte rámečkem.")
                     else:
-                        st.warning("Zadejte název kontroly!")
+                        st.warning("Musíte zadat název a mít aktivní rámeček!")
 
             st.divider()
-            # Seznam už uložených věcí
-            st.subheader("📋 Již nastavené kontroly")
-            rois = database.get_roi_templates(active_p)
-            if rois:
-                for r in rois:
-                    col_t, col_b = st.columns([3, 1])
-                    col_t.write(f"📍 **{r[2]}** (ID: {r[0]})")
-                    if col_b.button("Smazat", key=f"del_roi_{r[0]}"):
+            # SEZNAM S NÁHLEDY (Aby uživatel viděl, že se to skutečně uložilo)
+            st.subheader("📋 Aktuálně nastavené kontroly")
+            saved_rois = database.get_roi_templates(active_p)
+            
+            if saved_rois:
+                for r in saved_rois:
+                    with st.expander(f"📍 {r[2]}"):
+                        c1, c2 = st.columns([1, 2])
+                        # Zobrazení výřezu přímo z master snímku pro kontrolu
+                        crop_view = img.crop((r[3], r[4], r[3]+r[5], r[4]+r[6]))
+                        c1.image(crop_view, use_container_width=True)
+                        if c2.button("Odstranit", key=f"del_{r[0]}"):
+                            database.delete_roi_template(r[0])
+                            st.rerun()
+            else:
+                st.info("Zatím žádné kontroly.")
+        else:
+            st.warning("⚠️ Data chybí! Vraťte se ke Kroku 1 a 2.")
+
+            st.divider()
+            # Výpis již uložených ROI
+            saved_rois = database.get_roi_templates(active_p)
+            if saved_rois:
+                for r in saved_rois:
+                    col_name, col_del = st.columns([3, 1])
+                    col_name.write(f"📍 {r[2]}")
+                    if col_del.button("Smazat", key=f"del_{r[0]}"):
                         database.delete_roi_template(r[0])
                         st.rerun()
-            else:
-                st.info("Zatím žádné kontroly pro tento produkt.")
-        
         else:
-            # Tohle se zobrazí, pokud uživatel přeskočil krok 1 nebo 2
-            st.warning("⚠️ Chybí data! Nejdříve vyberte produkt (Krok 1) a nahrajte Master snímek (Krok 2).")
-            if st.button("⬅️ Zpět na nahrávání snímku"):
-                st.session_state.set_step = 2
-                st.rerun()
+            st.warning("⚠️ Data chybí! Musíte mít vybraný produkt (Krok 1) a nahraný snímek (Krok 2).")
