@@ -70,31 +70,38 @@ elif menu == "🧠 Učení a Trénink":
     
     with t3:
         st.subheader("Import a Anotace pro AI")
-        templates = database.get_roi_templates("MQB Skříň ventilátoru L")
+        upl = st.file_uploader("Nahrajte fotky k doučení", accept_multiple_files=True, key="u_upl")
+        
+        templates = database.get_roi_templates(produkt)
         roi_names = [t[2] for t in templates]
         
-        if roi_names:
-            sel_roi = st.selectbox("Vyberte součástku k doučení", roi_names)
-            upl_test = st.file_uploader("Nahrajte novou fotku z výroby", type=["jpg", "png"])
+        if upl and roi_names:
+            # Vezmeme první nahraný obrázek ze seznamu
+            current_img = Image.open(upl[0])
             
-            if upl_test:
-                img_test = Image.open(upl_test)
-                # Najdeme souřadnice vybrané ROI
-                for t in templates:
-                    if t[2] == sel_roi:
-                        # Vyřízneme kousek podle souřadnic z Nastavení
-                        crop = img_test.crop((t[3], t[4], t[3]+t[5], t[4]+t[6]))
-                        
-                        col_a, col_b = st.columns(2)
-                        col_a.image(crop, caption="Výřez z nové fotky", use_container_width=True)
-                        with col_b:
-                            if st.button("✅ ULOŽIT JAKO OK"):
-                                # Tady zavoláme logic pro uložení do složky 'training_data/OK'
-                                st.success("Uloženo do OK vzorků")
-                            if st.button("❌ ULOŽIT JAKO NOK"):
-                                st.error("Uloženo do NOK vzorků")
+            sel_roi = st.selectbox("Patří k inspekci:", roi_names)
+            
+            # Najdeme souřadnice vybrané ROI
+            for t in templates:
+                if t[2] == sel_roi:
+                    # Vyřízneme ROI z právě nahrané fotky
+                    crop = current_img.crop((t[3], t[4], t[3]+t[5], t[4]+t[6]))
+                    
+                    c1, c2 = st.columns(2)
+                    c1.image(crop, caption="Výřez z nahrané fotky", use_container_width=True)
+                    
+                    with c2:
+                        st.write(f"Anotace pro: **{sel_roi}**")
+                        if st.button("✅ OK - Správně", use_container_width=True):
+                            logic.save_cropped_image(crop, sel_roi, "OK")
+                            st.success("Uloženo jako OK")
+                        if st.button("❌ NOK - Chyba", use_container_width=True):
+                            logic.save_cropped_image(crop, sel_roi, "NOK")
+                            st.error("Uloženo jako NOK")
+        elif not roi_names:
+            st.warning("Nejdříve vytvořte ROI v Nastavení.")
         else:
-            st.warning("Nejdříve musíte vytvořit ROI v sekci Nastavení!")
+            st.info("Nahrajte fotku pro začátek anotace.")
 
 elif menu == "⚙️ Nastavení":
     st.title("⚙️ Konfigurace projektu")
@@ -120,35 +127,31 @@ elif menu == "⚙️ Nastavení":
             
             name = st.text_input("Název ROI", key="roi_name_input")
             
-            # TLAČÍTKO: Musí být takto odsazené, aby bylo v pravém sloupci
             if st.button("➕ ULOŽIT DO PROJEKTU", use_container_width=True, type="primary"):
-                # Kontrola, zda cropper už poslal data
-                if 'main_cropper' in st.session_state and st.session_state['main_cropper'] is not None:
-                    cropper_data = st.session_state['main_cropper']
+                if 'main_cropper' in st.session_state and name:
+                    # Bezpečné získání dat
+                    c_data = st.session_state['main_cropper']
+                    box = c_data.get('coords')
+                    cw = c_data.get('width')
+                    ch = c_data.get('height')
                     
-                    # Bezpečné vytažení souřadnic a rozměrů plátna
-                    box = cropper_data.get('coords')
-                    canvas_w = cropper_data.get('width')
-                    canvas_h = cropper_data.get('height')
-
-                    if box and canvas_w and canvas_h and name:
+                    if box and cw and ch:
                         orig_w, orig_h = img_pil.size
+                        rx, ry = orig_w/cw, orig_h/ch
                         
-                        # Výpočet poměru (ratio)
-                        rx, ry = orig_w / canvas_w, orig_h / canvas_h
-                        
-                        # Přepočet na reálné pixely fotky
-                        real_x = int(box['left'] * rx)
-                        real_y = int(box['top'] * ry)
-                        real_w = int(box['width'] * rx)
-                        real_h = int(box['height'] * ry)
-
-                        database.save_roi_template(produkt, name, real_x, real_y, real_w, real_h)
+                        # Uložení do DB
+                        database.save_roi_template(
+                            produkt, name, 
+                            int(box['left']*rx), int(box['top']*ry), 
+                            int(box['width']*rx), int(box['height']*ry)
+                        )
                         st.success(f"ROI '{name}' uložena!")
                         time.sleep(0.5)
                         st.rerun()
                     else:
-                        st.error("Chybí název nebo nebyla správně zaměřena oblast!"))
+                        st.error("Chyba: Zaměřte oblast na fotce!")
+                else:
+                    st.error("Chyba: Zadejte název ROI!")
 
     # --- SEZNAM ROI POD ČAROU ---
     st.divider()
