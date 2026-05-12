@@ -78,29 +78,64 @@ elif menu == "⚙️ Nastavení":
 
     # --- STRÁNKA 3: DEFINICE ROI ---
     elif st.session_state.set_step == 3:
-        if 'active_p' in st.session_state and st.session_state.master_image:
-            img = st.session_state.master_image
-            active_p = st.session_state.active_p
+        # Kontrola, zda máme data z předchozích kroků
+        active_p = st.session_state.get('active_p')
+        img = st.session_state.get('master_image')
+
+        if active_p and img:
+            st.subheader(f"🔍 Nastavení kontrol pro: {active_p}")
             
             c_foto, c_form = st.columns([2, 1])
             
             with c_foto:
-                roi = st_cropper(img, realtime_update=True, box_color='#FF9800', key="cropper")
+                # Cropper musí mít unikátní klíč a přístup k img
+                roi = st_cropper(img, realtime_update=True, box_color='#FF9800', key="cropper_main")
             
             with c_form:
-                roi_name = st.text_input("Název kontroly")
-                if st.button("💾 ULOŽIT", use_container_width=True, type="primary"):
-                    c_data = st.session_state.get('cropper')
+                st.write("### 📝 Uložit novou ROI")
+                roi_name = st.text_input("Název součástky/kontroly", key="input_roi_name")
+                
+                if st.button("💾 ULOŽIT DO DATABÁZE", use_container_width=True, type="primary"):
+                    c_data = st.session_state.get('cropper_main')
                     if c_data and roi_name:
-                        # ... zde zůstává tvůj kód pro výpočet rx, ry a database.save_roi_template ...
-                        # (použij ten přepočet z minulé zprávy)
-                        st.success("Uloženo")
-                        st.rerun()
-            
+                        box = c_data.get('coords')
+                        cw = c_data.get('width')
+                        ch = c_data.get('height')
+                        
+                        if box and cw and ch:
+                            iw, ih = img.size
+                            rx, ry = iw/cw, ih/ch
+                            
+                            database.save_roi_template(
+                                active_p, roi_name, 
+                                int(box['left']*rx), int(box['top']*ry), 
+                                int(box['width']*rx), int(box['height']*ry)
+                            )
+                            st.success(f"ROI '{roi_name}' uložena!")
+                            time.sleep(0.5)
+                            st.rerun()
+                        else:
+                            st.error("Pohněte rámečkem na fotce!")
+                    else:
+                        st.warning("Zadejte název kontroly!")
+
             st.divider()
-            st.subheader(f"Kontroly pro {active_p}")
+            # Seznam už uložených věcí
+            st.subheader("📋 Již nastavené kontroly")
             rois = database.get_roi_templates(active_p)
-            for r in rois:
-                st.write(f"📍 {r[2]}") # Zjednodušený seznam pro dotyk
+            if rois:
+                for r in rois:
+                    col_t, col_b = st.columns([3, 1])
+                    col_t.write(f"📍 **{r[2]}** (ID: {r[0]})")
+                    if col_b.button("Smazat", key=f"del_roi_{r[0]}"):
+                        database.delete_roi_template(r[0])
+                        st.rerun()
+            else:
+                st.info("Zatím žádné kontroly pro tento produkt.")
+        
         else:
-            st.error("Chybí Master snímek nebo vybraný produkt!")
+            # Tohle se zobrazí, pokud uživatel přeskočil krok 1 nebo 2
+            st.warning("⚠️ Chybí data! Nejdříve vyberte produkt (Krok 1) a nahrajte Master snímek (Krok 2).")
+            if st.button("⬅️ Zpět na nahrávání snímku"):
+                st.session_state.set_step = 2
+                st.rerun()
