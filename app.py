@@ -3,6 +3,7 @@ import styles, logic, database
 
 st.set_page_config(page_title="AI Vision Hunter", layout="wide")
 database.init_db()
+st.write("### 👁️ Monitorovací systém")
 styles.apply_custom_css()
 
 with st.sidebar:
