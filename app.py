@@ -182,18 +182,31 @@ elif menu == "⚙️ Nastavení":
                     st.rerun()
 
     # --- SEZNAM ROI POD ČAROU ---
+    # --- SEZNAM ROI S OPRAVENÝMI KLÍČI ---
     st.divider()
     st.subheader(f"📋 Seznam definovaných ROI pro: {produkt}")
+    
     current_rois = database.get_roi_templates(produkt)
     
     if current_rois:
         for r in current_rois:
-            with st.expander(f"🟢 {r[2]}"):
-                c1, c2 = st.columns([3, 1])
-                c1.write(f"Pozice: {r[3]},{r[4]} | Rozměr: {r[5]}x{r[6]}")
-                if c2.button("🗑️ Smazat", key=f"del_{r[0]}"):
-                    database.delete_roi_template(r[0])
-                    st.rerun()
+            # r[0] je unikátní ID z databáze (např. 14, 15, 16...)
+            # Vytvoříme unikátní klíč pro každé smazací tlačítko
+            unique_key = f"del_btn_{r[0]}" 
+            
+            with st.expander(f"🟢 {r[2]} (ID: {r[0]})"):
+                col_info, col_del = st.columns([4, 1])
+                
+                with col_info:
+                    st.write(f"**Pozice:** [{r[3]}, {r[4]}] | **Velikost:** {r[5]}x{r[6]} px")
+                
+                with col_del:
+                    # Tady je oprava: unikátní klíč pro každé tlačítko
+                    if st.button("🗑️ Smazat", key=unique_key, use_container_width=True):
+                        database.delete_roi_template(r[0])
+                        st.success(f"ROI s ID {r[0]} smazána.")
+                        time.sleep(0.5)
+                        st.rerun()
     else:
         st.info("Zatím žádné ROI.")
 
