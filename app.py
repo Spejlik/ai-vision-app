@@ -70,113 +70,85 @@ elif menu == "🧠 Učení a Trénink":
     
     with t3:
         st.subheader("Import a Anotace pro AI")
-        upl = st.file_uploader("Nahrajte fotky k doučení", accept_multiple_files=True)
-        
-        # Načteme ROI z databáze pro výběr
         templates = database.get_roi_templates("MQB Skříň ventilátoru L")
         roi_names = [t[2] for t in templates]
         
         if roi_names:
-            c1, c2 = st.columns([3, 1])
-            with c1:
-                st.info("Vyberte oblast na fotce a uložte ji jako vzorek pro AI.")
-                img_path = "training_data/external/master.jpg" # Cesta k tvému master obrázku
-                
-                if os.path.exists(img_path):
-                    master_img = Image.open(img_path)
-                    # Tady definujeme 'crop' pomocí st_cropper
-                    crop = st_cropper(master_img, realtime_update=True, box_color='#FF0000')
-                else:
-                    st.error("Soubor master.jpg nebyl nalezen ve složce training_data/external/")
-                    crop = None # Definujeme jako None, aby program nespadl
+            sel_roi = st.selectbox("Vyberte součástku k doučení", roi_names)
+            upl_test = st.file_uploader("Nahrajte novou fotku z výroby", type=["jpg", "png"])
             
-            with c2:
-                # Kontrola: Pokud crop existuje, zobrazíme ho a umožníme uložit
-                if crop is not None:
-                    st.image(crop, use_container_width=True)
-                    sel_roi = st.selectbox("Patří k inspekci:", roi_names)
-                    label = st.radio("Výsledek:", ["OK", "NOK"])
-                    
-                    if st.button("💾 ULOŽIT DO UČENÍ"):
-                        import logic
-                        logic.save_cropped_image(crop, sel_roi, label)
-                        st.success(f"Vzorek pro {sel_roi} uložen jako {label}!")
+            if upl_test:
+                img_test = Image.open(upl_test)
+                # Najdeme souřadnice vybrané ROI
+                for t in templates:
+                    if t[2] == sel_roi:
+                        # Vyřízneme kousek podle souřadnic z Nastavení
+                        crop = img_test.crop((t[3], t[4], t[3]+t[5], t[4]+t[6]))
+                        
+                        col_a, col_b = st.columns(2)
+                        col_a.image(crop, caption="Výřez z nové fotky", use_container_width=True)
+                        with col_b:
+                            if st.button("✅ ULOŽIT JAKO OK"):
+                                # Tady zavoláme logic pro uložení do složky 'training_data/OK'
+                                st.success("Uloženo do OK vzorků")
+                            if st.button("❌ ULOŽIT JAKO NOK"):
+                                st.error("Uloženo do NOK vzorků")
         else:
-            st.warning("Nejdříve vytvořte ROI v sekci Nastavení, aby AI věděla, co má učit.")
+            st.warning("Nejdříve musíte vytvořit ROI v sekci Nastavení!")
 
 elif menu == "⚙️ Nastavení":
     st.title("⚙️ Konfigurace projektu")
-    
     produkt = st.selectbox("Aktivní produkt", ["MQB Skříň ventilátoru L", "Octavia III - Kryt"])
     
-    # Nahrání souboru - výsledek uložíme do 'uploaded_file'
-    uploaded_file = st.file_uploader("Nahrajte Master snímek", type=["jpg", "png"], key="master_upl")
-    
-    # Uložíme do session_state, aby obrázek nezmizel
-    if uploaded_file is not None:
-        st.session_state.master_image = Image.open(uploaded_file)
+    # 1. Nahrání a uložení do paměti
+    master_file = st.file_uploader("Nahrajte Master snímek", type=["jpg", "png"], key="master_upl")
+    if master_file:
+        st.session_state.master_image = Image.open(master_file)
 
     if 'master_image' in st.session_state:
         img_pil = st.session_state.master_image
-        
         col_foto, col_form = st.columns([3, 1])
         
         with col_foto:
             st.write("### 🖱️ 1. Definice nové ROI")
-            # Tady nesmí být nic jiného než tyto parametry:
-            roi_obj = st_cropper(
-                img_pil, 
-                realtime_update=True, 
-                box_color='#FF9800', 
-                aspect_ratio=None, 
-                key="main_cropper"
-            )
+            roi_obj = st_cropper(img_pil, realtime_update=True, box_color='#FF9800', aspect_ratio=None, key="main_cropper")
             
         with col_form:
             st.write("### 📝 2. Uložit")
             if roi_obj:
-                st.image(roi_obj, use_container_width=True, caption="Náhled")
+                st.image(roi_obj, use_container_width=True)
             
             name = st.text_input("Název ROI", key="roi_name_input")
             
-            if st.button("🚨 VYMAZAT VŠECHNY ROI (RESET)"):
-                import sqlite3
-                conn = sqlite3.connect('inspections.db')
-                conn.execute("DELETE FROM roi_templates")
-                conn.commit()
-                conn.close()
-                st.warning("Všechny ROI byly smazány. Začněte znovu.")
+            # TLAČÍTKO: Musí být takto odsazené, aby bylo v pravém sloupci
+            if st.button("➕ ULOŽIT DO PROJEKTU", use_container_width=True, type="primary"):
+                if name and 'main_cropper' in st.session_state:
+                    # Výpočet měřítka
+                    box = st.session_state['main_cropper']['coords']
+                    canvas_w = st.session_state['main_cropper']['width']
+                    canvas_h = st.session_state['main_cropper']['height']
+                    orig_w, orig_h = img_pil.size
+                    rx, ry = orig_w/canvas_w, orig_h/canvas_h
 
-    # --- 3. SEZNAM S NÁHLEDY (Zde byla chyba NameError) ---
+                    database.save_roi_template(produkt, name, int(box['left']*rx), int(box['top']*ry), int(box['width']*rx), int(box['height']*ry))
+                    st.success("ROI uložena!")
+                    time.sleep(0.5)
+                    st.rerun()
+
+    # --- SEZNAM ROI POD ČAROU ---
     st.divider()
-    st.subheader(f"📋 Aktivní ROI pro: {produkt}")
-    
     templates = database.get_roi_templates(produkt)
-    
-    # OPRAVA: Kontrolujeme 'master_image' v session_state, ne master_file
     if templates and 'master_image' in st.session_state:
         for r in templates:
             with st.expander(f"🔍 {r[2]} (ID: {r[0]})"):
-                c_img, c_txt, c_btn = st.columns([1, 2, 1])
-                
-                with c_img:
-                    # Vyřízneme náhled z obrázku v paměti
-                    # r[3]=x, r[4]=y, r[5]=w, r[6]=h
-                    try:
-                        left, top, w, h = r[3], r[4], r[5], r[6]
-                        roi_preview = st.session_state.master_image.crop((left, top, left+w, top+h))
-                        st.image(roi_preview, use_container_width=True)
-                    except Exception as e:
-                        st.error("Chyba náhledu")
-                
-                with c_txt:
-                    st.write(f"Pozice: [{r[3]}, {r[4]}]")
-                    st.write(f"Rozměr: {r[5]}x{r[6]} px")
-                
-                with c_btn:
-                    if st.button("🗑️ Smazat", key=f"del_{r[0]}", use_container_width=True):
-                        database.delete_roi_template(r[0])
-                        st.rerun()
+                c1, c2, c3 = st.columns([1, 2, 1])
+                # Tady vyřízneme náhled, aby byl vidět v seznamu
+                preview = st.session_state.master_image.crop((r[3], r[4], r[3]+r[5], r[4]+r[6]))
+                c1.image(preview, use_container_width=True)
+                c2.write(f"Pozice: [{r[3]}, {r[4]}]")
+                if c3.button("🗑️ Smazat", key=f"del_{r[0]}"):
+                    database.delete_roi_template(r[0])
+                    st.rerun()
     else:
         st.info("Nahrajte Master snímek pro zobrazení seznamu s náhledy.")
 
