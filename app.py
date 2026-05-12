@@ -119,22 +119,25 @@ elif menu == "🧠 Učení a Trénink":
         st.subheader("Import a Anotace externích fotek")
         upl = st.file_uploader("Nahrajte nové soubory", accept_multiple_files=True, key="uploader")
         
-        # Logika uložení (už máš)
+        # 1. Logika uložení
         if upl:
             import os
             for file in upl:
                 save_path = os.path.join("training_data", "external", file.name)
                 with open(save_path, "wb") as f:
                     f.write(file.getbuffer())
+            st.success(f"Nahráno {len(upl)} souborů.")
 
-        # --- GALERIE MINIATUR ---
+        # 2. Galerie miniatur
         import os
         ext_path = "training_data/external/"
-        files = [f for f in os.listdir(ext_path) if f.endswith(('.jpg', '.png'))]
+        # Vytvoříme složku, pokud neexistuje
+        if not os.path.exists(ext_path): os.makedirs(ext_path)
+        
+        files = [f for f in os.listdir(ext_path) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
         
         if files:
-            st.write("### 🖼️ Galerie nahraných snímků")
-            # Vytvoříme mřížku miniatur (5 sloupců)
+            st.write("### 🖼️ Galerie snímků")
             img_cols = st.columns(5)
             for idx, f_name in enumerate(files):
                 with img_cols[idx % 5]:
@@ -142,35 +145,33 @@ elif menu == "🧠 Učení a Trénink":
                     if st.button("🔍 Detail", key=f"sel_{f_name}"):
                         st.session_state.annot_img = f_name
 
-            # --- DETAIL A TVORBA ROI ---
+            # 3. INTERAKTIVNÍ OŘEZ (ROI)
             if 'annot_img' in st.session_state:
                 st.divider()
                 st.markdown(f"#### 📐 Nastavení ROI pro: `{st.session_state.annot_img}`")
                 
-                col_img, col_form = st.columns([3, 1])
-                
                 img_p = os.path.join(ext_path, st.session_state.annot_img)
-                
+                img = Image.open(img_p)
+
+                col_img, col_form = st.columns([3, 1])
+
                 with col_img:
-                    # Tady v budoucnu můžeme použít streamlit-cropper, 
-                    # zatím zobrazíme detail a zadáme souřadnice
-                    st.image(img_p, use_container_width=True)
-                
+                    st.info("🖱️ Táhni myší v obrázku pro výběr oblasti (ROI)")
+                    # Grafický výběr ROI
+                    cropped_img = st_cropper(img, realtime_update=True, box_color='#FF0000', aspect_ratio=None)
+                    
                 with col_form:
-                    st.write("**Definice výřezu:**")
-                    roi_n = st.text_input("Název ROI", value="Kolicek_Detail")
-                    x = st.number_input("X", 0, 2000, 100)
-                    y = st.number_input("Y", 0, 2000, 100)
-                    w = st.number_input("Šířka", 10, 500, 200)
-                    h = st.number_input("Výška", 10, 500, 200)
+                    st.write("**📐 Náhled výřezu:**")
+                    st.image(cropped_img, use_container_width=True)
                     
-                    label = st.radio("Označit jako:", ["OK", "NOK"])
+                    roi_name = st.text_input("Název této ROI", value="Zebro_P1")
+                    label = st.radio("Výsledek ROI:", ["OK", "NOK"])
                     
-                    if st.button("💾 ULOŽIT VÝŘEZ DO UČENÍ"):
-                        # Zavoláme logiku pro ořez a uložení
+                    if st.button("💾 ULOŽIT DO UČENÍ", use_container_width=True):
                         import logic
-                        crop_path = logic.save_roi_crop(img_p, roi_n, x, y, w, h, label)
-                        st.success(f"Výřez uložen do dataset/{label}")
+                        path = logic.save_cropped_image(cropped_img, roi_name, label)
+                        st.success(f"Uloženo!")
+                        st.toast(f"ROI {roi_name} uložena jako {label}")
 
 elif menu == "📂 Historie inspekcí":
     st.markdown("## 📂 Historie inspekcí")

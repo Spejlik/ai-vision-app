@@ -48,22 +48,17 @@ def augment_image(image, count=10):
         variants.append(aug_img)
     return variants
 
-def save_roi_crop(img_path, name, x, y, w, h, label):
-    # Načtení originálu
-    img = cv2.imread(img_path)
-    if img is None: return None
-    
-    # Ořez (Crop) podle souřadnic
-    crop = img[y:y+h, x:x+w]
-    
-    # Cesta pro uložení do datasetu
-    target_dir = f"dataset/{label}/{name}/"
+def save_cropped_image(pil_image, roi_name, label):
+    # Vytvoření cesty: dataset/OK/Zebro_P1/
+    target_dir = os.path.join("dataset", label, roi_name)
     if not os.path.exists(target_dir):
         os.makedirs(target_dir)
-        
-    import time
-    file_name = f"crop_{int(time.time())}.jpg"
-    final_path = os.path.join(target_dir, file_name)
     
-    cv2.imwrite(final_path, crop)
+    # Generování názvu souboru podle času
+    import time
+    filename = f"crop_{int(time.time())}.jpg"
+    final_path = os.path.join(target_dir, filename)
+    
+    # Uložení (převedeme na RGB pro jistotu, kdyby byl vstup v PNG s alfou)
+    pil_image.convert('RGB').save(final_path, "JPEG")
     return final_path    
