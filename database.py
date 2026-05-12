@@ -49,4 +49,13 @@ def get_history(limit=8):
     c.execute("SELECT * FROM results ORDER BY id DESC LIMIT ?", (limit,))
     data = c.fetchall()
     conn.close()
+    return data
+
+def get_cycle_details(cycle_id):
+    """Vrátí všechny ROI pro jeden konkrétní výstřel lisu"""
+    conn = sqlite3.connect('inspections.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM results WHERE cycle_id = ?", (cycle_id,))
+    data = c.fetchall()
+    conn.close()
     return data    
