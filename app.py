@@ -79,21 +79,30 @@ elif menu == "🧠 Učení a Trénink":
         if roi_names:
             c1, c2 = st.columns([3, 1])
             with c1:
-                # Simulace galerie - vezmeme první nahraný nebo vzorový
                 st.info("Vyberte oblast na fotce a uložte ji jako vzorek pro AI.")
-                img_path = "training_data/external/master.jpg" # Ukázka
+                img_path = "training_data/external/master.jpg" # Cesta k tvému master obrázku
+                
                 if os.path.exists(img_path):
                     master_img = Image.open(img_path)
+                    # Tady definujeme 'crop' pomocí st_cropper
                     crop = st_cropper(master_img, realtime_update=True, box_color='#FF0000')
+                else:
+                    st.error("Soubor master.jpg nebyl nalezen ve složce training_data/external/")
+                    crop = None # Definujeme jako None, aby program nespadl
+            
             with c2:
-                st.image(crop, use_container_width=True)
-                sel_roi = st.selectbox("Patří k inspekci:", roi_names)
-                label = st.radio("Výsledek:", ["OK", "NOK"])
-                if st.button("💾 ULOŽIT DO UČENÍ"):
-                    logic.save_cropped_image(crop, sel_roi, label)
-                    st.success("Vzorek uložen!")
+                # Kontrola: Pokud crop existuje, zobrazíme ho a umožníme uložit
+                if crop is not None:
+                    st.image(crop, use_container_width=True)
+                    sel_roi = st.selectbox("Patří k inspekci:", roi_names)
+                    label = st.radio("Výsledek:", ["OK", "NOK"])
+                    
+                    if st.button("💾 ULOŽIT DO UČENÍ"):
+                        import logic
+                        logic.save_cropped_image(crop, sel_roi, label)
+                        st.success(f"Vzorek pro {sel_roi} uložen jako {label}!")
         else:
-            st.warning("Nejdříve vytvořte ROI v Nastavení.")
+            st.warning("Nejdříve vytvořte ROI v sekci Nastavení, aby AI věděla, co má učit.")
 
 # --- 3. NASTAVENÍ (KONFIGURÁTOR) ---
 elif menu == "⚙️ Nastavení":
