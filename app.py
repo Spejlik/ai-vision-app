@@ -68,11 +68,23 @@ if menu == "🏠 Monitor":
                 cols = st.columns(n_cols)
                 
                 for i, res in enumerate(latest_results):
-                    with cols[i % n_cols]:
-                        b64_img = logic.get_real_image_base64(res[2], res[4])
-                        status_color = "#22c55e" if res[4] == "OK" else "#ef4444"
-                        card_size = "small" if n_results > 4 else "normal"
-                        styles.draw_roi_card(res[2], res[3], res[4], status_color, b64_img, size=card_size)
+    with cols[i % n_cols]:
+        # res[4] je status (OK/NOK), res[2] je roi_name
+        # Musíme získat base64 kód obrázku
+        b64_img = logic.get_real_image_base64(res[2], res[4])
+        
+        # BARVA: Zelená pro OK, Červená pro NOK
+        status_color = "#22c55e" if res[4] == "OK" else "#ef4444"
+        
+        # VOLÁNÍ FUNKCE (Zkontroluj pořadí argumentů!)
+        styles.draw_roi_card(
+            name=res[4],          # Jméno ROI (Kolicek D atd.)
+            confidence=res[5],    # Procenta shody
+            status=res[6],        # OK / NOK
+            color=status_color,   # Barva pro text
+            img_path=b64_img,     # TADY MUSÍ BÝT TEN BASE64 KÓD
+            size="small" if n_results > 4 else "normal"
+        )
 
     # --- TADY JE TA CHYBĚJÍCÍ PRAVÁ STRANA ---
     with col_right:
