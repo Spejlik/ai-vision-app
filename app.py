@@ -77,10 +77,15 @@ elif menu == "⚙️ Nastavení":
                 roi_name = st.text_input("Název kontroly (např. 'Sroub_1')")
                 if st.button("💾 ULOŽIT ROI"):
                     c_data = st.session_state.get('cropper')
-                    if c_data and roi_name:
+                    
+                    # Kontrola, zda máme všechna potřebná data
+                    if c_data and 'coords' in c_data and 'width' in c_data and roi_name:
                         box = c_data['coords']
-                        cw, ch = c_data['width'], c_data['height']
+                        cw = c_data['width']
+                        ch = c_data['height']
                         iw, ih = img.size
+                        
+                        # Přepočet měřítka
                         rx, ry = iw/cw, ih/ch
                         
                         database.save_roi_template(
@@ -91,6 +96,11 @@ elif menu == "⚙️ Nastavení":
                         st.success(f"Kontrola '{roi_name}' uložena!")
                         time.sleep(0.5)
                         st.rerun()
+                    else:
+                        if not roi_name:
+                            st.error("Chyba: Zadejte název kontroly!")
+                        else:
+                            st.error("Chyba: Nejdříve pohněte rámečkem na fotce pro aktivaci dat.")
 
             # Zobrazení existujících ROI
             st.subheader(f"Existující kontroly pro {active_p}")

@@ -33,83 +33,23 @@ def delete_product(name):
     conn.execute("DELETE FROM products WHERE name = ?", (name,))
     conn.execute("DELETE FROM roi_templates WHERE product_name = ?", (name,))
     conn.commit()
-    conn.close()]
-
-def save_result(cycle_id, part_name, roi_name, confidence, status, img_path):
-    conn = sqlite3.connect('inspections.db')
-    c = conn.cursor()
-    ts = time.strftime('%Y-%m-%d %H:%M:%S')
-    c.execute("INSERT INTO results (timestamp, cycle_id, part_name, roi_name, confidence, status, image_path) VALUES (?,?,?,?,?,?,?)",
-              (ts, cycle_id, part_name, roi_name, confidence, status, img_path))
-    conn.commit()
     conn.close()
 
-# TATO FUNKCE JE KLÍČOVÁ - seskupuje inspekce do jedné tečky
-def get_last_cycles(limit=15):
+def save_roi_template(product_name, name, x, y, w, h):
     conn = sqlite3.connect('inspections.db')
-    c = conn.cursor()
-    # Pokud je v cyklu aspoň jedno NOK, celý cyklus je NOK
-    c.execute('''SELECT cycle_id, MAX(timestamp), 
-                 CASE WHEN MIN(status) = 'NOK' THEN 'NOK' ELSE 'OK' END as final_status
-                 FROM results 
-                 GROUP BY cycle_id 
-                 ORDER BY MAX(timestamp) DESC 
-                 LIMIT ?''', (limit,))
-    data = c.fetchall()
-    conn.close()
-    return data
-    
-def get_history(limit=8):
-    """Tato funkce vrací jednotlivé ROI karty (to, co ti teď hází chybu)"""
-    conn = sqlite3.connect('inspections.db')
-    c = conn.cursor()
-    # Seřadíme podle ID sestupně, abychom viděli nejnovější výsledky
-    c.execute("SELECT * FROM results ORDER BY id DESC LIMIT ?", (limit,))
-    data = c.fetchall()
-    conn.close()
-    return data
-
-def get_cycle_details(cycle_id):
-    """Vrátí všechny ROI pro jeden konkrétní výstřel lisu"""
-    conn = sqlite3.connect('inspections.db')
-    c = conn.cursor()
-    c.execute("SELECT * FROM results WHERE cycle_id = ?", (cycle_id,))
-    data = c.fetchall()
-    conn.close()
-    return data
-
-def create_config_tables():
-    conn = sqlite3.connect('inspections.db')
-    c = conn.cursor()
-    # Tabulka pro definici inspekčních zón
-    c.execute('''CREATE TABLE IF NOT EXISTS roi_templates
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  product_name TEXT,
-                  roi_name TEXT,
-                  x INTEGER, y INTEGER, w INTEGER, h INTEGER)''')
-    conn.commit()
-    conn.close()    
-    
-def save_roi_template(product_name, roi_name, x, y, w, h):
-    conn = sqlite3.connect('inspections.db')
-    c = conn.cursor()
-    c.execute('''INSERT INTO roi_templates (product_name, roi_name, x, y, w, h)
-                 VALUES (?, ?, ?, ?, ?, ?)''', (product_name, roi_name, int(x), int(y), int(w), int(h)))
+    conn.execute('''INSERT INTO roi_templates (product_name, name, x, y, w, h)
+                    VALUES (?, ?, ?, ?, ?, ?)''', (product_name, name, x, y, w, h))
     conn.commit()
     conn.close()
 
 def get_roi_templates(product_name):
     conn = sqlite3.connect('inspections.db')
-    c = conn.cursor()
-    c.execute("SELECT * FROM roi_templates WHERE product_name = ?", (product_name,))
-    rows = c.fetchall()
+    res = conn.execute("SELECT id, product_name, name, x, y, w, h FROM roi_templates WHERE product_name = ?", (product_name,)).fetchall()
     conn.close()
-    return rows
+    return res
 
 def delete_roi_template(roi_id):
-    """Smaže konkrétní ROI šablonu z databáze"""
     conn = sqlite3.connect('inspections.db')
-    c = conn.cursor()
-    c.execute("DELETE FROM roi_templates WHERE id = ?", (roi_id,))
+    conn.execute("DELETE FROM roi_templates WHERE id = ?", (roi_id,))
     conn.commit()
-    conn.close()    
+    conn.close()
