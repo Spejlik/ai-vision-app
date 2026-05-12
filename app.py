@@ -49,56 +49,43 @@ st.divider()
 
 # --- HLAVNÍ MONITOROVACÍ PLOCHA ---
 if menu == "🏠 Monitor":
-    col_left, col_right = st.columns([4, 1.2])
+    # Změna poměru na 75% : 25%
+    col_left, col_right = st.columns([3, 1])
 
     with col_left:
-        # Získání posledních 4 výsledků z databáze
         latest_results = database.get_history(limit=4)
-        
         if latest_results:
-            # Rozdělení do 2 sloupců (matice 2x2), aby se předešlo rolování
-            c1, c2 = st.columns(2)
+            # Matice 2x2 pomocí vnořených sloupců
+            row1_col1, row1_col2 = st.columns(2)
+            row2_col1, row2_col2 = st.columns(2)
+            
+            # Mapování výsledků do buněk
+            slots = [row1_col1, row1_col2, row2_col1, row2_col2]
+            
             for i, res in enumerate(latest_results):
-                # i=0,1 jde do c1 | i=2,3 jde do c2
-                target_col = c1 if i < 2 else c2
-                with target_col:
-                    # Získání base64 obrázku z logic.py
+                with slots[i]:
                     b64_img = logic.get_real_image_base64(res[2], res[4])
-                    # Barva podle statusu
                     status_color = "#22c55e" if res[4] == "OK" else "#ef4444"
-                    # Vykreslení karty ze styles.py
                     styles.draw_roi_card(res[2], res[3], res[4], status_color, b64_img)
-        else:
-            st.info("Čekám na první data z kontroly... Spusťte test tlačítkem START.")
 
     with col_right:
-        # Velký stavový semafor (Celkový výsledek)
+        # Kompaktní stavový box
         current_status = latest_results[0][4] if latest_results else "WAIT"
         bg_color = "#22c55e" if current_status == "OK" else "#ef4444"
-        if current_status == "WAIT": bg_color = "#64748b"
-
+        
         st.markdown(f"""
-            <div style="background:{bg_color}; color:white; padding:40px; border-radius:12px; text-align:center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                <p style="margin:0; opacity:0.8; font-weight:bold;">CELKOVÝ STAV</p>
-                <h1 style="font-size:70px; margin:0;">{current_status}</h1>
+            <div style="background:{bg_color}; color:white; padding:20px; border-radius:10px; text-align:center;">
+                <h1 style="font-size:45px; margin:0;">{current_status}</h1>
+                <p style="margin:0; font-size:12px;">STATUS</p>
             </div>
         """, unsafe_allow_html=True)
         
-        st.write("") # Mezera
-        
-        # Ovládání v MANUAL režimu
+        # Ovládání (v MANUAL režimu)
         if mode == "MANUAL":
-            st.markdown("### 🎮 RUČNÍ OVLÁDÁNÍ")
-            if st.button("🚀 START INSPEKCE", use_container_width=True, type="primary"):
-                # Simulace/Spuštění kontroly pro 4 ROI body
-                for roi_name in ["Odtok A", "Zebro B", "Domecek C", "Kolicek D"]:
-                    conf, stat, _ = logic.get_ai_prediction(roi_name)
-                    # Uložení do databáze
-                    database.save_result("MQB L", roi_name, conf, stat, f"img/guma_{stat.lower()}.jpg")
+            st.write("")
+            if st.button("🚀 START", use_container_width=True):
+                # Tady volání tvé logiky
                 st.rerun()
-        else:
-            st.success("🤖 Režim AUTO aktivní")
-            st.caption("Čekám na signál z PLC...")
 
 elif menu == "📊 Statistiky":
     st.header("Statistiky výroby")

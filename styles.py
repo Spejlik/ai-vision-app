@@ -3,39 +3,51 @@ import streamlit as st
 def apply_custom_css():
     st.markdown("""
         <style>
-        /* 1. ZÁKAZ SCROLLU A PEVNÁ VÝŠKA */
-        html, body, [data-testid="stAppViewContainer"] {
+        /* 1. GLOBÁLNÍ ZÁKAZ SCROLLU NA VŠECH VRSTVÁCH */
+        html, body, [data-testid="stAppViewContainer"], 
+        [data-testid="stMainViewContainer"], 
+        .main .block-container,
+        [data-testid="stVerticalBlock"] {
             overflow: hidden !important;
             height: 100vh !important;
-            background-color: #f0f2f6; /* Světle šedé průmyslové pozadí */
+            max-height: 100vh !important;
         }
-        
+
+        /* 2. ODSTRANĚNÍ VNĚJŠÍCH OKRAJŮ A MEZER */
         .main .block-container {
             padding-top: 1rem !important;
+            padding-bottom: 0rem !important;
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
             max-width: 98% !important;
         }
 
-        /* 2. SIDEBAR - Tmavě modrý (profesionální kontrast) */
-        [data-testid="stSidebar"] {
-            background-color: #1e293b !important;
-            color: white !important;
-        }
-        [data-testid="stSidebar"] * {
-            color: white !important;
-        }
-
-        /* 3. KARTY ROI - Světlé s výrazným okrajem */
+        /* 3. DESIGN KARET (Zmenšení, aby se vešly) */
         .roi-card {
             background-color: white;
             border: 2px solid #e2e8f0;
             border-radius: 8px;
-            padding: 10px;
+            padding: 8px; /* Méně paddingu pro úsporu místa */
             text-align: center;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            margin-bottom: 5px;
         }
         
-        /* 4. SKRYTÍ DEPLOY TLAČÍTKA A MENU */
-        #MainMenu, footer, header {visibility: hidden;}
+        .roi-card img {
+            max-height: 120px; /* Limit výšky obrázku */
+            object-fit: contain;
+        }
+
+        /* 4. SIDEBAR - Kontrastní vzhled */
+        [data-testid="stSidebar"] {
+            background-color: #1e293b !important;
+            min-width: 250px !important;
+        }
+
+        /* 5. SKRYTÍ MENU A DEPLOY TLAČÍTKA */
+        #MainMenu, footer, header, [data-testid="stHeader"] {
+            display: none !important;
+        }
         </style>
     """, unsafe_allow_html=True)
 
