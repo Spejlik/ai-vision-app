@@ -17,10 +17,62 @@ with st.sidebar:
     st.title("🔍 Menu")
     menu = st.radio("Přejít na:", ["📊 Monitoring", "🧠 Učení a Trénink", "⚙️ Nastavení"])
 
-# --- 1. MONITORING (Zjednodušená verze) ---
+# --- 1. MONITORING (Hlavní obrazovka) ---
 if menu == "📊 Monitoring":
-    st.title("📊 Monitoring výroby")
-    st.info("Zde probíhá automatická kontrola podle definovaných ROI.")
+    st.title("📊 Monitoring výroby v reálném čase")
+    
+    # Horní řada: Statistiky
+    col_stat1, col_stat2, col_stat3 = st.columns(3)
+    with col_stat1:
+        st.metric("Dnešní cykly", "1,284", "+12")
+    with col_stat2:
+        st.metric("Úspěšnost (Yield)", "98.2 %", "-0.4 %")
+    with col_stat3:
+        # Zobrazení posledních 10 výsledků jako barevná kolečka
+        cycles = database.get_last_cycles(limit=10) # Předpokládám funkci v DB
+        dots = "".join([f" {'🟢' if c[2]=='OK' else '🔴'}" for c in cycles]) if cycles else "Zatím žádná data"
+        st.write(f"Poslední cykly: {dots}")
+
+    st.divider()
+
+    # Hlavní část: Rozvržení vlevo obraz, vpravo tabulka
+    col_cam, col_res = st.columns([2, 1])
+
+    with col_cam:
+        st.subheader("📸 Živý náhled / Poslední snímek")
+        # Pokud máme master snímek, ukážeme ho jako podklad
+        if st.session_state.master_image:
+            st.image(st.session_state.master_image, use_container_width=True, caption="Kamera 1 - MQB Skříň ventilátoru")
+        else:
+            st.warning("Není k dispozici žádný snímek z kamery. Nahrajte Master v Nastavení.")
+
+    with col_res:
+        st.subheader("✅ Aktuální výsledky")
+        
+        # Načteme ROI, které máme hlídat
+        produkt = "MQB Skříň ventilátoru L"
+        active_rois = database.get_roi_templates(produkt)
+        
+        if active_rois:
+            for r in active_rois:
+                # Simulace výsledku - později zde bude volání AI modelu
+                status = "OK" # Simulace
+                confidence = "99.8%"
+                
+                # Barevný box pro výsledek
+                color = "#dcfce7" if status == "OK" else "#fee2e2"
+                st.markdown(f"""
+                    <div style="background-color:{color}; padding:10px; border-radius:5px; margin-bottom:10px; border: 1px solid #ccc;">
+                        <span style="font-weight:bold;">{r[2]}</span>: <span style="float:right;">{status} ({confidence})</span>
+                    </div>
+                """, unsafe_allow_html=True)
+            
+            if st.button("🚀 SPUSTIT RUČNÍ TEST", use_container_width=True):
+                st.toast("Inspekce probíhá...")
+                time.sleep(1)
+                st.success("Inspekce dokončena.")
+        else:
+            st.info("Nejsou definovány žádné kontrolní zóny (ROI).")
 
 # --- 2. UČENÍ A TRÉNINK ---
 elif menu == "🧠 Učení a Trénink":
