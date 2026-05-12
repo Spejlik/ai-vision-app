@@ -107,15 +107,15 @@ elif menu == "🧠 Učení a Trénink":
 elif menu == "⚙️ Nastavení":
     st.title("⚙️ Konfigurace projektu")
     
-    # 1. Volba produktu
     produkt = st.selectbox("Aktivní produkt", ["MQB Skříň ventilátoru L", "Octavia III - Kryt"])
     
-    # 2. Správa Master snímku v paměti (aby nezmizel při uložení)
-    master_file = st.file_uploader("Nahrajte Master snímek", type=["jpg", "png"], key="master_upl")
+    # Nahrání souboru - výsledek uložíme do 'uploaded_file'
+    uploaded_file = st.file_uploader("Nahrajte Master snímek", type=["jpg", "png"], key="master_upl")
     
-    if master_file:
-        st.session_state.master_image = Image.open(master_file)
-    
+    # Uložíme do session_state, aby obrázek nezmizel
+    if uploaded_file is not None:
+        st.session_state.master_image = Image.open(uploaded_file)
+
     if 'master_image' in st.session_state:
         img_pil = st.session_state.master_image
         
@@ -123,81 +123,69 @@ elif menu == "⚙️ Nastavení":
         
         with col_foto:
             st.write("### 🖱️ 1. Definice nové ROI")
-            # Použijeme edit_name ze session_state pokud existuje (pro editaci)
-            default_name = st.session_state.get('edit_name', "")
-            
+            # OPRAVA: Odstraněn problematický parametr should_resize_out
             roi_obj = st_cropper(
                 img_pil, 
                 realtime_update=True, 
                 box_color='#FF9800', 
                 aspect_ratio=None, 
                 key="main_cropper",
-                should_resize_out=False,
                 use_container_width=True
             )
             
         with col_form:
-            st.write("### 📝 2. Uložit / Upravit")
+            st.write("### 📝 2. Uložit")
             if roi_obj:
                 st.image(roi_obj, use_container_width=True, caption="Náhled")
             
-            name = st.text_input("Název ROI", value=default_name, key="roi_name_input")
+            name = st.text_input("Název ROI", key="roi_name_input")
             
             if st.button("➕ ULOŽIT DO PROJEKTU", use_container_width=True, type="primary"):
                 if 'main_cropper' in st.session_state and name:
-                    coords = st.session_state['main_cropper']['coords']
-                    # Uložíme do DB
+                    # Výpočet souřadnic
+                    box = st.session_state['main_cropper']['coords']
+                    # POZOR: Pokud cropper vrací relativní hodnoty, přepočítáme na pixely
                     database.save_roi_template(
                         produkt, name, 
-                        int(coords['left']), int(coords['top']), 
-                        int(coords['width']), int(coords['height'])
+                        int(box['left']), int(box['top']), 
+                        int(box['width']), int(box['height'])
                     )
-                    # Vyčistíme editační pole a restartujeme
-                    if 'edit_name' in st.session_state:
-                        del st.session_state.edit_name
                     st.success(f"ROI '{name}' uložena!")
                     time.sleep(0.5)
                     st.rerun()
 
-    # --- 3. SEZNAM S FOTKAMI A EDITACÍ ---
+    # --- 3. SEZNAM S NÁHLEDY (Zde byla chyba NameError) ---
     st.divider()
     st.subheader(f"📋 Aktivní ROI pro: {produkt}")
     
     templates = database.get_roi_templates(produkt)
     
+    # OPRAVA: Kontrolujeme 'master_image' v session_state, ne master_file
     if templates and 'master_image' in st.session_state:
         for r in templates:
-            # Unikátní klíče pro Streamlit prvky
             with st.expander(f"🔍 {r[2]} (ID: {r[0]})"):
                 c_img, c_txt, c_btn = st.columns([1, 2, 1])
                 
-                # Zobrazení fotky výřezu
                 with c_img:
-                    left, top, w, h = r[3], r[4], r[5], r[6]
                     # Vyřízneme náhled z obrázku v paměti
-                    roi_preview = st.session_state.master_image.crop((left, top, left+w, top+h))
-                    st.image(roi_preview, use_container_width=True)
+                    # r[3]=x, r[4]=y, r[5]=w, r[6]=h
+                    try:
+                        left, top, w, h = r[3], r[4], r[5], r[6]
+                        roi_preview = st.session_state.master_image.crop((left, top, left+w, top+h))
+                        st.image(roi_preview, use_container_width=True)
+                    except Exception as e:
+                        st.error("Chyba náhledu")
                 
                 with c_txt:
-                    st.write(f"**Pozice:** [{left}, {top}]")
-                    st.write(f"**Rozměr:** {w}x{h} px")
+                    st.write(f"Pozice: [{r[3]}, {r[4]}]")
+                    st.write(f"Rozměr: {r[5]}x{r[6]} px")
                 
                 with c_btn:
-                    # Tlačítko SMAZAT
                     if st.button("🗑️ Smazat", key=f"del_{r[0]}", use_container_width=True):
                         database.delete_roi_template(r[0])
                         st.rerun()
-                    
-                    # Tlačítko UPRAVIT (Smaže původní a hodí název do text_inputu)
-                    if st.button("📝 Upravit", key=f"ed_{r[0]}", use_container_width=True):
-                        st.session_state.edit_name = r[2]
-                        database.delete_roi_template(r[0])
-                        st.rerun()
     else:
-        if 'master_image' not in st.session_state:
-            st.info("Nahrajte Master snímek pro zobrazení náhledů.")
-        else:
-            st.info("Zatím žádné ROI.")
+        st.info("Nahrajte Master snímek pro zobrazení seznamu s náhledy.")
 
 # --- 4. HISTORIE ---
 elif menu == "📂 Historie inspekcí":
