@@ -81,3 +81,11 @@ def create_config_tables():
                   x INTEGER, y INTEGER, w INTEGER, h INTEGER)''')
     conn.commit()
     conn.close()    
+    
+def save_roi_template(product_name, roi_name, x, y, w, h):
+    conn = sqlite3.connect('inspections.db')
+    c = conn.cursor()
+    c.execute('''INSERT INTO roi_templates (product_name, roi_name, x, y, w, h)
+                 VALUES (?, ?, ?, ?, ?, ?)''', (product_name, roi_name, int(x), int(y), int(w), int(h)))
+    conn.commit()
+    conn.close()    

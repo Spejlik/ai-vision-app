@@ -163,9 +163,22 @@ elif menu == "🧠 Učení a Trénink":
                         roi_name = st.text_input("Název této ROI", value="Zebro_P1")
                         label = st.radio("Výsledek ROI:", ["OK", "NOK"])
                         if st.button("💾 ULOŽIT DO UČENÍ", use_container_width=True):
-                            import logic
-                            path = logic.save_cropped_image(cropped_img, roi_name, label)
-                            st.success(f"Uloženo do dataset/{label}!")
+                        import logic
+                        # 1. Uložíme výřez jako obrázek pro trénink AI (to už máš)
+                        logic.save_cropped_image(cropped_img, roi_name, label)
+                        
+                        # 2. Získáme souřadnice z cropperu (tohle je to nové!)
+                        # st_cropper vrací box s údaji o levém horním rohu a rozměrech
+                        # Pokud používáš st_cropper, souřadnice jsou v 'cropped_img' nebo v datech z cropperu
+                        # Pro zjednodušení: získáme info o boxu
+                        box = cropped_img.getbbox() # PIL funkce pro získání rozměrů
+                        
+                        # 3. Uložíme "předpis" do databáze
+                        # Abychom věděli, kde na velké fotce količek je
+                        # (Předpokládáme, že produkt je ten, co máš vybraný nahoře)
+                        database.save_roi_template("MQB L", roi_name, 0, 0, 0, 0) # Sem doplníme reálná data z cropperu
+                        
+                        st.success(f"ROI '{roi_name}' uložena do databáze i do složky pro učení!")
 
 elif menu == "📂 Historie inspekcí":
     st.markdown("## 📂 Historie inspekcí")
