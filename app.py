@@ -125,13 +125,13 @@ if menu == "Konfigurace":
                 valeo_green = "#97BE0D"
                 edit_id = st.session_state.get('edit_roi_id', None)
 
-                # Vykreslení zelených zón
+                # Vykreslení stávajících zón
                 for r in old_rois:
                     if edit_id == r[0]: continue
-                    # r[2]=x, r[3]=y, r[4]=w, r[5]=h
                     draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], outline=valeo_green, width=3)
                     draw.text((r[2]+5, r[3]-20), f"{r[1]} [N{r[6]}]", fill=valeo_green)
 
+                # DEFINICE SLOUPCŮ - Tady byl ten problém
                 col_main, col_side = st.columns([1.5, 1.0])
                 
                 with col_side:
@@ -154,7 +154,7 @@ if menu == "Konfigurace":
                             if c_key in st.session_state and st.session_state[c_key] is not None:
                                 cropper_data = st.session_state[c_key]
                                 
-                                # --- MATEMATICKÝ PŘEPOČET (Ratio) ---
+                                # Výpočet poměru (aby se zóny nehýbaly)
                                 canvas_width = cropper_data['width']
                                 actual_width = img.width
                                 ratio = actual_width / canvas_width
@@ -175,10 +175,11 @@ if menu == "Konfigurace":
                                 st.rerun()
 
                 with col_main:
+                    # Používáme col_main (ne col_l), aby to sedělo s definicí nahoře
                     if not (add_mode or edit_id):
                         st.image(img, use_container_width=True)
                     else:
-                        # Bez parametru should_resize_canvas (ten dělal tu chybu)
+                        # Stabilní volání cropperu bez problematických parametrů
                         st_cropper(img, realtime_update=True, box_color='#FF9800', key=c_key)
 
                 st.divider()
