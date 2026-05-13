@@ -162,9 +162,14 @@ if menu == "Konfigurace":
                             if c_key in st.session_state and st.session_state[c_key] is not None:
                                 cropper_data = st.session_state[c_key]
                                 
-                                # --- VÝPOČET POMĚRU (Ratio) pro přesnost ---
-                                canvas_width = cropper_data['width']
+                                # --- OPRAVA KeyError: 'width' ---
+                                # Pokud cropper nevrací 'width', použijeme šířku originálu
+                                # Tím pádem bude ratio vždy 1.0 (vše sedí na pixel)
                                 actual_width = img.width
+                                
+                                # Zkusíme získat width z cropperu, pokud tam není, použijeme actual_width
+                                canvas_width = cropper_data.get('width', actual_width)
+                                
                                 ratio = actual_width / canvas_width
                                 
                                 coords = cropper_data['coords']
