@@ -184,8 +184,8 @@ if menu == "Konfigurace":
                                     st.session_state.edit_roi_id = None
                                 else:
                                     database.save_roi(curr_m[0], name, r_x, r_y, r_w, r_h, nok + 1)
-                                    if 'add_toggle' in st.session_state: 
-                                        st.session_state.add_toggle = False
+                                    if 'add_toggle' in st.session_state:
+                                        del st.session_state['add_toggle']
                                 
                                 st.rerun()
 
