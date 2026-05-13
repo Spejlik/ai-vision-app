@@ -55,24 +55,42 @@ if menu == "Konfigurace":
             
             with col_r:
                 st.write("### Nastavení ořezu kamery (AOI)")
-                ax = st.slider("X pozice", 0, 2000, 0)
-                ay = st.slider("Y pozice", 0, 2000, 0)
-                aw = st.slider("Šířka", 100, 2500, 1200)
-                ah = st.slider("Výška", 100, 2500, 1000)
+                # Nastavíme max. limity podle reálného rozlišení (např. 2500x2000)
+                ax = st.slider("X pozice (vlevo)", 0, 2000, 0)
+                ay = st.slider("Y pozice (nahoře)", 0, 2000, 0)
+                aw = st.slider("Šířka výřezu", 100, 2500, 1200)
+                ah = st.slider("Výška výřezu", 100, 2500, 1000)
                 
-                master_name = st.text_input("Název Master snímku (např. MQB_P1_TOP)")
+                master_name = st.text_input("Název Master snímku", placeholder="např. MQB_P1_TOP")
+                
                 if st.button("📸 VYFOTIT A ULOŽIT MASTER", type="primary", use_container_width=True):
-                    # Tady se v reálu uloží snímek s AOI
-                    img_path = f"masters/{master_name}.jpg"
-                    if not os.path.exists('masters'): os.makedirs('masters')
-                    # Simulace uložení
-                    database.save_master(st.session_state.active_project, master_name, ax, ay, aw, ah, img_path)
-                    st.success("Master uložen!")
+                    if master_name:
+                        # Tady uložíme oříznutý obrázek na disk
+                        final_frame = cam.get_frame()
+                        # Převedeme numpy na PIL pro ořez
+                        pil_img = Image.fromarray(final_frame)
+                        cropped_master = pil_img.crop((ax, ay, ax + aw, ay + ah))
+                        
+                        img_path = f"masters/{master_name}.jpg"
+                        if not os.path.exists('masters'): os.makedirs('masters')
+                        cropped_master.save(img_path)
+                        
+                        database.save_master(st.session_state.active_project, master_name, ax, ay, aw, ah, img_path)
+                        st.success(f"Master '{master_name}' uložen!")
+                    else:
+                        st.error("Zadejte název Masteru!")
 
             with col_l:
-                # Živý náhled (nebo dummy)
-                frame = cam.get_frame()
-                st.image(frame, caption="Živý náhled z kamery", use_container_width=True)
+                # ŽIVÝ NÁHLED S OŘEZEM V REÁLNÉM ČASE
+                raw_frame = cam.get_frame()
+                pil_raw = Image.fromarray(raw_frame)
+                
+                # ZDE SE DĚJE TEN REÁLNÝ NÁHLED OŘEZU
+                # crop((left, top, right, bottom))
+                preview_crop = pil_raw.crop((ax, ay, ax + aw, ay + ah))
+                
+                st.image(preview_crop, caption="Náhled ořezu (AOI)", use_container_width=True)
+                st.write(f"📏 Aktuální rozlišení masteru: {aw} x {ah} px")
 
     # KROK 3: ROI DEFINICE
     elif st.session_state.step == 3:
