@@ -121,37 +121,48 @@ if menu == "Konfigurace":
                 
                 c_l, c_r = st.columns([3, 1])
                 with c_l:
-                    # Výchozí souřadnice pro cropper, aby nebyl None
-                    roi = st_cropper(img, realtime_update=True, box_color='#FF9800', key="roi_cropper")
-                
+                    # Načteme existující ROI pro vizuální kontrolu
+                    draw = ImageDraw.Draw(img)
+                    old_rois = database.get_rois(curr_m[0])
+                    for r in old_rois:
+                        # Vykreslení modrých rámečků pro všechny uložené ROI
+                        shape = [r[2], r[3], r[2]+r[4], r[3]+r[5]]
+                        draw.rectangle(shape, outline="blue", width=5)
+                        label = f"{r[1]} [NOK {r[6]}]"
+                        draw.text((r[2], r[3] - 15), label, fill="blue")
+                    
+                    # Cropper pro novou ROI
+                    st.write("📌 Tažením rámečku definujte NOVOU zónu:")
+                    roi = st_cropper(img, realtime_update=True, box_color='#FF9800', key=f"cropper_{len(old_rois)}")
+
                 with c_r:
-                    new_roi_name = st.text_input("Název nové kontroly:")
+                    st.write("### ➕ Přidat novou kontrolu")
+                    new_roi_name = st.text_input("Název nové kontroly:", key="new_roi_input")
+                    nok_code = st.selectbox("Kód pro vyřazení (robot):", options=range(1, 9), format_func=lambda x: f"NOK {x}")
                     
-                    # VÝBĚR PRO ROBOTA
-                    nok_code = st.selectbox("Kód pro vyřazení (robot):", 
-                                            options=range(1, 9), 
-                                            format_func=lambda x: f"NOK {x}")
+                    if st.button("💾 ULOŽIT TUTO ZÓNU", use_container_width=True):
+                        if 'roi_cropper' in st.session_state or f"cropper_{len(old_rois)}" in st.session_state:
+                            # Získáme souřadnice z aktuálního cropperu
+                            current_key = f"cropper_{len(old_rois)}"
+                            coords = st.session_state[current_key]['coords']
+                            
+                            database.save_roi(
+                                curr_m[0], 
+                                new_roi_name, 
+                                int(coords['left']), 
+                                int(coords['top']), 
+                                int(coords['width']), 
+                                int(coords['height']),
+                                nok_code
+                            )
+                            st.success(f"Zóna '{new_roi_name}' přidána!")
+                            time.sleep(0.5)
+                            st.rerun() # Refresh pro zobrazení nové modré zóny
                     
-                    if st.button("💾 ULOŽIT KONTROLU", use_container_width=True):
-                        if 'roi_cropper' in st.session_state and st.session_state['roi_cropper'] is not None:
-                            if new_roi_name:
-                                coords = st.session_state['roi_cropper']['coords']
-                                database.save_roi(
-                                    curr_m[0], 
-                                    new_roi_name, 
-                                    int(coords['left']), 
-                                    int(coords['top']), 
-                                    int(coords['width']), 
-                                    int(coords['height']),
-                                    nok_code
-                                )
-                                st.success(f"Uloženo: {new_roi_name} pod kódem NOK {nok_code}")
-                                time.sleep(0.5)
-                                st.rerun()
-                            else:
-                                st.error("Chybí název kontroly!")
-            else:
-                st.error(f"Soubor nenalezen: {path_to_img}")
+                    st.divider()
+                    st.write("### 📋 Již uložené kontroly")
+                    for r in old_rois:
+                        st.text(f"• {r[1]} (NOK {r[6]})")
 
 # ... (zbytek monitoring sekce)
 
