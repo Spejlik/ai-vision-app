@@ -154,12 +154,16 @@ if menu == "Konfigurace":
                             c = st.session_state[cropper_key]['coords']
                             if edit_id:
                                 database.update_roi_position(edit_id, int(c['left']), int(c['top']), int(c['width']), int(c['height']))
-                                # Tady můžeme updatovat i NOK a jméno, pokud chceš:
                                 database.update_roi_nok(edit_id, nok)
                                 st.session_state.edit_roi_id = None
                             else:
                                 database.save_roi(curr_m[0], name, int(c['left']), int(c['top']), int(c['width']), int(c['height']), nok)
-                                st.session_state.add_toggle = False
+                                
+                                # OPRAVA CHYBY: Místo přímého zápisu do session_state
+                                # vymažeme klíč přepínače, aby se při dalším načtení vrátil do výchozího stavu (False)
+                                if 'add_toggle' in st.session_state:
+                                    del st.session_state['add_toggle']
+                            
                             st.rerun()
                         
                         if edit_id:
