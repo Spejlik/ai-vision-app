@@ -51,13 +51,13 @@ if menu == "Konfigurace":
     # Průvodce kroky
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-    if st.button("📁 Projekty"): st.session_state.step = 1
+        if st.button("📁 Projekty"): st.session_state.step = 1
     with c2:
-    if st.button("🎯 Master"): st.session_state.step = 2
+        if st.button("🎯 Master"): st.session_state.step = 2
     with c3:
-    if st.button("🔍 Zóny"): st.session_state.step = 3
+        if st.button("🔍 Zóny"): st.session_state.step = 3
     with c4:
-    if st.button("🔌 I/O"): st.session_state.step = 4 
+        if st.button("🔌 I/O"): st.session_state.step = 4 
     
     st.divider()
 
