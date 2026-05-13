@@ -89,22 +89,23 @@ if menu == "Konfigurace":
                 if not m_name:
                     st.error("Zadejte název snímku!")
                 else:
-                    # 1. Získání aktuálního snímku z kamery
+                    # 1. Vyfotíme celou scénu
                     raw_frame = cam.get_frame()
                     pil_img = Image.fromarray(raw_frame)
                     
-                    # 2. Provedení ořezu (AOI)
-                    cropped_img = pil_img.crop((ax, ay, ax + aw, ay + ah))
+                    # 2. PROVEDEME OŘEZ (Toto je ten odrazový můstek)
+                    # Teď už neukládáme celou fotku, ale jen to, co jsi vybral slidery
+                    cropped_master = pil_img.crop((ax, ay, ax + aw, ay + ah))
                     
-                    # 3. Vytvoření cesty a uložení souboru
+                    # 3. Uložíme oříznutý Master
                     os.makedirs("masters", exist_ok=True)
                     file_path = f"masters/{st.session_state.active_project}_{m_name}.png"
-                    cropped_img.save(file_path)
+                    cropped_master.save(file_path)
                     
-                    # 4. Uložení do databáze
+                    # 4. Zapíšeme do DB
                     database.add_master(st.session_state.active_project, m_name, ax, ay, aw, ah, file_path)
                     
-                    st.success(f"Master '{m_name}' uložen!")
+                    st.success(f"Master '{m_name}' uložen jako výřez!")
                     st.rerun()
 
         with col_img:
