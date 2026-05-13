@@ -18,7 +18,7 @@ def init_db():
               project_name TEXT,
               master_name TEXT,
               x INTEGER, y INTEGER, w INTEGER, h INTEGER,
-              img_path TEXT)'''))
+              img_path TEXT)''')
     conn.commit()
     conn.close()
 
