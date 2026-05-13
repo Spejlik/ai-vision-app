@@ -113,8 +113,10 @@ if menu == "Konfigurace":
                 old_rois = database.get_rois(curr_m[0])
                 valeo_green = "#97BE0D" 
                 
-                # Vykreslení uložených zelených zón
+                # Zjistíme stav (editace vs nová)
                 edit_id = st.session_state.get('edit_roi_id', None)
+                
+                # Vykreslení uložených zelených zón
                 for r in old_rois:
                     if edit_id == r[0]: continue 
                     draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], outline=valeo_green, width=3)
@@ -124,39 +126,71 @@ if menu == "Konfigurace":
                 
                 with c_r:
                     st.write("### ➕ Akce")
-                    # Přidáme přepínač pro aktivaci kreslení
-                    add_mode = st.toggle("PŘIDAT NOVOU KONTROLU", key="add_toggle")
-                    
+                    # Přepínač pro novou kontrolu (pokud needitujeme)
+                    if not edit_id:
+                        add_mode = st.toggle("PŘIDAT NOVOU KONTROLU", key="add_toggle")
+                    else:
+                        add_mode = False
+                        st.info(f"📝 Editujete zónu ID: {edit_id}")
+
+                    # Formulář pro uložení/editaci
                     if add_mode or edit_id:
                         st.divider()
-                        name = st.text_input("Název:", value="" if not edit_id else next(r[1] for r in old_rois if r[0] == edit_id))
-                        nok = st.selectbox("NOK:", range(1, 9), index=0 if not edit_id else next(r[6]-1 for r in old_rois if r[0] == edit_id))
+                        default_name = ""
+                        default_nok = 0
                         
-                        btn_label = "💾 ULOŽIT ZMĚNY" if edit_id else "💾 ULOŽIT NOVOU"
+                        if edit_id:
+                            curr_r = next(r for r in old_rois if r[0] == edit_id)
+                            default_name = curr_r[1]
+                            default_nok = curr_r[6] - 1
+
+                        name = st.text_input("Název:", value=default_name)
+                        nok = st.selectbox("NOK:", range(1, 9), index=default_nok)
+                        
+                        cropper_key = f"c_{edit_id if edit_id else 'new'}_{len(old_rois)}"
+                        
+                        btn_label = "💾 POTVRDIT ZMĚNU" if edit_id else "💾 ULOŽIT NOVOU"
                         if st.button(btn_label, type="primary", use_container_width=True):
                             c = st.session_state[cropper_key]['coords']
                             if edit_id:
                                 database.update_roi_position(edit_id, int(c['left']), int(c['top']), int(c['width']), int(c['height']))
+                                # Tady můžeme updatovat i NOK a jméno, pokud chceš:
+                                database.update_roi_nok(edit_id, nok)
                                 st.session_state.edit_roi_id = None
                             else:
                                 database.save_roi(curr_m[0], name, int(c['left']), int(c['top']), int(c['width']), int(c['height']), nok)
-                            st.session_state.add_toggle = False # Vypne kreslení po uložení
+                                st.session_state.add_toggle = False
                             st.rerun()
+                        
+                        if edit_id:
+                            if st.button("❌ ZRUŠIT EDITACI", use_container_width=True):
+                                st.session_state.edit_roi_id = None
+                                st.rerun()
 
                 with c_l:
-                    # Pokud není aktivní "Přidat" nebo "Editovat", zobrazíme jen čistý obrázek
-                    if not st.session_state.add_toggle and not edit_id:
-                        st.image(img, use_container_width=True, caption="Náhled uložených zón")
+                    # Zobrazení cropperu nebo čistého obrázku
+                    if not (add_mode or edit_id):
+                        st.image(img, use_container_width=True, caption="Náhled uložených zón Valeo")
                     else:
-                        cropper_key = f"c_{edit_id if edit_id else 'new'}"
-                        # Nastavíme cropper tak, aby začínal jako malý čtvereček (např. 50x50 px)
-                        # Tím zabráníme tomu obřímu rámečku přes půl fotky
-                        roi = st_cropper(img, realtime_update=True, box_color='#FF9800', 
-                                         key=cropper_key, should_resize_canvas=False)
+                        # Čistý cropper bez problémových parametrů
+                        roi = st_cropper(img, realtime_update=True, box_color='#FF9800', key=cropper_key)
 
+                # --- SEKCE SPRÁVY (VRÁCENO ZPĚT) ---
                 st.divider()
-                # Seznam pro editaci/mazání zůstává pod tím
-                # ... (zbytek tvého kódu pro seznam expanderů)
+                st.write("### ⚙️ Seznam a správa uložených zón")
+                cols = st.columns(2) # Rozdělíme seznam do dvou sloupců pro úsporu místa
+                
+                for idx, r in enumerate(old_rois):
+                    with cols[idx % 2].expander(f"{r[1]} (NOK {r[6]})"):
+                        if st.button("🎮 Upravit pozici / NOK", key=f"edit_btn_{r[0]}"):
+                            st.session_state.edit_roi_id = r[0]
+                            st.rerun()
+                        
+                        if st.button("🗑️ Smazat zónu", key=f"del_btn_{r[0]}", type="secondary"):
+                            database.delete_roi(r[0])
+                            st.rerun()
+            else:
+                st.error(f"Soubor nenalezen: {path_to_img}")
 
 # ... (zbytek monitoring sekce)
 
