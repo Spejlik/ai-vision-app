@@ -122,43 +122,93 @@ if menu == "Konfigurace":
     # KROK 3: ROI DEFINICE
     elif st.session_state.step == 3:
         masters = database.get_masters(st.session_state.active_project)
-        if masters:
+        if not masters:
+            st.error("Žádné Mastery nenalezeny.")
+        else:
+            # 1. Výběr Masteru a načtení dat
             m_names = [m[2] for m in masters]
             sel_m_name = st.selectbox("Vyber Master:", m_names, label_visibility="collapsed")
             curr_m = next(m for m in masters if m[2] == sel_m_name)
             
-            # Načtení dat
             old_rois = database.get_rois(curr_m[0])
             img = Image.open(curr_m[7]).convert("RGB")
             W, H = img.size
 
-            # ROZVRŽENÍ: Vlevo obraz, vpravo VŠE ostatní
+            # 2. Definice rozložení
             col_main, col_side = st.columns([1.6, 1.0])
-            
-            with col_main:
-                # 1. PŘÍPRAVA KRESLENÍ
-                draw = ImageDraw.Draw(img)
-                valeo_green = "#97BE0D"
-                orange = "#FF9800"
+
+            with col_side:
+                st.subheader("➕ Správa zón")
                 
-                # 2. NEJDŘÍV NAKRESLI VŠECHNY ULOŽENÉ ZÓNY (Zelené)
-                for r in old_rois:
-                    draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], outline=valeo_green, width=5)
-                    draw.text((r[2]+5, r[3]+5), f"{r[1]}", fill=valeo_green)
-                
-                # 3. POKUD SE PRÁVĚ NASTAVUJE NOVÁ (Oranžová)
-                # Musíme ty hodnoty ze sliderů vytáhnout i sem
+                # Inicializace stavu pro editaci, pokud neexistuje
+                if 'edit_roi_id' not in st.session_state:
+                    st.session_state.edit_roi_id = None
+
+                # TLAČÍTKO PRO NOVOU ZÓNU
+                if not st.session_state.get('manual_add_active', False):
+                    if st.button("✨ VYTVOŘIT NOVOU ZÓNU", use_container_width=True, type="primary"):
+                        st.session_state.manual_add_active = True
+                        st.session_state.edit_roi_id = None
+                        st.rerun()
+
+                # FORMULÁŘ (SLIDERY)
+                rx, ry, rw, rh = 0, 0, 100, 100 # Výchozí hodnoty
                 if st.session_state.get('manual_add_active', False):
-                    # Tady je trik: musíme nakreslit rámeček pomocí hodnot, 
-                    # které uživatel zrovna mění v pravém sloupci.
-                    # Streamlit je "uvidí" díky tomu, že slidery mají klíče.
-                    try:
-                        # rx, ry atd. musí mít v pravém sloupci definované 'key'
-                        draw.rectangle([rx, ry, rx+rw, ry+rh], outline=orange, width=6)
-                        draw.text((rx+5, ry-20), "NÁHLED", fill=orange)
-                    except NameError:
-                        # Pokud proměnné ještě neexistují (při prvním načtení), nic nekresli
-                        pass
+                    with st.container(border=True):
+                        # Pokud editujeme, načteme původní hodnoty
+                        default_name = "Zóna 1"
+                        if st.session_state.edit_roi_id:
+                            e_roi = next(r for r in old_rois if r[0] == st.session_state.edit_roi_id)
+                            default_name, rx_d, ry_d, rw_d, rh_d = e_roi[1], e_roi[2], e_roi[3], e_roi[4], e_roi[5]
+                        else:
+                            rx_d, ry_d, rw_d, rh_d = W//3, H//3, 150, 150
+
+                        name = st.text_input("Název:", default_name)
+                        rx = st.slider("X pozice", 0, W, rx_d)
+                        ry = st.slider("Y pozice", 0, H, ry_d)
+                        rw = st.slider("Šířka", 10, 800, rw_d)
+                        rh = st.slider("Výška", 10, 800, rh_d)
+                        nok = st.selectbox("Typ vady:", range(1, 11), format_func=lambda x: f"NOK {x}")
+                        
+                        c1, c2 = st.columns(2)
+                        if c1.button("💾 ULOŽIT", type="primary", use_container_width=True):
+                            database.save_roi(curr_m[0], name, rx, ry, rw, rh, nok, st.session_state.edit_roi_id)
+                            st.session_state.manual_add_active = False
+                            st.session_state.edit_roi_id = None
+                            st.rerun()
+                        if c2.button("✖ ZRUŠIT", use_container_width=True):
+                            st.session_state.manual_add_active = False
+                            st.rerun()
+
+                st.divider()
+                st.subheader("📋 Seznam zón")
+                for r in old_rois:
+                    with st.container(border=True):
+                        c1, c2, c3 = st.columns([3, 1, 1])
+                        c1.markdown(f"**{r[1]}** (NOK {r[6]})")
+                        if c2.button("📝", key=f"edit_{r[0]}"):
+                            st.session_state.edit_roi_id = r[0]
+                            st.session_state.manual_add_active = True
+                            st.rerun()
+                        if c3.button("🗑️", key=f"del_{r[0]}"):
+                            database.delete_roi(r[0])
+                            st.rerun()
+
+            with col_main:
+                # 3. KRESLENÍ (Tady se děje to kouzlo, proběhne to až po nastavení sliderů)
+                draw = ImageDraw.Draw(img)
+                # Uložené zóny (Zelená)
+                for r in old_rois:
+                    if r[0] != st.session_state.edit_roi_id: # Nekreslit zeleně tu, kterou zrovna editujeme
+                        draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], outline="#97BE0D", width=5)
+                        draw.text((r[2]+5, r[3]+5), r[1], fill="#97BE0D")
+                
+                # Aktuálně laděná zóna (Oranžová)
+                if st.session_state.get('manual_add_active', False):
+                    draw.rectangle([rx, ry, rx+rw, ry+rh], outline="#FF9800", width=6)
+                    draw.text((rx+5, ry-25), "UPRAVUJI...", fill="#FF9800")
+
+                st.image(img, use_container_width=True)
 
                 # 4. TEPRVE TEĎ ZOBRAZ FINÁLNÍ OBRÁZEK
                 st.image(img, use_container_width=True)
