@@ -124,96 +124,62 @@ if menu == "Konfigurace":
             st.error("Žádné Mastery.")
         else:
             m_names = [m[2] for m in masters]
-            sel_m_name = st.selectbox("Master:", m_names, label_visibility="collapsed")
+            sel_m_name = st.selectbox("Vyber Master:", m_names, label_visibility="collapsed")
             curr_m = next(m for m in masters if m[2] == sel_m_name)
             
-            if os.path.exists(curr_m[7]):
-                img = Image.open(curr_m[7]).convert("RGB")
-                draw = ImageDraw.Draw(img)
-                old_rois = database.get_rois(curr_m[0])
-                valeo_green = "#97BE0D"
-                edit_id = st.session_state.get('edit_roi_id', None)
-
-                # Vykreslení stávajících zón
-                for r in old_rois:
-                    if edit_id == r[0]: continue
-                    draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], outline=valeo_green, width=3)
-                    draw.text((r[2]+5, r[3]-20), f"{r[1]} [N{r[6]}]", fill=valeo_green)
-
-                # --- DEFINICE SLOUPCŮ (Zde byla ta chyba, sjednoceno na col_main a col_side) ---
-                col_main, col_side = st.columns([1.5, 1.0])
+            # Načtení obrázku a jeho rozměrů
+            img_path = curr_m[7]
+            img = Image.open(img_path).convert("RGB")
+            W, H = img.size
+            
+            col_main, col_side = st.columns([1.5, 1.0])
+            
+            with col_side:
+                st.subheader("➕ Nová zóna")
+                add_mode = st.toggle("REŽIM ÚPRAV", key="add_toggle_manual")
                 
-                with col_side:
-                    st.write("### ➕ Akce")
-                    add_mode = st.toggle("PŘIDAT NOVOU", key="add_toggle") if not edit_id else False
+                if add_mode:
+                    name = st.text_input("Název:", "Zóna 1")
+                    # Slidery s rozsahem podle skutečných pixelů fotky
+                    rx = st.slider("X pozice", 0, W, W//4)
+                    ry = st.slider("Y pozice", 0, H, H//4)
+                    rw = st.slider("Šířka", 20, W, 150)
+                    rh = st.slider("Výška", 20, H, 150)
+                    nok = st.selectbox("NOK kód:", range(1, 11), format_func=lambda x: f"Kód {x}")
                     
-                    if add_mode or edit_id:
-                        st.divider()
-                        d_name, d_nok = "", 0
-                        if edit_id:
-                            curr_r = next(r for r in old_rois if r[0] == edit_id)
-                            d_name, d_nok = curr_r[1], curr_r[6] - 1
-
-                        name = st.text_input("Název:", value=d_name, placeholder="Název zóny")
-                        nok = st.selectbox("NOK:", range(1, 9), index=d_nok, format_func=lambda x: f"NOK {x}")
-                        
-                        c_key = f"c_{edit_id if edit_id else 'new'}_{len(old_rois)}"
-                        
-                        if st.button("💾 ULOŽIT", type="primary", use_container_width=True):
-                            if c_key in st.session_state and st.session_state[c_key] is not None:
-                                cropper_result = st.session_state[c_key]
-                                coords = cropper_result['coords']
-                                
-                                # --- DYNAMICKÝ PŘEPOČET (Tohle je neprůstřelné) ---
-                                # Vytáhneme si šířku, kterou cropper skutečně použil na tvé obrazovce
-                                canvas_w = cropper_result.get('width')
-                                
-                                # Pokud nám cropper šířku nevrátí, použijeme šířku originálu (ratio bude 1)
-                                if canvas_w is None or canvas_w == 0:
-                                    ratio = 1.0
-                                else:
-                                    ratio = img.width / canvas_w
-                                
-                                r_x = int(coords['left'] * ratio)
-                                r_y = int(coords['top'] * ratio)
-                                r_w = int(coords['width'] * ratio)
-                                r_h = int(coords['height'] * ratio)
-                                
-                                # ... uložení do DB ...
-
-                                if edit_id:
-                                    database.update_roi_position(edit_id, r_x, r_y, r_w, r_h)
-                                    database.update_roi_nok(edit_id, nok + 1)
-                                    st.session_state.edit_roi_id = None
-                                else:
-                                    database.save_roi(curr_m[0], name, r_x, r_y, r_w, r_h, nok + 1)
-                                    # Oprava SessionState chyby z tvého screenshotu
-                                    if 'add_toggle' in st.session_state:
-                                        del st.session_state['add_toggle']
-                                
-                                st.rerun()
-
-                with col_main:
-                    if not (add_mode or edit_id):
-                        # Zobrazení uložených zón (zde můžeme nechat automatickou šířku)
-                        st.image(img, use_container_width=True)
-                    else:
-                        # Kreslení zóny - odstraněny všechny problematické šířky
-                        # st_cropper si sám určí velikost podle sloupce
-                        st_cropper(img, realtime_update=True, box_color='#FF9800', key=c_key)
-
+                    if st.button("💾 ULOŽIT ZÓNU", type="primary", use_container_width=True):
+                        database.save_roi(curr_m[0], name, rx, ry, rw, rh, nok)
+                        st.success("Zóna uložena!")
+                        st.rerun()
+                
                 st.divider()
-                st.caption("⚙️ Správa zón")
-                m_cols = st.columns(4)
-                for idx, r in enumerate(old_rois):
-                    with m_cols[idx % 4]:
-                        with st.expander(f"{r[1]} (N{r[6]})"):
-                            if st.button("🎮 Edit", key=f"e_{r[0]}", use_container_width=True):
-                                st.session_state.edit_roi_id = r[0]
-                                st.rerun()
-                            if st.button("🗑️ Smazat", key=f"d_{r[0]}", use_container_width=True):
-                                database.delete_roi(r[0])
-                                st.rerun()
+                st.write("🔍 **Uložené zóny v tomto Masteru:**")
+                old_rois = database.get_rois(curr_m[0])
+                for r in old_rois:
+                    c1, c2 = st.columns([4, 1])
+                    c1.caption(f"{r[1]} (X:{r[2]}, Y:{r[3]})")
+                    if c2.button("🗑️", key=f"del_{r[0]}"):
+                        database.delete_roi(r[0])
+                        st.rerun()
+
+            with col_main:
+                # Kreslení do kopie obrázku
+                draw = ImageDraw.Draw(img)
+                valeo_green = "#97BE0D"
+                orange = "#FF9800"
+                
+                # 1. Vykresli uložené (Zeleně)
+                for r in old_rois:
+                    draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], outline=valeo_green, width=5)
+                    draw.text((r[2]+5, r[3]+5), f"{r[1]} [N{r[6]}]", fill=valeo_green)
+                
+                # 2. Vykresli aktuální náhled ze sliderů (Oranžově)
+                if add_mode:
+                    draw.rectangle([rx, ry, rx+rw, ry+rh], outline=orange, width=5)
+                    # Přidáme poloprůhledný střed pro lepší viditelnost
+                    draw.text((rx+5, ry+5), "NÁHLED ZÓNY", fill=orange)
+                
+                st.image(img, use_container_width=True)
 
                 # PEVNÝ PANEL SEZNAMU (s vnitřním scrollováním, pokud je dlouhý)
                 st.write("📋 Seznam zón")
