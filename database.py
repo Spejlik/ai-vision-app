@@ -76,3 +76,10 @@ def get_rois(master_id):
     data = c.fetchall()
     conn.close()
     return data
+    
+def delete_roi(roi_id):
+    conn = sqlite3.connect('inspections.db')
+    c = conn.cursor()
+    c.execute("DELETE FROM rois WHERE id = ?", (roi_id,))
+    conn.commit()
+    conn.close()    
