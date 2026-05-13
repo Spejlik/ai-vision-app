@@ -136,27 +136,7 @@ if menu == "Konfigurace":
 
             col_main, col_side = st.columns([1.5, 1.0])
             
-            with col_main:
-                # Kreslení zón na obrázek
-                draw = ImageDraw.Draw(img)
-                for r in old_rois:
-                    # r[2]=x, r[3]=y, r[4]=w, r[5]=h
-                    draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], outline="#97BE0D", width=5)
-                st.image(img, use_container_width=True)
-
-            with col_side:
-                # Výpis zón vpravo
-                st.subheader("📋 Seznam zón")
-                if not old_rois:
-                    st.write("Žádné zóny nenalezeny.")
-                for r in old_rois:
-                    with st.container(border=True):
-                        st.write(f"**{r[1]}** (NOK {r[6]})")
-                        if st.button("🗑️", key=f"del_{r[0]}"):
-                            database.delete_roi(r[0])
-                            st.rerun()
-                
-                st.divider()
+            st.divider()
                 # ... (zbytek se seznamem zón zůstává stejný)
 
             # 1. Definujeme rozvržení (vlevo fotka, vpravo veškeré ovládání)
