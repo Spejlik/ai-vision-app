@@ -164,19 +164,17 @@ if menu == "Konfigurace":
                                 cropper_result = st.session_state[c_key]
                                 coords = cropper_result['coords']
                                 
-                                # KLÍČ K PŘESNOSTI:
-                                # Zjistíme poměr mezi tím, co vidíš (canvas) a realitou (img)
+                                # --- KLÍČ K PŘESNOSTI (Master = 0,0) ---
+                                # Zjistíme, jak moc Streamlit obrázek zmenšil na plátně
+                                # img je v tomto kroku už ten oříznutý Master z disku
                                 canvas_w = cropper_result.get('width', img.width)
-                                canvas_h = cropper_result.get('height', img.height)
+                                ratio = img.width / canvas_w
                                 
-                                ratio_x = img.width / canvas_w
-                                ratio_y = img.height / canvas_h
-                                
-                                # Přepočet na reálné pixely masteru
-                                r_x = int(coords['left'] * ratio_x)
-                                r_y = int(coords['top'] * ratio_y)
-                                r_w = int(coords['width'] * ratio_x)
-                                r_h = int(coords['height'] * ratio_y)
+                                # Přepočet souřadnic (už bez přičítání ax, ay!)
+                                r_x = int(coords['left'] * ratio)
+                                r_y = int(coords['top'] * ratio)
+                                r_w = int(coords['width'] * ratio)
+                                r_h = int(coords['height'] * ratio)
 
                                 if edit_id:
                                     database.update_roi_position(edit_id, r_x, r_y, r_w, r_h)
@@ -184,6 +182,7 @@ if menu == "Konfigurace":
                                     st.session_state.edit_roi_id = None
                                 else:
                                     database.save_roi(curr_m[0], name, r_x, r_y, r_w, r_h, nok + 1)
+                                    # Oprava SessionState chyby z tvého screenshotu
                                     if 'add_toggle' in st.session_state:
                                         del st.session_state['add_toggle']
                                 
