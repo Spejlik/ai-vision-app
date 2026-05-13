@@ -32,3 +32,37 @@ def get_rois(master_id):
     data = c.fetchall()
     conn.close()
     return data
+ 
+def save_project(name):
+    conn = sqlite3.connect('inspections.db')
+    c = conn.cursor()
+    c.execute("INSERT OR IGNORE INTO projects (name) VALUES (?)", (name,))
+    conn.commit()
+    conn.close()
+
+def get_projects():
+    conn = sqlite3.connect('inspections.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM projects")
+    data = c.fetchall()
+    conn.close()
+    return data
+
+def save_master(proj_name, name, x, y, w, h, path):
+    conn = sqlite3.connect('inspections.db')
+    c = conn.cursor()
+    # Zjistíme ID projektu
+    c.execute("SELECT id FROM projects WHERE name = ?", (proj_name,))
+    p_id = c.fetchone()[0]
+    c.execute("INSERT INTO masters (project_id, name, aoi_x, aoi_y, aoi_w, aoi_h, img_path) VALUES (?, ?, ?, ?, ?, ?, ?)",
+              (p_id, name, x, y, w, h, path))
+    conn.commit()
+    conn.close()
+
+def get_masters(proj_name):
+    conn = sqlite3.connect('inspections.db')
+    c = conn.cursor()
+    c.execute("SELECT m.* FROM masters m JOIN projects p ON m.project_id = p.id WHERE p.name = ?", (proj_name,))
+    data = c.fetchall()
+    conn.close()
+    return data 
