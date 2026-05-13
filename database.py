@@ -13,9 +13,12 @@ def init_db():
                   img_path TEXT)''')
     
     # Tabulka inspekčních zón (ROI) - s error_code pro robota
-    c.execute('''CREATE TABLE IF NOT EXISTS rois 
-                 (id INTEGER PRIMARY KEY, master_id INTEGER, name TEXT, 
-                  x INTEGER, y INTEGER, w INTEGER, h INTEGER, error_code INTEGER)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS masters
+             (id INTEGER PRIMARY KEY AUTOINCREMENT,
+              project_name TEXT,
+              master_name TEXT,
+              x INTEGER, y INTEGER, w INTEGER, h INTEGER,
+              img_path TEXT)'''))
     conn.commit()
     conn.close()
 
