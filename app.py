@@ -127,11 +127,14 @@ if menu == "Konfigurace":
             sel_m_name = st.selectbox("Vyber Master:", m_names, label_visibility="collapsed")
             curr_m = next(m for m in masters if m[2] == sel_m_name)
             
-            # Načtení obrázku a jeho rozměrů
             img_path = curr_m[7]
             img = Image.open(img_path).convert("RGB")
             W, H = img.size
-            
+
+            # --- TADY JE TA OPRAVA: Definuj old_rois hned na začátku ---
+            old_rois = database.get_rois(curr_m[0]) 
+            # ---------------------------------------------------------
+
             col_main, col_side = st.columns([1.5, 1.0])
             
             with col_side:
