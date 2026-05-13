@@ -82,4 +82,11 @@ def delete_roi(roi_id):
     c = conn.cursor()
     c.execute("DELETE FROM rois WHERE id = ?", (roi_id,))
     conn.commit()
+    conn.close()
+
+def update_roi_nok(roi_id, new_nok):
+    conn = sqlite3.connect('inspections.db')
+    c = conn.cursor()
+    c.execute("UPDATE rois SET error_code = ? WHERE id = ?", (new_nok, roi_id))
+    conn.commit()
     conn.close()    
