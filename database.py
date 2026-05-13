@@ -3,26 +3,31 @@ import sqlite3
 def init_db():
     conn = sqlite3.connect('inspections.db')
     c = conn.cursor()
-    # Tabulka projektů
-    c.execute('''CREATE TABLE IF NOT EXISTS projects (id INTEGER PRIMARY KEY, name TEXT UNIQUE)''')
     
-    # Tabulka master snímků a ořezů kamery (AOI)
-    c.execute('''CREATE TABLE IF NOT EXISTS masters 
-                 (id INTEGER PRIMARY KEY, project_id INTEGER, name TEXT, 
-                  cam_id TEXT, aoi_x INTEGER, aoi_y INTEGER, aoi_w INTEGER, aoi_h INTEGER,
+    # 1. Tabulka projektů
+    c.execute('''CREATE TABLE IF NOT EXISTS projects 
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE)''')
+    
+    # 2. Tabulka MASTERŮ (Sjednocená verze)
+    c.execute('''CREATE TABLE IF NOT EXISTS masters
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  project_name TEXT,
+                  master_name TEXT,
+                  x INTEGER, y INTEGER, w INTEGER, h INTEGER,
                   img_path TEXT)''')
     
-    # Tabulka inspekčních zón (ROI) - s error_code pro robota
-    c.execute('''CREATE TABLE IF NOT EXISTS masters
-             (id INTEGER PRIMARY KEY AUTOINCREMENT,
-              project_name TEXT,
-              master_name TEXT,
-              x INTEGER, y INTEGER, w INTEGER, h INTEGER,
-              img_path TEXT)''')
+    # 3. Tabulka ROI (Zóny)
+    c.execute('''CREATE TABLE IF NOT EXISTS rois
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  master_id INTEGER,
+                  name TEXT,
+                  x INTEGER, y INTEGER, w INTEGER, h INTEGER,
+                  error_code INTEGER)''')
+    
     conn.commit()
     conn.close()
 
-# --- FUNKCE PRO PROJEKTY ---
+# --- FUNKCE ---
 
 def save_project(name):
     conn = sqlite3.connect('inspections.db')
@@ -39,30 +44,23 @@ def get_projects():
     conn.close()
     return data
 
-# --- FUNKCE PRO MASTERY ---
-
-def save_master(proj_name, name, x, y, w, h, path):
+def add_master(project_name, master_name, x, y, w, h, path):
     conn = sqlite3.connect('inspections.db')
     c = conn.cursor()
-    # Zjistíme ID projektu podle jména
-    c.execute("SELECT id FROM projects WHERE name = ?", (proj_name,))
-    result = c.fetchone()
-    if result:
-        p_id = result[0]
-        c.execute("INSERT INTO masters (project_id, name, aoi_x, aoi_y, aoi_w, aoi_h, img_path) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                  (p_id, name, x, y, w, h, path))
+    c.execute('''INSERT INTO masters 
+                 (project_name, master_name, x, y, w, h, img_path) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?)''', 
+              (project_name, master_name, x, y, w, h, path))
     conn.commit()
     conn.close()
 
 def get_masters(proj_name):
     conn = sqlite3.connect('inspections.db')
     c = conn.cursor()
-    c.execute("SELECT m.* FROM masters m JOIN projects p ON m.project_id = p.id WHERE p.name = ?", (proj_name,))
+    c.execute("SELECT * FROM masters WHERE project_name = ?", (proj_name,))
     data = c.fetchall()
     conn.close()
     return data
-
-# --- FUNKCE PRO ROI (KONTROLY) ---
 
 def save_roi(master_id, name, x, y, w, h, error_code):
     conn = sqlite3.connect('inspections.db')
@@ -79,7 +77,7 @@ def get_rois(master_id):
     data = c.fetchall()
     conn.close()
     return data
-    
+
 def delete_roi(roi_id):
     conn = sqlite3.connect('inspections.db')
     c = conn.cursor()
@@ -100,14 +98,3 @@ def update_roi_position(roi_id, x, y, w, h):
     c.execute("UPDATE rois SET x=?, y=?, w=?, h=? WHERE id=?", (x, y, w, h, roi_id))
     conn.commit()
     conn.close()
-
-def add_master(project_name, master_name, x, y, w, h, path):
-    conn = sqlite3.connect('inspections.db')
-    c = conn.cursor()
-    # Tabulka 'masters' má sloupce: project_name, master_name, x, y, w, h, path
-    c.execute('''INSERT INTO masters 
-                 (project_name, master_name, x, y, w, h, img_path) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?)''', 
-              (project_name, master_name, x, y, w, h, path))
-    conn.commit()
-    conn.close()    
