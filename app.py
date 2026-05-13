@@ -56,6 +56,9 @@ if menu == "Konfigurace":
         if st.button("2. Master & AOI", use_container_width=True): st.session_state.step = 2
     with c3:
         if st.button("3. ROI (Inspekce)", use_container_width=True): st.session_state.step = 3
+    with c4:    
+        if st.sidebar.button("🔌 I/O Monitor"):
+        st.session_state.step = 4    
     
     st.divider()
 
@@ -157,9 +160,9 @@ if menu == "Konfigurace":
                         rh = st.slider("Výška", 10, 500, 100)
                         
                         # Oprava bodu 2: NOK kódy
-                        nok_val = st.selectbox("Typ vady (NOK):", 
+                        nok_val = st.selectbox("Typ vady:", 
                                              options=range(1, 11), 
-                                             format_func=lambda x: f"NOK {x} - Chyba typu {x}")
+                                             format_func=lambda x: f"NOK {x}")
                         
                         c1, c2 = st.columns(2)
                         if c1.button("💾 ULOŽIT", type="primary", use_container_width=True):
@@ -204,6 +207,69 @@ if menu == "Konfigurace":
                         if c2.button("⚙️", key=f"cfg_{r[0]}", help="Editovat"):
                             st.session_state.edit_roi_id = r[0]
                             st.rerun()
+                            
+    elif st.session_state.step == 4:
+        st.title("🔌 I/O Monitor - Rozhraní stroje")
+        st.info("Zde můžete sledovat reálný stav komunikace s lisem a robotem.")
+
+        # Hlavní rozdělení na Vstupy a Výstupy
+        col_vstupy, col_vystupy = st.columns(2)
+
+        with col_vstupy:
+            st.markdown("### 📥 VSTUPY (Input)")
+            st.write("Signály přicházející z lisu do programu.")
+            
+            # Simulace stavů vstupů (v reálu čtení z HW)
+            col_led1, col_text1 = st.columns([1, 4])
+            lis_provoz = st.toggle("LIS V PROVOZU (S1)", value=True)
+            if lis_provoz:
+                col_led1.markdown("🟢")
+                col_text1.success("LIS BĚŽÍ - Světla svítí")
+            else:
+                col_led1.markdown("🔴")
+                col_text1.error("LIS ZASTAVEN - Světla vypnuta")
+
+            col_led2, col_text2 = st.columns([1, 4])
+            trigger_active = st.button("📸 TRIGGER (S2) - Vyfotit")
+            if trigger_active:
+                col_led2.markdown("🟡")
+                col_text2.warning("TRIGGER AKTIVNÍ - Probíhá inspekce")
+            else:
+                col_led2.markdown("⚫")
+                col_text2.info("ČEKÁM NA TRIGGER")
+
+        with col_vystupy:
+            st.markdown("### 📤 VÝSTUPY (Output)")
+            st.write("Signály odesílané z programu do robotu.")
+
+            # Tady simulujeme rozhodovací logiku
+            # Pro test si zde můžeš přepnout výsledek:
+            vysledek_test = st.radio("Simulovat výsledek:", ["Čekání", "Vše OK", "NOK 1", "NOK 2"], horizontal=True)
+
+            st.divider()
+
+            if vysledek_test == "Vše OK":
+                st.success("✅ VÝSLEDEK: OK")
+                st.write("🤖 **VÝSTUP: ROBOTE ODJEĎ** (Pin Y0 -> HIGH)")
+                st.progress(100)
+            elif "NOK" in vysledek_test:
+                st.error(f"❌ VÝSLEDEK: {vysledek_test}")
+                st.write("🤖 **VÝSTUP: VYŘADIT KUS** (Pin Y1/Y2 -> HIGH)")
+                st.progress(0)
+            else:
+                st.info("⚪ SYSTÉM PŘIPRAVEN")
+                st.write("🤖 Čekám na dokončení cyklu lisu...")
+
+            # Přehledná tabulka digitálních výstupů pro údržbu
+            st.table({
+                "Digitální výstup": ["Y0 (Celkově OK)", "Y1 (Chyba NOK 1)", "Y2 (Chyba NOK 2)", "Y3 (Systém Ready)"],
+                "Logický stav": [
+                    "1 (Zapnuto)" if vysledek_test == "Vše OK" else "0",
+                    "1 (Zapnuto)" if vysledek_test == "NOK 1" else "0",
+                    "1 (Zapnuto)" if vysledek_test == "NOK 2" else "0",
+                    "1 (Zapnuto)" if vysledek_test == "Čekání" else "0"
+                ]
+            })                        
 
 # ... (zbytek monitoring sekce)
 
