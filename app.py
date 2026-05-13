@@ -142,8 +142,8 @@ if menu == "Konfigurace":
                         st.image(img, use_container_width=True)
                     else:
                         c_key = f"c_{edit_id if edit_id else 'new'}_{len(old_rois)}"
-                        # Cropper se teď přizpůsobí pevnému kontejneru
-                        st_cropper(img, realtime_update=True, box_color='#FF9800', key=c_key)
+                        # Uprav řádek s cropperem takto:
+                        st_cropper(img, realtime_update=True, box_color='#FF9800', key=c_key, should_resize_canvas=False)
 
             with col_side:
                 # PEVNÝ PANEL AKCÍ
@@ -159,20 +159,34 @@ if menu == "Konfigurace":
                         name = st.text_input("Název:", value=d_name)
                         nok = st.selectbox("NOK:", range(1, 9), index=d_nok, format_func=lambda x: f"NOK {x}")
                         
-                        if st.button("💾 ULOŽIT", type="primary", use_container_width=True):
-                            c = st.session_state[c_key]['coords']
-                            if edit_id:
-                                database.update_roi_position(edit_id, int(c['left']), int(c['top']), int(c['width']), int(c['height']))
-                                database.update_roi_nok(edit_id, nok + 1)
-                                st.session_state.edit_roi_id = None
-                            else:
-                                database.save_roi(curr_m[0], name, int(c['left']), int(c['top']), int(c['width']), int(c['height']), nok + 1)
-                                del st.session_state['add_toggle']
-                            st.rerun()
-                        
-                        if edit_id and st.button("❌ ZRUŠIT"):
-                            st.session_state.edit_roi_id = None
-                            st.rerun()
+                        if st.button(btn_label, type="primary", use_container_width=True):
+                            # Získání dat z cropperu
+                            cropper_data = st.session_state[c_key]
+                            
+                            if cropper_data:
+                                # VÝPOČET POMĚRU (Scaling factor)
+                                # Zjistíme, jak moc Streamlit fotku zmenšil pro displej
+                                canvas_width = cropper_data['width']  # Šířka plátna v prohlížeči
+                                actual_width = img.width              # Skutečná šířka souboru
+                                ratio = actual_width / canvas_width   # Přepočítací koeficient
+                                
+                                coords = cropper_data['coords']
+                                
+                                # Přepočet na skutečné pixely s koeficientem ratio
+                                real_left = int(coords['left'] * ratio)
+                                real_top = int(coords['top'] * ratio)
+                                real_width = int(coords['width'] * ratio)
+                                real_height = int(coords['height'] * ratio)
+
+                                if edit_id:
+                                    database.update_roi_position(edit_id, real_left, real_top, real_width, real_height)
+                                    database.update_roi_nok(edit_id, nok + 1)
+                                    st.session_state.edit_roi_id = None
+                                else:
+                                    database.save_roi(curr_m[0], name, real_left, real_top, real_width, real_height, nok + 1)
+                                    if 'add_toggle' in st.session_state: del st.session_state['add_toggle']
+                                
+                                st.rerun()
 
                 # PEVNÝ PANEL SEZNAMU (s vnitřním scrollováním, pokud je dlouhý)
                 st.write("📋 Seznam zón")
