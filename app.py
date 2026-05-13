@@ -85,81 +85,48 @@ elif menu == "⚙️ Nastavení":
         else:
             st.warning("⚠️ Nejdříve vyberte produkt v Kroku 1!")
 
-    # --- STRÁNKA 3: DEFINICE ROI (Zde byla chyba odsazení) ---
-    elif st.session_state.set_step == 3:
-        active_p = st.session_state.get('active_p')
-        img = st.session_state.get('master_image')
+    # --- STRÁNKA 3: DEFINICE ROI ---
+elif st.session_state.set_step == 3:
+    active_p = st.session_state.get('active_p')
+    img = st.session_state.get('master_image')
 
-        if active_p and img:
-            st.subheader(f"🔍 KROK 3: Nastavení ROI pro {active_p}")
-            col_l, col_r = st.columns([2, 1])
+    if active_p and img:
+        st.subheader(f"🔍 Konfigurace inspekcí pro: {active_p}")
+        
+        col_l, col_r = st.columns([3, 1])
+        
+        with col_l:
+            # Uživatel vidí velký obrázek a kreslí ROI
+            roi_data = st_cropper(img, realtime_update=True, box_color='#FF9800', key="cropper_final")
             
-            with col_l:
-                # Cropper pro dotykový monitor
-                roi_data = st_cropper(img, realtime_update=True, box_color='#FF9800', key="cropper_final")
+        with col_r:
+            st.write("### Přidat inspekci")
+            roi_name = st.text_input("Název (např. Kontrola količku)")
             
-            with col_r:
-                st.write("### 📝 Uložit novou ROI")
-                roi_name = st.text_input("Název kontroly", key="roi_name_buffer")
-                
-                if st.button("💾 ULOŽIT DO DATABÁZE", use_container_width=True, type="primary"):
-                    c_state = st.session_state.get('cropper_final')
-                    
-                    if c_state and 'coords' in c_state:
-                        # Reálná velikost originálního souboru
-                        iw, ih = img.size 
-                        
-                        # Rozměry, které cropper viděl v prohlížeči
-                        cw = c_state.get('width')
-                        ch = c_state.get('height')
-                        
-                        # Souřadnice z rámečku na webu
-                        box = c_state.get('coords')
+            if st.button("ULOŽIT INSPEKCI", use_container_width=True, type="primary"):
+                c_state = st.session_state.get('cropper_final')
+                if c_state and roi_name:
+                    box = c_state.get('coords')
+                    # Uložíme čistá procentuální data nebo poměrové souřadnice
+                    # Pro zobrazení v inspekci (image_57c352.jpg) se výřez provede až tam
+                    database.save_roi_template(
+                        active_p, 
+                        roi_name,
+                        box['left'], box['top'], box['width'], box['height']
+                    )
+                    st.success(f"Inspekce '{roi_name}' přidána")
+                    st.rerun()
 
-                        # Pokud cw/ch chybí, nepokračujeme ve výpočtu
-                        if cw and ch:
-                            # Výpočet koeficientu zvětšení
-                            # Musíme zajistit, aby poměr stran odpovídal
-                            scale_x = iw / cw
-                            scale_y = ih / ch
-
-                            # Přepočet na reálné pixely souboru
-                            real_x = int(box['left'] * scale_x)
-                            real_y = int(box['top'] * scale_y)
-                            real_w = int(box['width'] * scale_x)
-                            real_h = int(box['height'] * scale_y)
-
-                            # Kontrola přetečení (nesmíme říznout mimo fotku)
-                            real_x = max(0, min(real_x, iw))
-                            real_y = max(0, min(real_y, ih))
-
-                            if roi_name:
-                                database.save_roi_template(
-                                    st.session_state.active_p, 
-                                    roi_name, 
-                                    real_x, real_y, real_w, real_h
-                                )
-                                st.success(f"ROI '{roi_name}' uložena!")
-                                time.sleep(0.5)
-                                st.rerun()
-                        else:
-                            st.error("Chyba inicializace cropperu. Pohněte s ním prosím.")
-                    else:
-                        st.error("Nejdříve pohněte rámečkem na fotce!")
-
-            st.divider()
-            st.subheader("📋 Seznam nastavených kontrol")
-            saved_rois = database.get_roi_templates(active_p)
-            if saved_rois:
-                for r in saved_rois:
-                    with st.expander(f"📍 {r[2]}"):
-                        c1, c2 = st.columns([1, 2])
-                        # Zobrazení náhledu přímo z databáze
-                        crop_view = img.crop((r[3], r[4], r[3]+r[5], r[4]+r[6]))
-                        c1.image(crop_view, use_container_width=True)
-                        if c2.button("Odstranit", key=f"del_{r[0]}"):
-                            database.delete_roi_template(r[0])
-                            st.rerun()
+        st.divider()
+        # Seznam inspekcí bez náhledů - jen textový přehled jako na image_57c67a.jpg
+        st.subheader("Seznam aktivních inspekcí")
+        saved_rois = database.get_roi_templates(active_p)
+        for r in saved_rois:
+            with st.expander(f"✅ {r[2]}"):
+                st.write(f"Typ: Klasifikátor | Pozice: {r[3]}, {r[4]}")
+                if st.button("Smazat", key=f"del_{r[0]}"):
+                    database.delete_roi_template(r[0])
+                    st.rerun()
             else:
                 st.info("Zatím žádné kontroly.")
         else:
