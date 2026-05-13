@@ -46,39 +46,26 @@ if menu == "Konfigurace":
 
     # KROK 2: MASTER A OŘEZ (AOI)
     elif st.session_state.step == 2:
-        if not st.session_state.active_project:
-            st.warning("Nejdříve vyberte projekt v kroku 1!")
-        else:
-            st.subheader(f"🖼️ Nastavení Masteru pro: {st.session_state.active_project}")
+        st.subheader(f"🖼️ Nastavení Masteru pro: {st.session_state.active_project}")
+        
+        # Rozdělíme na sloupce, aby sliders nezabíraly celou šířku
+        col_img, col_ctrl = st.columns([2, 1])
+        
+        with col_ctrl:
+            st.caption("Nastavení ořezu (AOI)")
+            ax = st.slider("X pozice", 0, 2000, 0, key="slider_x")
+            ay = st.slider("Y pozice", 0, 2000, 0, key="slider_y")
+            aw = st.slider("Šířka", 100, 2500, 1280, key="slider_w")
+            ah = st.slider("Výška", 100, 2500, 1080, key="slider_h")
+            m_name = st.text_input("Název Master snímku:", placeholder="např. P1_TOP")
             
-            col_l, col_r = st.columns([2, 1])
-            
-            with col_r:
-                st.write("### Nastavení ořezu kamery (AOI)")
-                # Nastavíme max. limity podle reálného rozlišení (např. 2500x2000)
-                ax = st.slider("X pozice (vlevo)", 0, 2000, 0)
-                ay = st.slider("Y pozice (nahoře)", 0, 2000, 0)
-                aw = st.slider("Šířka výřezu", 100, 2500, 1200)
-                ah = st.slider("Výška výřezu", 100, 2500, 1000)
-                
-                master_name = st.text_input("Název Master snímku", placeholder="např. MQB_P1_TOP")
-                
-                if st.button("📸 VYFOTIT A ULOŽIT MASTER", type="primary", use_container_width=True):
-                    if master_name:
-                        # Tady uložíme oříznutý obrázek na disk
-                        final_frame = cam.get_frame()
-                        # Převedeme numpy na PIL pro ořez
-                        pil_img = Image.fromarray(final_frame)
-                        cropped_master = pil_img.crop((ax, ay, ax + aw, ay + ah))
-                        
-                        img_path = f"masters/{master_name}.jpg"
-                        if not os.path.exists('masters'): os.makedirs('masters')
-                        cropped_master.save(img_path)
-                        
-                        database.save_master(st.session_state.active_project, master_name, ax, ay, aw, ah, img_path)
-                        st.success(f"Master '{master_name}' uložen!")
-                    else:
-                        st.error("Zadejte název Masteru!")
+            if st.button("📸 VYFOTIT A ULOŽIT", type="primary", use_container_width=True):
+                # ... (zde nechat tvůj stávající kód pro focení a ukládání)
+                pass
+
+        with col_img:
+            # Tady bude náhled kamery (zmenšený automaticky sloupcem)
+            st.image("https://via.placeholder.com/640x480.png?text=Nahled+Kamery", use_container_width=True)
 
             with col_l:
                 # ŽIVÝ NÁHLED S OŘEZEM V REÁLNÉM ČASE
@@ -150,9 +137,8 @@ if menu == "Konfigurace":
                             st.rerun()
 
                 with c_l:
-                    # Tady využíváme parametr width=550, který už verze 0.2.2 umí
-                    if not (add_mode or edit_id):
-                        st.image(img, width=550)
+    # Obalíme cropper do dalšího sloupce nebo kontejneru pro fixaci šířky
+    roi = st_cropper(img, realtime_update=True, box_color='#FF9800', key=c_key)
                     else:
                         st_cropper(img, realtime_update=True, box_color='#FF9800', key=c_key, width=550)
 
