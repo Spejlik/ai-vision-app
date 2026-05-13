@@ -53,7 +53,7 @@ if menu == "Konfigurace":
     with c1:
         if c1.button("📁", help="Projekty"): st.session_state.step = 1
     with c2:
-        iif c2.button("🎯", help="Master"): st.session_state.step = 2
+        if c2.button("🎯", help="Master"): st.session_state.step = 2
     with c3:
         if c3.button("🔍", help="ROI"): st.session_state.step = 3
     with c4:    
