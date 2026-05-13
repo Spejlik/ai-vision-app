@@ -96,47 +96,62 @@ if menu == "Konfigurace":
     elif st.session_state.step == 3:
         st.subheader("🔍 Definice inspekčních zón")
         
-        # Výběr masteru
+        # Načteme seznam všech Masterů pro aktivní projekt
         masters = database.get_masters(st.session_state.active_project)
+        
         if not masters:
-            st.error("Žádné Mastery nenalezeny. Vytvořte je v kroku 2.")
+            st.error("Žádné Mastery nenalezeny. Vytvořte a uložte Master v kroku 2.")
         else:
+            # Vytvoříme seznam jmen pro selectbox
             m_names = [m[2] for m in masters]
-            sel_m_name = st.selectbox("Vyberte Master snímek:", m_names)
             
-            # Získáme data vybraného masteru
+            # Selectbox pro výběr konkrétního ořezu (Masteru)
+            sel_m_name = st.selectbox("Vyberte Master snímek (ořez):", m_names)
+            
+            # Najdeme data vybraného masteru v seznamu
             curr_m = next(m for m in masters if m[2] == sel_m_name)
             
-            # OPRAVA: Načteme skutečnou cestu k oříznutému souboru z databáze
-            # curr_m[8] odpovídá sloupci img_path v tabulce masters
+            # CESTA K OŘÍZNUTÉMU OBRÁZKU (sloupec img_path v DB)
             path_to_img = curr_m[8] 
             
             if os.path.exists(path_to_img):
+                # Otevřeme ten oříznutý soubor, ne dummy!
                 img = Image.open(path_to_img)
                 
                 c_l, c_r = st.columns([3, 1])
                 
                 with c_l:
-                    # Vykreslení stávajících ROI (modře)
+                    st.write(f"Snímek: `{path_to_img}`")
+                    # Vykreslení stávajících ROI (modře) na tento ořez
                     draw = ImageDraw.Draw(img)
                     old_rois = database.get_rois(curr_m[0])
                     for r in old_rois:
                         # r[3]=x, r[4]=y, r[5]=w, r[6]=h
                         draw.rectangle([r[3], r[4], r[3]+r[5], r[4]+r[6]], outline="blue", width=5)
                     
-                    # Cropper pro novou ROI na OŘÍZNUTÉM obrázku
-                    roi = st_cropper(img, realtime_update=True, box_color='#FF9800', key="cropper")
+                    # Cropper na oříznutém obrázku
+                    roi = st_cropper(img, realtime_update=True, box_color='#FF9800', key="roi_cropper")
                 
                 with c_r:
-                    new_roi_name = st.text_input("Název kontroly:")
+                    new_roi_name = st.text_input("Název nové kontroly:")
                     if st.button("💾 ULOŽIT KONTROLU", use_container_width=True):
-                        coords = st.session_state['cropper']['coords']
-                        database.save_roi(curr_m[0], new_roi_name, int(coords['left']), int(coords['top']), int(coords['width']), int(coords['height']))
-                        st.toast(f"Kontrola '{new_roi_name}' uložena!")
-                        time.sleep(0.5)
-                        st.rerun()
+                        if new_roi_name:
+                            coords = st.session_state['roi_cropper']['coords']
+                            database.save_roi(
+                                curr_m[0], 
+                                new_roi_name, 
+                                int(coords['left']), 
+                                int(coords['top']), 
+                                int(coords['width']), 
+                                int(coords['height'])
+                            )
+                            st.toast(f"Kontrola '{new_roi_name}' uložena!")
+                            time.sleep(0.5)
+                            st.rerun()
+                        else:
+                            st.error("Zadejte název!")
             else:
-                st.error(f"Soubor Masteru nebyl nalezen na cestě: {path_to_img}")
+                st.error(f"Soubor ořezu nebyl nalezen: {path_to_img}. Zkuste Master znovu uložit v Kroku 2.")
 
 elif menu == "Monitoring":
     st.title("📊 Živý monitoring")
