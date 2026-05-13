@@ -126,8 +126,8 @@ if menu == "Konfigurace":
             sel_m_name = st.selectbox("Master:", m_names, label_visibility="collapsed")
             curr_m = next(m for m in masters if m[2] == sel_m_name)
             
-            if os.path.exists(curr_m[8]):
-                img = Image.open(curr_m[8]).convert("RGB")
+            if os.path.exists(curr_m[7]):
+                img = Image.open(curr_m[7]).convert("RGB")
                 draw = ImageDraw.Draw(img)
                 old_rois = database.get_rois(curr_m[0])
                 valeo_green = "#97BE0D"
