@@ -71,37 +71,50 @@ if menu == "Konfigurace":
         projs = database.get_projects()
         st.session_state.active_project = st.selectbox("Vyberte aktivní projekt:", [p[1] for p in projs])
 
-    # KROK 2: MASTER A OŘEZ (AOI)
+    # KROK 2: NASTAVENÍ MASTERU A AOI
     elif st.session_state.step == 2:
         st.subheader(f"🖼️ Nastavení Masteru pro: {st.session_state.active_project}")
         
-        # Rozdělíme na sloupce, aby sliders nezabíraly celou šířku
-        col_img, col_ctrl = st.columns([2, 1])
+        col_img, col_ctrl = st.columns([1.5, 1.0])
         
         with col_ctrl:
             st.caption("Nastavení ořezu (AOI)")
-            ax = st.slider("X pozice", 0, 2000, 0, key="slider_x")
-            ay = st.slider("Y pozice", 0, 2000, 0, key="slider_y")
-            aw = st.slider("Šířka", 100, 2500, 1280, key="slider_w")
-            ah = st.slider("Výška", 100, 2500, 1080, key="slider_h")
-            m_name = st.text_input("Název Master snímku:", placeholder="např. P1_TOP")
+            ax = st.slider("X pozice", 0, 2000, 0)
+            ay = st.slider("Y pozice", 0, 2000, 0)
+            aw = st.slider("Šířka", 100, 2500, 1280)
+            ah = st.slider("Výška", 100, 2500, 1080)
+            m_name = st.text_input("Název Master snímku:", placeholder="např. MQB_P1")
             
             if st.button("📸 VYFOTIT A ULOŽIT", type="primary", use_container_width=True):
-                # ... (zde nechat tvůj stávající kód pro focení a ukládání)
-                pass
+                if not m_name:
+                    st.error("Zadejte název snímku!")
+                else:
+                    # 1. Získání aktuálního snímku z kamery
+                    raw_frame = cam.get_frame()
+                    pil_img = Image.fromarray(raw_frame)
+                    
+                    # 2. Provedení ořezu (AOI)
+                    cropped_img = pil_img.crop((ax, ay, ax + aw, ay + ah))
+                    
+                    # 3. Vytvoření cesty a uložení souboru
+                    os.makedirs("masters", exist_ok=True)
+                    file_path = f"masters/{st.session_state.active_project}_{m_name}.png"
+                    cropped_img.save(file_path)
+                    
+                    # 4. Uložení do databáze
+                    database.add_master(st.session_state.active_project, m_name, ax, ay, aw, ah, file_path)
+                    
+                    st.success(f"Master '{m_name}' uložen!")
+                    st.rerun()
 
         with col_img:
-            # Tady bude náhled kamery
+            # Živý náhled s výřezem
             raw_frame = cam.get_frame()
             pil_raw = Image.fromarray(raw_frame)
-            
-            # Reálný náhled ořezu (AOI)
             preview_crop = pil_raw.crop((ax, ay, ax + aw, ay + ah))
             
-            st.image(preview_crop, caption="Náhled ořezu (AOI)", use_container_width=True)
-            st.write(f"📝 Aktuální rozlišení masteru: {aw} x {ah} px")
-
-    # ... (začátek app.py zůstává stejný)
+            st.image(preview_crop, caption="Náhled AOI (to, co uvidí AI)", use_container_width=True)
+            st.write(f"📏 Rozlišení: {aw} x {ah} px")
 
     # KROK 3: ROI DEFINICE
     elif st.session_state.step == 3:
