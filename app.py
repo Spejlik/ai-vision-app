@@ -108,84 +108,90 @@ if menu == "Konfigurace":
 
     # ... (začátek app.py zůstává stejný)
 
-    # KROK 3: ROI DEFINICE (Dashboard layout)
+    # KROK 3: ROI DEFINICE
     elif st.session_state.step == 3:
         masters = database.get_masters(st.session_state.active_project)
         if not masters:
             st.error("Žádné Mastery.")
         else:
-            # 1. Horní lišta - pevná výška
             m_names = [m[2] for m in masters]
-            sel_m_name = st.selectbox("Vyberte Master snímek:", m_names, label_visibility="collapsed")
+            sel_m_name = st.selectbox("Master:", m_names, label_visibility="collapsed")
             curr_m = next(m for m in masters if m[2] == sel_m_name)
             
-            img = Image.open(curr_m[8]).convert("RGB")
-            draw = ImageDraw.Draw(img)
-            old_rois = database.get_rois(curr_m[0])
-            valeo_green = "#97BE0D"
-            edit_id = st.session_state.get('edit_roi_id', None)
+            if os.path.exists(curr_m[8]):
+                img = Image.open(curr_m[8]).convert("RGB")
+                draw = ImageDraw.Draw(img)
+                old_rois = database.get_rois(curr_m[0])
+                valeo_green = "#97BE0D"
+                edit_id = st.session_state.get('edit_roi_id', None)
 
-            # Vykreslení zón do podkladu
-            for r in old_rois:
-                if edit_id == r[0]: continue
-                draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], outline=valeo_green, width=3)
-                draw.text((r[2]+5, r[3]-20), f"{r[1]} [N{r[6]}]", fill=valeo_green)
+                # Vykreslení zelených zón
+                for r in old_rois:
+                    if edit_id == r[0]: continue
+                    # r[2]=x, r[3]=y, r[4]=w, r[5]=h
+                    draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], outline=valeo_green, width=3)
+                    draw.text((r[2]+5, r[3]-20), f"{r[1]} [N{r[6]}]", fill=valeo_green)
 
-            # --- HLAVNÍ MŘÍŽKA ---
-            col_main, col_side = st.columns([1.5, 1.0])
-
-            with col_main:
-                # PEVNÝ KONTEJNER PRO OBRAZ
-                image_container = st.container(border=True)
-                with image_container:
-                    if not (st.session_state.get('add_toggle') or edit_id):
-                        st.image(img, use_container_width=True)
-                    else:
-                        c_key = f"c_{edit_id if edit_id else 'new'}_{len(old_rois)}"
-                        # Uprav řádek s cropperem takto:
-                        st_cropper(img, realtime_update=True, box_color='#FF9800', key=c_key, should_resize_canvas=False)
-
-            with col_side:
-                # PEVNÝ PANEL AKCÍ
-                action_panel = st.container(border=True)
-                with action_panel:
-                    st.subheader("➕ Akce")
-                    if not edit_id:
-                        add_mode = st.toggle("PŘIDAT NOVOU KONTROLU", key="add_toggle")
+                col_main, col_side = st.columns([1.5, 1.0])
+                
+                with col_side:
+                    st.write("### ➕ Akce")
+                    add_mode = st.toggle("PŘIDAT NOVOU", key="add_toggle") if not edit_id else False
                     
-                    if st.session_state.get('add_toggle') or edit_id:
-                        d_name, d_nok = ("", 0) if not edit_id else (next(r[1] for r in old_rois if r[0] == edit_id), next(r[6]-1 for r in old_rois if r[0] == edit_id))
-                        
-                        name = st.text_input("Název:", value=d_name)
+                    if add_mode or edit_id:
+                        st.divider()
+                        d_name, d_nok = "", 0
+                        if edit_id:
+                            curr_r = next(r for r in old_rois if r[0] == edit_id)
+                            d_name, d_nok = curr_r[1], curr_r[6] - 1
+
+                        name = st.text_input("Název:", value=d_name, placeholder="Název zóny")
                         nok = st.selectbox("NOK:", range(1, 9), index=d_nok, format_func=lambda x: f"NOK {x}")
                         
-                        if st.button(btn_label, type="primary", use_container_width=True):
-                            # Získání dat z cropperu
-                            cropper_data = st.session_state[c_key]
-                            
-                            if cropper_data:
-                                # VÝPOČET POMĚRU (Scaling factor)
-                                # Zjistíme, jak moc Streamlit fotku zmenšil pro displej
-                                canvas_width = cropper_data['width']  # Šířka plátna v prohlížeči
-                                actual_width = img.width              # Skutečná šířka souboru
-                                ratio = actual_width / canvas_width   # Přepočítací koeficient
+                        c_key = f"c_{edit_id if edit_id else 'new'}_{len(old_rois)}"
+                        
+                        if st.button("💾 ULOŽIT", type="primary", use_container_width=True):
+                            if c_key in st.session_state and st.session_state[c_key] is not None:
+                                cropper_data = st.session_state[c_key]
+                                
+                                # --- MATEMATICKÝ PŘEPOČET (Ratio) ---
+                                canvas_width = cropper_data['width']
+                                actual_width = img.width
+                                ratio = actual_width / canvas_width
                                 
                                 coords = cropper_data['coords']
-                                
-                                # Přepočet na skutečné pixely s koeficientem ratio
-                                real_left = int(coords['left'] * ratio)
-                                real_top = int(coords['top'] * ratio)
-                                real_width = int(coords['width'] * ratio)
-                                real_height = int(coords['height'] * ratio)
+                                r_x = int(coords['left'] * ratio)
+                                r_y = int(coords['top'] * ratio)
+                                r_w = int(coords['width'] * ratio)
+                                r_h = int(coords['height'] * ratio)
 
                                 if edit_id:
-                                    database.update_roi_position(edit_id, real_left, real_top, real_width, real_height)
+                                    database.update_roi_position(edit_id, r_x, r_y, r_w, r_h)
                                     database.update_roi_nok(edit_id, nok + 1)
                                     st.session_state.edit_roi_id = None
                                 else:
-                                    database.save_roi(curr_m[0], name, real_left, real_top, real_width, real_height, nok + 1)
+                                    database.save_roi(curr_m[0], name, r_x, r_y, r_w, r_h, nok + 1)
                                     if 'add_toggle' in st.session_state: del st.session_state['add_toggle']
-                                
+                                st.rerun()
+
+                with col_main:
+                    if not (add_mode or edit_id):
+                        st.image(img, use_container_width=True)
+                    else:
+                        # Bez parametru should_resize_canvas (ten dělal tu chybu)
+                        st_cropper(img, realtime_update=True, box_color='#FF9800', key=c_key)
+
+                st.divider()
+                st.caption("⚙️ Správa zón")
+                m_cols = st.columns(4)
+                for idx, r in enumerate(old_rois):
+                    with m_cols[idx % 4]:
+                        with st.expander(f"{r[1]} (N{r[6]})"):
+                            if st.button("🎮 Edit", key=f"e_{r[0]}", use_container_width=True):
+                                st.session_state.edit_roi_id = r[0]
+                                st.rerun()
+                            if st.button("🗑️ Smazat", key=f"d_{r[0]}", use_container_width=True):
+                                database.delete_roi(r[0])
                                 st.rerun()
 
                 # PEVNÝ PANEL SEZNAMU (s vnitřním scrollováním, pokud je dlouhý)
