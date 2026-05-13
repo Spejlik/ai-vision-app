@@ -122,56 +122,38 @@ if menu == "Konfigurace":
     # KROK 3: ROI DEFINICE
     elif st.session_state.step == 3:
         masters = database.get_masters(st.session_state.active_project)
-        if not masters:
-            st.error("Žádné Mastery.")
-        else:
+        if masters:
             m_names = [m[2] for m in masters]
-            sel_m_name = st.selectbox("Vyber Master:", m_names, label_visibility="collapsed")
+            sel_m_name = st.selectbox("Vyber Master:", m_names)
             curr_m = next(m for m in masters if m[2] == sel_m_name)
             
-            img_path = curr_m[7]
-            img = Image.open(img_path).convert("RGB")
-            W, H = img.size
-
-            # --- TADY JE TA OPRAVA: Definuj old_rois hned na začátku ---
-            old_rois = database.get_rois(curr_m[0]) 
-            # ---------------------------------------------------------
+            # --- TADY TO MUSÍ BÝT ---
+            # Načteme zóny pro tento konkrétní Master ID (curr_m[0])
+            old_rois = database.get_rois(curr_m[0])
+            
+            img = Image.open(curr_m[7]).convert("RGB")
+            # ------------------------
 
             col_main, col_side = st.columns([1.5, 1.0])
             
+            with col_main:
+                # Kreslení zón na obrázek
+                draw = ImageDraw.Draw(img)
+                for r in old_rois:
+                    # r[2]=x, r[3]=y, r[4]=w, r[5]=h
+                    draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], outline="#97BE0D", width=5)
+                st.image(img, use_container_width=True)
+
             with col_side:
-                st.subheader("➕ Správa zón")
-                
-                # Pokud zrovna needitujeme, ukážeme tlačítko pro novou zónu
-                if not st.session_state.get('manual_add_active', False):
-                    if st.button("✨ VYTVOŘIT NOVOU ZÓNU", use_container_width=True):
-                        st.session_state.manual_add_active = True
-                        st.rerun()
-                
-                if st.session_state.get('manual_add_active', False):
-                    with st.expander("Nastavení nové zóny", expanded=True):
-                        name = st.text_input("Název zóny:", f"Zóna {len(old_rois)+1}")
-                        
-                        # Slidery pro přesné polohování
-                        rx = st.slider("X pozice", 0, W, W//2)
-                        ry = st.slider("Y pozice", 0, H, H//2)
-                        rw = st.slider("Šířka", 10, 500, 100)
-                        rh = st.slider("Výška", 10, 500, 100)
-                        
-                        # Oprava bodu 2: NOK kódy
-                        nok_val = st.selectbox("Typ vady:", 
-                                             options=range(1, 11), 
-                                             format_func=lambda x: f"NOK {x}")
-                        
-                        c1, c2 = st.columns(2)
-                        if c1.button("💾 ULOŽIT", type="primary", use_container_width=True):
-                            database.save_roi(curr_m[0], name, rx, ry, rw, rh, nok_val)
-                            # Necháme menu otevřené pro další kousek, ale resetujeme jméno
-                            st.success("Uloženo!")
-                            st.rerun()
-                            
-                        if c2.button("✖ ZAVŘÍT", use_container_width=True):
-                            st.session_state.manual_add_active = False
+                # Výpis zón vpravo
+                st.subheader("📋 Seznam zón")
+                if not old_rois:
+                    st.write("Žádné zóny nenalezeny.")
+                for r in old_rois:
+                    with st.container(border=True):
+                        st.write(f"**{r[1]}** (NOK {r[6]})")
+                        if st.button("🗑️", key=f"del_{r[0]}"):
+                            database.delete_roi(r[0])
                             st.rerun()
                 
                 st.divider()
