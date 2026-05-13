@@ -124,112 +124,79 @@ if menu == "Konfigurace":
         masters = database.get_masters(st.session_state.active_project)
         if masters:
             m_names = [m[2] for m in masters]
-            sel_m_name = st.selectbox("Vyber Master:", m_names)
+            sel_m_name = st.selectbox("Vyber Master:", m_names, label_visibility="collapsed")
             curr_m = next(m for m in masters if m[2] == sel_m_name)
             
-            # --- TADY TO MUSÍ BÝT ---
-            # Načteme zóny pro tento konkrétní Master ID (curr_m[0])
+            # Načtení dat
             old_rois = database.get_rois(curr_m[0])
-            
             img = Image.open(curr_m[7]).convert("RGB")
-            # ------------------------
+            W, H = img.size
 
-            col_main, col_side = st.columns([1.5, 1.0])
-            
-            st.divider()
-                # ... (zbytek se seznamem zón zůstává stejný)
-
-            # 1. Definujeme rozvržení (vlevo fotka, vpravo veškeré ovládání)
-            col_main, col_side = st.columns([1.5, 1.0])
+            # ROZVRŽENÍ: Vlevo obraz, vpravo VŠE ostatní
+            col_main, col_side = st.columns([1.6, 1.0])
             
             with col_main:
-                # Tady zůstává vykreslování obrázku (zelené a oranžové rámečky)
-                # ... (tvůj kód pro Drawing a st.image) ...
+                # Vykreslování zón do obrázku
+                draw = ImageDraw.Draw(img)
+                valeo_green = "#97BE0D"
+                orange = "#FF9800"
+                
+                for r in old_rois:
+                    draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], outline=valeo_green, width=5)
+                    draw.text((r[2]+5, r[3]+5), f"{r[1]}", fill=valeo_green)
+                
+                # Pokud se zrovna tvoří/edituje, vykresli oranžový náhled
+                if st.session_state.get('manual_add_active', False):
+                    # Tyto proměnné (rx, ry, rw, rh) se definují níže v col_side
+                    # ale díky Streamlit rerun mechanismu budou dostupné
+                    pass 
+
                 st.image(img, use_container_width=True)
 
             with col_side:
-                # HORNÍ ČÁST: Přidávání nových zón
                 st.subheader("➕ Správa zón")
-                # ... (tvůj kód pro st.button "VYTVOŘIT NOVOU ZÓNU" a slidery) ...
+                
+                # Tlačítko pro start přidávání
+                if not st.session_state.get('manual_add_active', False):
+                    if st.button("✨ VYTVOŘIT NOVOU ZÓNU", use_container_width=True, type="primary"):
+                        st.session_state.manual_add_active = True
+                        st.rerun()
+                
+                # FORMULÁŘ PRO EDITACI / PŘIDÁVÁNÍ
+                if st.session_state.get('manual_add_active', False):
+                    with st.container(border=True):
+                        st.write("**Nastavení zóny**")
+                        name = st.text_input("Název:", f"Zóna {len(old_rois)+1}")
+                        rx = st.slider("X pozice", 0, W, W//3)
+                        ry = st.slider("Y pozice", 0, H, H//3)
+                        rw = st.slider("Šířka", 10, 500, 150)
+                        rh = st.slider("Výška", 10, 500, 150)
+                        nok = st.selectbox("Typ vady:", range(1, 11), format_func=lambda x: f"NOK {x}")
+                        
+                        # Vykreslení oranžového náhledu (vynucený překres)
+                        draw.rectangle([rx, ry, rx+rw, ry+rh], outline=orange, width=6)
+                        
+                        c1, c2 = st.columns(2)
+                        if c1.button("💾 ULOŽIT", type="primary", use_container_width=True):
+                            database.save_roi(curr_m[0], name, rx, ry, rw, rh, nok)
+                            st.session_state.manual_add_active = False
+                            st.rerun()
+                        if c2.button("✖ ZRUŠIT", use_container_width=True):
+                            st.session_state.manual_add_active = False
+                            st.rerun()
 
                 st.divider()
-
-                # SPODNÍ ČÁST: Seznam zón (přesunuto zespodu sem)
                 st.subheader("📋 Seznam zón")
-                
-                # Uděláme seznam kompaktnější, aby se jich tam vešlo hodně
-                for r in old_rois:
-                    # Použijeme kontejner s ohraničením pro každou zónu
-                    with st.container(border=True):
-                        c1, c2 = st.columns([4, 1])
-                        c1.markdown(f"**{r[1]}**")
-                        c1.caption(f"Typ: NOK {r[6]}")
-                        if c2.button("🗑️", key=f"del_{r[0]}", help="Smazat zónu"):
-                            database.delete_roi(r[0])
-                            st.rerun()
-                            
-    elif st.session_state.step == 4:
-        st.title("🔌 I/O Monitor - Rozhraní stroje")
-        st.info("Zde můžete sledovat reálný stav komunikace s lisem a robotem.")
-
-        # Hlavní rozdělení na Vstupy a Výstupy
-        col_vstupy, col_vystupy = st.columns(2)
-
-        with col_vstupy:
-            st.markdown("### 📥 VSTUPY (Input)")
-            st.write("Signály přicházející z lisu do programu.")
-            
-            # Simulace stavů vstupů (v reálu čtení z HW)
-            col_led1, col_text1 = st.columns([1, 4])
-            lis_provoz = st.toggle("LIS V PROVOZU (S1)", value=True)
-            if lis_provoz:
-                col_led1.markdown("🟢")
-                col_text1.success("LIS BĚŽÍ - Světla svítí")
-            else:
-                col_led1.markdown("🔴")
-                col_text1.error("LIS ZASTAVEN - Světla vypnuta")
-
-            col_led2, col_text2 = st.columns([1, 4])
-            trigger_active = st.button("📸 TRIGGER (S2) - Vyfotit")
-            if trigger_active:
-                col_led2.markdown("🟡")
-                col_text2.warning("TRIGGER AKTIVNÍ - Probíhá inspekce")
-            else:
-                col_led2.markdown("⚫")
-                col_text2.info("ČEKÁM NA TRIGGER")
-
-        with col_vystupy:
-            st.markdown("### 📤 VÝSTUPY (Output)")
-            st.write("Signály odesílané z programu do robotu.")
-
-            # Tady simulujeme rozhodovací logiku
-            # Pro test si zde můžeš přepnout výsledek:
-            vysledek_test = st.radio("Simulovat výsledek:", ["Čekání", "Vše OK", "NOK 1", "NOK 2"], horizontal=True)
-
-            st.divider()
-
-            if vysledek_test == "Vše OK":
-                st.success("✅ VÝSLEDEK: OK")
-                st.write("🤖 **VÝSTUP: ROBOTE ODJEĎ** (Pin Y0 -> HIGH)")
-                st.progress(100)
-            elif "NOK" in vysledek_test:
-                st.error(f"❌ VÝSLEDEK: {vysledek_test}")
-                st.write("🤖 **VÝSTUP: VYŘADIT KUS** (Pin Y1/Y2 -> HIGH)")
-                st.progress(0)
-            else:
-                st.info("⚪ SYSTÉM PŘIPRAVEN")
-                st.write("🤖 Čekám na dokončení cyklu lisu...")
-
-            # Přehledná tabulka digitálních výstupů pro údržbu
-            st.table({
-                "Digitální výstup": ["Y0 (Celkově OK)", "Y1 (Chyba NOK 1)", "Y2 (Chyba NOK 2)", "Y3 (Systém Ready)"],
-                "Logický stav": [
-                    "1 (Zapnuto)" if vysledek_test == "Vše OK" else "0",
-                    "1 (Zapnuto)" if vysledek_test == "NOK 1" else "0",
-                    "1 (Zapnuto)" if vysledek_test == "NOK 2" else "0",
-                    "1 (Zapnuto)" if vysledek_test == "Čekání" else "0"
-                ]
-            })                        
+                if not old_rois:
+                    st.caption("Žádné zóny nenalezeny.")
+                else:
+                    for r in old_rois:
+                        with st.container(border=True):
+                            c1, c2 = st.columns([4, 1])
+                            c1.markdown(f"**{r[1]}** (NOK {r[6]})")
+                            if c2.button("🗑️", key=f"del_{r[0]}", use_container_width=True):
+                                database.delete_roi(r[0])
+                                st.rerun()                        
 
 # ... (zbytek monitoring sekce)
 
