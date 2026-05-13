@@ -51,13 +51,13 @@ if menu == "Konfigurace":
     # Průvodce kroky
     c1, c2, c3 = st.columns(3)
     with c1:
-        if st.button("1. Projekt", use_container_width=True): st.session_state.step = 1
+        if c1.button("📁", help="Projekty"): st.session_state.step = 1
     with c2:
-        if st.button("2. Master & AOI", use_container_width=True): st.session_state.step = 2
+        iif c2.button("🎯", help="Master"): st.session_state.step = 2
     with c3:
-        if st.button("3. ROI (Inspekce)", use_container_width=True): st.session_state.step = 3
+        if c3.button("🔍", help="ROI"): st.session_state.step = 3
     with c4:    
-        if st.sidebar.button("🔌 I/O Monitor"): st.session_state.step = 4  
+        if c4.button("🔌", help="I/O"): st.session_state.step = 4  
     
     st.divider()
 
