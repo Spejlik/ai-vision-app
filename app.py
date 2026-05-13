@@ -177,34 +177,33 @@ if menu == "Konfigurace":
                 st.divider()
                 # ... (zbytek se seznamem zón zůstává stejný)
 
+            # 1. Definujeme rozvržení (vlevo fotka, vpravo veškeré ovládání)
+            col_main, col_side = st.columns([1.5, 1.0])
+            
             with col_main:
-                # Kreslení do kopie obrázku
-                draw = ImageDraw.Draw(img)
-                valeo_green = "#97BE0D"
-                orange = "#FF9800"
-                
-                # 1. Vykresli uložené (Zeleně)
-                for r in old_rois:
-                    draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], outline=valeo_green, width=5)
-                    draw.text((r[2]+5, r[3]+5), f"{r[1]} [N{r[6]}]", fill=valeo_green)
-                
-                # 2. Vykresli aktuální náhled ze sliderů (Oranžově)
-                # OPRAVA: Místo 'if add_mode:' použijeme kontrolu session_state
-                if st.session_state.get('manual_add_active', False):
-                    draw.rectangle([rx, ry, rx+rw, ry+rh], outline=orange, width=5)
-                    draw.text((rx+5, ry+5), "NÁHLED ZÓNY", fill=orange)
-                
+                # Tady zůstává vykreslování obrázku (zelené a oranžové rámečky)
+                # ... (tvůj kód pro Drawing a st.image) ...
                 st.image(img, use_container_width=True)
 
-                # PEVNÝ PANEL SEZNAMU (s vnitřním scrollováním, pokud je dlouhý)
-                st.write("📋 Seznam zón")
-                list_container = st.container(height=300) # Pevná výška seznamu!
-                with list_container:
-                    for r in old_rois:
-                        c1, c2 = st.columns([3, 1])
-                        c1.caption(f"**{r[1]}** (NOK {r[6]})")
-                        if c2.button("⚙️", key=f"cfg_{r[0]}", help="Editovat"):
-                            st.session_state.edit_roi_id = r[0]
+            with col_side:
+                # HORNÍ ČÁST: Přidávání nových zón
+                st.subheader("➕ Správa zón")
+                # ... (tvůj kód pro st.button "VYTVOŘIT NOVOU ZÓNU" a slidery) ...
+
+                st.divider()
+
+                # SPODNÍ ČÁST: Seznam zón (přesunuto zespodu sem)
+                st.subheader("📋 Seznam zón")
+                
+                # Uděláme seznam kompaktnější, aby se jich tam vešlo hodně
+                for r in old_rois:
+                    # Použijeme kontejner s ohraničením pro každou zónu
+                    with st.container(border=True):
+                        c1, c2 = st.columns([4, 1])
+                        c1.markdown(f"**{r[1]}**")
+                        c1.caption(f"Typ: NOK {r[6]}")
+                        if c2.button("🗑️", key=f"del_{r[0]}", help="Smazat zónu"):
+                            database.delete_roi(r[0])
                             st.rerun()
                             
     elif st.session_state.step == 4:
