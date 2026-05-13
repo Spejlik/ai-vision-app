@@ -160,21 +160,28 @@ if menu == "Konfigurace":
                         
                         if st.button("💾 ULOŽIT", type="primary", use_container_width=True):
                             if c_key in st.session_state and st.session_state[c_key] is not None:
-                                coords = st.session_state[c_key]['coords']
+                                cropper_result = st.session_state[c_key]
+                                coords = cropper_result['coords']
                                 
-                                # BEREME PŘÍMO HODNOTY Z CROPPERU (bez ratio a bez offsetu)
-                                # Pokud to "odskakuje", zkusíme tyto čisté hodnoty:
-                                r_x = int(coords['left'])
-                                r_y = int(coords['top'])
-                                r_w = int(coords['width'])
-                                r_h = int(coords['height'])
+                                # KLÍČ K PŘESNOSTI:
+                                # Zjistíme poměr mezi tím, co vidíš (canvas) a realitou (img)
+                                canvas_w = cropper_result.get('width', img.width)
+                                canvas_h = cropper_result.get('height', img.height)
+                                
+                                ratio_x = img.width / canvas_w
+                                ratio_y = img.height / canvas_h
+                                
+                                # Přepočet na reálné pixely masteru
+                                r_x = int(coords['left'] * ratio_x)
+                                r_y = int(coords['top'] * ratio_y)
+                                r_w = int(coords['width'] * ratio_x)
+                                r_h = int(coords['height'] * ratio_y)
 
                                 if edit_id:
                                     database.update_roi_position(edit_id, r_x, r_y, r_w, r_h)
                                     database.update_roi_nok(edit_id, nok + 1)
                                     st.session_state.edit_roi_id = None
                                 else:
-                                    # curr_m[0] je ID masteru
                                     database.save_roi(curr_m[0], name, r_x, r_y, r_w, r_h, nok + 1)
                                     if 'add_toggle' in st.session_state: 
                                         st.session_state.add_toggle = False
