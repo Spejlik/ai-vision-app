@@ -92,6 +92,8 @@ if menu == "Konfigurace":
                 st.image(preview_crop, caption="Náhled ořezu (AOI)", use_container_width=True)
                 st.write(f"📏 Aktuální rozlišení masteru: {aw} x {ah} px")
 
+    # ... (začátek app.py zůstává stejný)
+
     # KROK 3: ROI DEFINICE
     elif st.session_state.step == 3:
         st.subheader("🔍 Definice inspekčních zón")
@@ -109,24 +111,28 @@ if menu == "Konfigurace":
                 img = Image.open(path_to_img)
                 draw = ImageDraw.Draw(img)
                 
-                # Načteme existující kontroly a vykreslíme je i s POPISKY
+                # Načteme kontroly a vypíšeme i s NOK kódem
                 old_rois = database.get_rois(curr_m[0])
                 for r in old_rois:
-                    # Rámeček (modrý)
-                    shape = [r[3], r[4], r[3]+r[5], r[4]+r[6]]
-                    draw.rectangle(shape, outline="blue", width=5)
-                    # Popisek (text nad rámečkem)
-                    draw.text((r[3], r[4] - 15), r[2], fill="blue") # r[2] je název kontroly
+                    draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], outline="blue", width=5)
+                    # Zobrazení názvu + NOK kódu (např. Guma dolití [NOK 3])
+                    label = f"{r[1]} [NOK {r[6]}]"
+                    draw.text((r[2], r[3] - 15), label, fill="blue")
                 
                 c_l, c_r = st.columns([3, 1])
                 with c_l:
-                    # Samotný cropper
+                    # Výchozí souřadnice pro cropper, aby nebyl None
                     roi = st_cropper(img, realtime_update=True, box_color='#FF9800', key="roi_cropper")
                 
                 with c_r:
-                    new_roi_name = st.text_input("Název nové kontroly (např. Guma dolití):")
+                    new_roi_name = st.text_input("Název nové kontroly:")
+                    
+                    # VÝBĚR PRO ROBOTA
+                    nok_code = st.selectbox("Kód pro vyřazení (robot):", 
+                                            options=range(1, 9), 
+                                            format_func=lambda x: f"NOK {x}")
+                    
                     if st.button("💾 ULOŽIT KONTROLU", use_container_width=True):
-                        # OCHRANA PROTI CHYBĚ 'NoneType':
                         if 'roi_cropper' in st.session_state and st.session_state['roi_cropper'] is not None:
                             if new_roi_name:
                                 coords = st.session_state['roi_cropper']['coords']
@@ -136,17 +142,18 @@ if menu == "Konfigurace":
                                     int(coords['left']), 
                                     int(coords['top']), 
                                     int(coords['width']), 
-                                    int(coords['height'])
+                                    int(coords['height']),
+                                    nok_code
                                 )
-                                st.success(f"Kontrola '{new_roi_name}' uložena!")
+                                st.success(f"Uloženo: {new_roi_name} pod kódem NOK {nok_code}")
                                 time.sleep(0.5)
                                 st.rerun()
                             else:
-                                st.error("Zadejte prosím název kontroly.")
-                        else:
-                            st.warning("Zkuste pohnout rámečkem před uložením.")
+                                st.error("Chybí název kontroly!")
             else:
-                st.error(f"Soubor nebyl nalezen: {path_to_img}")
+                st.error(f"Soubor nenalezen: {path_to_img}")
+
+# ... (zbytek monitoring sekce)
 
 elif menu == "Monitoring":
     st.title("📊 Živý monitoring")
