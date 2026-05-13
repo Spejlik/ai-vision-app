@@ -187,9 +187,9 @@ if menu == "Konfigurace":
                     draw.text((r[2]+5, r[3]+5), f"{r[1]} [N{r[6]}]", fill=valeo_green)
                 
                 # 2. Vykresli aktuální náhled ze sliderů (Oranžově)
-                if add_mode:
+                # OPRAVA: Místo 'if add_mode:' použijeme kontrolu session_state
+                if st.session_state.get('manual_add_active', False):
                     draw.rectangle([rx, ry, rx+rw, ry+rh], outline=orange, width=5)
-                    # Přidáme poloprůhledný střed pro lepší viditelnost
                     draw.text((rx+5, ry+5), "NÁHLED ZÓNY", fill=orange)
                 
                 st.image(img, use_container_width=True)
