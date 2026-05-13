@@ -193,9 +193,20 @@ if menu == "Konfigurace":
                 else:
                     for r in old_rois:
                         with st.container(border=True):
-                            c1, c2 = st.columns([4, 1])
-                            c1.markdown(f"**{r[1]}** (NOK {r[6]})")
-                            if c2.button("🗑️", key=f"del_{r[0]}", use_container_width=True):
+                            c1, c2, c3 = st.columns([3, 1, 1])
+                            c1.markdown(f"**{r[1]}**")
+                            c1.caption(f"NOK {r[6]}")
+                            
+                            # TLAČÍTKO EDITACE (Tužka)
+                            if c2.button("📝", key=f"edit_{r[0]}", help="Upravit zónu"):
+                                # Načteme hodnoty zóny do session_state pro slidery
+                                st.session_state.manual_add_active = True
+                                st.session_state.edit_id = r[0] # Uložíme si, kterou zónu ladíme
+                                # Přednastavíme hodnoty pro slidery (pokud je v kódu používáš jako defaulty)
+                                st.rerun()
+
+                            # TLAČÍTKO SMAZÁNÍ (Koš)
+                            if c3.button("🗑️", key=f"del_{r[0]}", help="Smazat"):
                                 database.delete_roi(r[0])
                                 st.rerun()                        
 

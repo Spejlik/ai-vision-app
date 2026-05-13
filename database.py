@@ -62,11 +62,17 @@ def get_masters(proj_name):
     conn.close()
     return data
 
-def save_roi(master_id, name, x, y, w, h, error_code):
-    conn = sqlite3.connect('inspections.db')
-    c = conn.cursor()
-    c.execute("INSERT INTO rois (master_id, name, x, y, w, h, error_code) VALUES (?, ?, ?, ?, ?, ?, ?)",
-              (master_id, name, x, y, w, h, error_code))
+def save_roi(master_id, name, x, y, w, h, nok, roi_id=None):
+    conn = sqlite3.connect('database.db')
+    cursor = conn.cursor()
+    if roi_id:
+        # AKTUALIZACE STÁVAJÍCÍ
+        cursor.execute("UPDATE rois SET name=?, x=?, y=?, w=?, h=?, nok=? WHERE id=?",
+                       (name, x, y, w, h, nok, roi_id))
+    else:
+        # NOVÁ ZÓNA
+        cursor.execute("INSERT INTO rois (master_id, name, x, y, w, h, nok) VALUES (?,?,?,?,?,?,?)",
+                       (master_id, name, x, y, w, h, nok))
     conn.commit()
     conn.close()
 
