@@ -208,8 +208,6 @@ if menu == "Konfigurace":
                     draw.rectangle([rx, ry, rx+rw, ry+rh], outline="#FF9800", width=6)
                     draw.text((rx+5, ry-25), "UPRAVUJI...", fill="#FF9800")
 
-                st.image(img, use_container_width=True)
-
                 # 4. TEPRVE TEĎ ZOBRAZ FINÁLNÍ OBRÁZEK
                 st.image(img, use_container_width=True)
                 
