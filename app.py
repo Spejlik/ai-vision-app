@@ -140,41 +140,30 @@ if menu == "Konfigurace":
             with col_side:
                 st.subheader("➕ Správa zón")
                 
-                # Inicializace stavu pro editaci, pokud neexistuje
-                if 'edit_roi_id' not in st.session_state:
-                    st.session_state.edit_roi_id = None
-
-                # TLAČÍTKO PRO NOVOU ZÓNU
+                # Pokud zrovna needitujeme, ukážeme tlačítko pro novou zónu
                 if not st.session_state.get('manual_add_active', False):
                     if st.button("✨ VYTVOŘIT NOVOU ZÓNU", use_container_width=True, type="primary"):
                         st.session_state.manual_add_active = True
                         st.session_state.edit_roi_id = None
                         st.rerun()
-
-                # FORMULÁŘ (SLIDERY)
-                rx, ry, rw, rh = 0, 0, 100, 100 # Výchozí hodnoty
+                
+                # FORMULÁŘ PRO PŘIDÁNÍ/EDITACI
                 if st.session_state.get('manual_add_active', False):
                     with st.container(border=True):
-                        # Pokud editujeme, načteme původní hodnoty
-                        default_name = "Zóna 1"
-                        if st.session_state.edit_roi_id:
-                            e_roi = next(r for r in old_rois if r[0] == st.session_state.edit_roi_id)
-                            default_name, rx_d, ry_d, rw_d, rh_d = e_roi[1], e_roi[2], e_roi[3], e_roi[4], e_roi[5]
-                        else:
-                            rx_d, ry_d, rw_d, rh_d = W//3, H//3, 150, 150
-
-                        name = st.text_input("Název:", default_name)
-                        rx = st.slider("X pozice", 0, W, rx_d)
-                        ry = st.slider("Y pozice", 0, H, ry_d)
-                        rw = st.slider("Šířka", 10, 800, rw_d)
-                        rh = st.slider("Výška", 10, 800, rh_d)
+                        # OPRAVA: Přidán unikátní KEY pro text_input
+                        name = st.text_input("Název:", f"Zóna {len(old_rois)+1}", key="roi_name_input")
+                        
+                        # Definice sliderů (ty už máš správně)
+                        rx = st.slider("X pozice", 0, W, W//3)
+                        ry = st.slider("Y pozice", 0, H, H//3)
+                        rw = st.slider("Šířka", 10, 800, 150)
+                        rh = st.slider("Výška", 10, 800, 150)
                         nok = st.selectbox("Typ vady:", range(1, 11), format_func=lambda x: f"NOK {x}")
                         
                         c1, c2 = st.columns(2)
                         if c1.button("💾 ULOŽIT", type="primary", use_container_width=True):
                             database.save_roi(curr_m[0], name, rx, ry, rw, rh, nok, st.session_state.edit_roi_id)
                             st.session_state.manual_add_active = False
-                            st.session_state.edit_roi_id = None
                             st.rerun()
                         if c2.button("✖ ZRUŠIT", use_container_width=True):
                             st.session_state.manual_add_active = False
@@ -182,15 +171,18 @@ if menu == "Konfigurace":
 
                 st.divider()
                 st.subheader("📋 Seznam zón")
+                # Pokud vidíš seznam 2x, smaž jeden z těchto cyklů:
                 for r in old_rois:
                     with st.container(border=True):
-                        c1, c2, c3 = st.columns([3, 1, 1])
-                        c1.markdown(f"**{r[1]}** (NOK {r[6]})")
-                        if c2.button("📝", key=f"edit_{r[0]}"):
+                        cols = st.columns([3, 1, 1])
+                        cols[0].write(f"**{r[1]}**\nNOK {r[6]}")
+                        # Editace
+                        if cols[1].button("📝", key=f"edit_{r[0]}"):
                             st.session_state.edit_roi_id = r[0]
                             st.session_state.manual_add_active = True
                             st.rerun()
-                        if c3.button("🗑️", key=f"del_{r[0]}"):
+                        # Smazání
+                        if cols[2].button("🗑️", key=f"del_{r[0]}"):
                             database.delete_roi(r[0])
                             st.rerun()
 
