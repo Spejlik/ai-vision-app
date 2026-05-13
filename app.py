@@ -57,8 +57,7 @@ if menu == "Konfigurace":
     with c3:
         if st.button("3. ROI (Inspekce)", use_container_width=True): st.session_state.step = 3
     with c4:    
-        if st.sidebar.button("🔌 I/O Monitor"):
-        st.session_state.step = 4    
+        if st.sidebar.button("🔌 I/O Monitor"): st.session_state.step = 4  
     
     st.divider()
 
