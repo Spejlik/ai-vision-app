@@ -89,4 +89,11 @@ def update_roi_nok(roi_id, new_nok):
     c = conn.cursor()
     c.execute("UPDATE rois SET error_code = ? WHERE id = ?", (new_nok, roi_id))
     conn.commit()
+    conn.close()
+
+def update_roi_position(roi_id, x, y, w, h):
+    conn = sqlite3.connect('inspections.db')
+    c = conn.cursor()
+    c.execute("UPDATE rois SET x=?, y=?, w=?, h=? WHERE id=?", (x, y, w, h, roi_id))
+    conn.commit()
     conn.close()    

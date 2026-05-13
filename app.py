@@ -129,60 +129,74 @@ if menu == "Konfigurace":
                 with c_l:
                     draw = ImageDraw.Draw(img)
                     old_rois = database.get_rois(curr_m[0])
+                    valeo_green = "#00B050"
                     
-                    # BARVA: Valeo Green (jasná, korporátní zelená)
-                    valeo_green = "#00B050" 
+                    # Zjistíme, jestli právě nějakou ROI editujeme
+                    edit_mode = st.session_state.get('edit_roi_id', None)
                     
                     for r in old_rois:
-                        # Vykreslení zelených rámečků Valeo
+                        # Pokud tuhle ROI právě editujeme, nekreslíme ji zeleně (bude oranžová v cropperu)
+                        if edit_mode == r[0]:
+                            continue
+                        
                         shape = [r[2], r[3], r[2]+r[4], r[3]+r[5]]
                         draw.rectangle(shape, outline=valeo_green, width=4)
-                        
-                        # Popisek s názvem a NOK kódem
-                        label = f"{r[1]} [NOK {r[6]}]"
-                        # Bílé pozadí pod textem pro maximální čitelnost
-                        draw.text((r[2], r[3] - 18), label, fill=valeo_green)
+                        draw.text((r[2], r[3] - 18), f"{r[1]} [NOK {r[6]}]", fill=valeo_green)
                     
-                    st.write("📌 Definujte novou zónu oranžovým rámečkem:")
-                    cropper_key = f"cropper_{len(old_rois)}"
-                    roi = st_cropper(img, realtime_update=True, box_color='#FF9800', key=cropper_key)
+                    # NASTAVENÍ POČÁTEČNÍ POZICE CROPPERU
+                    initial_coords = None
+                    if edit_mode:
+                        curr_edit = next(r for r in old_rois if r[0] == edit_mode)
+                        initial_coords = {'left': curr_edit[2], 'top': curr_edit[3], 'width': curr_edit[4], 'height': curr_edit[5]}
+                    
+                    st.write("📌 " + ("UPRAVUJETE POZICI ZÓNY" if edit_mode else "DEFINUJTE NOVOU ZÓNU"))
+                    
+                    # Cropper s fixními souřadnicemi při editaci
+                    roi = st_cropper(img, realtime_update=True, box_color='#FF9800', 
+                                     key=f"cropper_{edit_mode if edit_mode else 'new'}",
+                                     initial_coords=initial_coords)
 
                 with c_r:
-                    st.write("### ➕ Nová kontrola")
-                    new_roi_name = st.text_input("Název kontroly:", key="new_roi_input")
-                    new_nok = st.selectbox("Přiřadit NOK:", options=range(1, 9), format_func=lambda x: f"NOK {x}", key="new_nok")
-                    
-                    if st.button("💾 ULOŽIT ZÓNU", type="primary", use_container_width=True):
-                        if cropper_key in st.session_state and st.session_state[cropper_key] is not None:
-                            coords = st.session_state[cropper_key]['coords']
-                            if new_roi_name:
-                                database.save_roi(curr_m[0], new_roi_name, int(coords['left']), 
-                                                 int(coords['top']), int(coords['width']), 
-                                                 int(coords['height']), new_nok)
-                                st.rerun()
+                    if edit_mode:
+                        target_roi = next(r for r in old_rois if r[0] == edit_mode)
+                        st.subheader(f"📝 Editace: {target_roi[1]}")
+                        
+                        if st.button("✅ ULOŽIT NOVOU POZICI", type="primary", use_container_width=True):
+                            coords = st.session_state[f"cropper_{edit_mode}"]['coords']
+                            database.update_roi_position(edit_mode, int(coords['left']), int(coords['top']), 
+                                                       int(coords['width']), int(coords['height']))
+                            st.session_state.edit_roi_id = None
+                            st.rerun()
+                        
+                        if st.button("❌ ZRUŠIT EDITACI", use_container_width=True):
+                            st.session_state.edit_roi_id = None
+                            st.rerun()
+                    else:
+                        st.write("### ➕ Nová kontrola")
+                        new_name = st.text_input("Název:", key="new_roi_input")
+                        new_nok = st.selectbox("NOK:", options=range(1, 9), format_func=lambda x: f"NOK {x}")
+                        
+                        if st.button("💾 ULOŽIT NOVOU ZÓNU", type="primary", use_container_width=True):
+                            coords = st.session_state[f"cropper_new"]['coords']
+                            database.save_roi(curr_m[0], new_name, int(coords['left']), int(coords['top']), 
+                                             int(coords['width']), int(coords['height']), new_nok)
+                            st.rerun()
 
                     st.divider()
-                    st.write("### ⚙️ Správa a změna NOK")
-                    
+                    st.write("### ⚙️ Seznam kontrol")
                     for r in old_rois:
-                        with st.expander(f"Zóna: {r[1]} (NOK {r[6]})"):
-                            # Změna NOK kódu za běhu
-                            current_nok_idx = r[6] - 1 # Index pro selectbox
-                            updated_nok = st.selectbox(f"Změnit NOK pro {r[1]}:", 
-                                                       options=range(1, 9), 
-                                                       index=current_nok_idx,
-                                                       format_func=lambda x: f"NOK {x}",
-                                                       key=f"edit_nok_{r[0]}")
-                            
-                            # Pokud se kód liší od toho v DB, uložíme změnu
-                            if updated_nok != r[6]:
-                                database.update_roi_nok(r[0], updated_nok)
-                                st.success(f"NOK změněn na {updated_nok}")
-                                time.sleep(0.5)
+                        with st.expander(f"{r[1]} (NOK {r[6]})"):
+                            if st.button(f"🎮 Posunout / Změnit velikost", key=f"btn_edit_{r[0]}"):
+                                st.session_state.edit_roi_id = r[0]
                                 st.rerun()
                             
-                            # Tlačítko pro smazání zůstává uvnitř expanderu
-                            if st.button(f"Smazat {r[1]}", key=f"del_{r[0]}", type="secondary"):
+                            # Rychlá změna NOK
+                            new_nok_val = st.selectbox("Změnit NOK:", options=range(1, 9), index=r[6]-1, key=f"nok_{r[0]}")
+                            if new_nok_val != r[6]:
+                                database.update_roi_nok(r[0], new_nok_val)
+                                st.rerun()
+                            
+                            if st.button(f"🗑️ Smazat", key=f"del_{r[0]}", type="secondary"):
                                 database.delete_roi(r[0])
                                 st.rerun()
 
