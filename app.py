@@ -95,63 +95,58 @@ if menu == "Konfigurace":
     # KROK 3: ROI DEFINICE
     elif st.session_state.step == 3:
         st.subheader("🔍 Definice inspekčních zón")
-        
-        # Načteme seznam všech Masterů pro aktivní projekt
         masters = database.get_masters(st.session_state.active_project)
         
         if not masters:
-            st.error("Žádné Mastery nenalezeny. Vytvořte a uložte Master v kroku 2.")
+            st.error("Žádné Mastery nenalezeny.")
         else:
-            # Vytvoříme seznam jmen pro selectbox
             m_names = [m[2] for m in masters]
-            
-            # Selectbox pro výběr konkrétního ořezu (Masteru)
             sel_m_name = st.selectbox("Vyberte Master snímek (ořez):", m_names)
-            
-            # Najdeme data vybraného masteru v seznamu
             curr_m = next(m for m in masters if m[2] == sel_m_name)
-            
-            # CESTA K OŘÍZNUTÉMU OBRÁZKU (sloupec img_path v DB)
             path_to_img = curr_m[8] 
             
             if os.path.exists(path_to_img):
-                # Otevřeme ten oříznutý soubor, ne dummy!
                 img = Image.open(path_to_img)
+                draw = ImageDraw.Draw(img)
+                
+                # Načteme existující kontroly a vykreslíme je i s POPISKY
+                old_rois = database.get_rois(curr_m[0])
+                for r in old_rois:
+                    # Rámeček (modrý)
+                    shape = [r[3], r[4], r[3]+r[5], r[4]+r[6]]
+                    draw.rectangle(shape, outline="blue", width=5)
+                    # Popisek (text nad rámečkem)
+                    draw.text((r[3], r[4] - 15), r[2], fill="blue") # r[2] je název kontroly
                 
                 c_l, c_r = st.columns([3, 1])
-                
                 with c_l:
-                    st.write(f"Snímek: `{path_to_img}`")
-                    # Vykreslení stávajících ROI (modře) na tento ořez
-                    draw = ImageDraw.Draw(img)
-                    old_rois = database.get_rois(curr_m[0])
-                    for r in old_rois:
-                        # r[3]=x, r[4]=y, r[5]=w, r[6]=h
-                        draw.rectangle([r[3], r[4], r[3]+r[5], r[4]+r[6]], outline="blue", width=5)
-                    
-                    # Cropper na oříznutém obrázku
+                    # Samotný cropper
                     roi = st_cropper(img, realtime_update=True, box_color='#FF9800', key="roi_cropper")
                 
                 with c_r:
-                    new_roi_name = st.text_input("Název nové kontroly:")
+                    new_roi_name = st.text_input("Název nové kontroly (např. Guma dolití):")
                     if st.button("💾 ULOŽIT KONTROLU", use_container_width=True):
-                        if new_roi_name:
-                            coords = st.session_state['roi_cropper']['coords']
-                            database.save_roi(
-                                curr_m[0], 
-                                new_roi_name, 
-                                int(coords['left']), 
-                                int(coords['top']), 
-                                int(coords['width']), 
-                                int(coords['height'])
-                            )
-                            st.toast(f"Kontrola '{new_roi_name}' uložena!")
-                            time.sleep(0.5)
-                            st.rerun()
+                        # OCHRANA PROTI CHYBĚ 'NoneType':
+                        if 'roi_cropper' in st.session_state and st.session_state['roi_cropper'] is not None:
+                            if new_roi_name:
+                                coords = st.session_state['roi_cropper']['coords']
+                                database.save_roi(
+                                    curr_m[0], 
+                                    new_roi_name, 
+                                    int(coords['left']), 
+                                    int(coords['top']), 
+                                    int(coords['width']), 
+                                    int(coords['height'])
+                                )
+                                st.success(f"Kontrola '{new_roi_name}' uložena!")
+                                time.sleep(0.5)
+                                st.rerun()
+                            else:
+                                st.error("Zadejte prosím název kontroly.")
                         else:
-                            st.error("Zadejte název!")
+                            st.warning("Zkuste pohnout rámečkem před uložením.")
             else:
-                st.error(f"Soubor ořezu nebyl nalezen: {path_to_img}. Zkuste Master znovu uložit v Kroku 2.")
+                st.error(f"Soubor nebyl nalezen: {path_to_img}")
 
 elif menu == "Monitoring":
     st.title("📊 Živý monitoring")
