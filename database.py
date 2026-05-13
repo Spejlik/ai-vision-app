@@ -3,11 +3,11 @@ import sqlite3
 def init_db():
     conn = sqlite3.connect('inspections.db')
     c = conn.cursor()
-    
+
     # 1. Tabulka projektů
-    c.execute('''CREATE TABLE IF NOT EXISTS projects 
+    c.execute('''CREATE TABLE IF NOT EXISTS projects
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE)''')
-    
+
     # 2. Tabulka MASTERŮ (Sjednocená verze)
     c.execute('''CREATE TABLE IF NOT EXISTS masters
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -15,7 +15,7 @@ def init_db():
                   master_name TEXT,
                   x INTEGER, y INTEGER, w INTEGER, h INTEGER,
                   img_path TEXT)''')
-    
+
     # 3. Tabulka ROI (Zóny)
     c.execute('''CREATE TABLE IF NOT EXISTS rois
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -23,7 +23,7 @@ def init_db():
                   name TEXT,
                   x INTEGER, y INTEGER, w INTEGER, h INTEGER,
                   error_code INTEGER)''')
-    
+
     conn.commit()
     conn.close()
 
