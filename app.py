@@ -124,24 +124,27 @@ elif menu == "⚙️ Nastavení":
             
             with col_menu:
                 st.write("### Přidat inspekci")
-                roi_name = st.text_input("Název kontroly", placeholder="např. količek P1")
                 
-                if st.button("➕ ULOŽIT INSPEKCI", use_container_width=True, type="primary"):
-                    c_state = st.session_state.get('cropper_final')
-                    if c_state and roi_name:
-                        # Ukládáme pouze čisté souřadnice z cropperu
-                        box = c_state.get('coords')
-                        database.save_roi_template(
-                            active_p, 
-                            roi_name,
-                            int(box['left']), int(box['top']), 
-                            int(box['width']), int(box['height'])
-                        )
-                        st.success(f"Inspekce '{roi_name}' přidána")
-                        time.sleep(0.5)
-                        st.rerun()
-                    else:
-                        st.warning("Zadejte název a pohněte rámečkem!")
+                # Vytvoření formuláře pro stabilní odeslání dat
+                with st.form("roi_form", clear_on_submit=True):
+                    roi_name = st.text_input("Název kontroly", placeholder="např. količek P1")
+                    submit_button = st.form_submit_button("➕ ULOŽIT INSPEKCI", use_container_width=True)
+                    
+                    if submit_button:
+                        c_state = st.session_state.get('cropper_final')
+                        if c_state and roi_name:
+                            box = c_state.get('coords')
+                            # Přímé uložení do databáze
+                            database.save_roi_template(
+                                active_p, 
+                                roi_name,
+                                int(box['left']), int(box['top']), 
+                                int(box['width']), int(box['height'])
+                            )
+                            st.toast(f"Inspekce '{roi_name}' uložena!")
+                            # Tady nepoužíváme st.rerun(), formulář to udělá sám
+                        else:
+                            st.error("Chyba: Zadejte název a pohněte rámečkem!")
 
             st.divider()
             # SEZNAM INSPEKCÍ - Textový přehled bez obrázků
