@@ -164,16 +164,16 @@ if menu == "Konfigurace":
                                 cropper_result = st.session_state[c_key]
                                 coords = cropper_result['coords']
                                 
-                                # Teď už víme přesně, jak je plátno široké (800px)
-                                # Pokud cropper nevrací 'width', použijeme naši konstantu
-                                canvas_w = cropper_result.get('width', 800)
-                                
+                                # Použijeme naši pevnou šířku 800 pro výpočet poměru
+                                canvas_w = 800 
                                 ratio = img.width / canvas_w
                                 
                                 r_x = int(coords['left'] * ratio)
                                 r_y = int(coords['top'] * ratio)
                                 r_w = int(coords['width'] * ratio)
                                 r_h = int(coords['height'] * ratio)
+                                
+                                # ... zbytek uložení (database.save_roi) ...
 
                                 if edit_id:
                                     database.update_roi_position(edit_id, r_x, r_y, r_w, r_h)
@@ -188,17 +188,17 @@ if menu == "Konfigurace":
                                 st.rerun()
 
                 with col_main:
-                    # FIX: Vynutíme fixní šířku pro oba stavy, aby souřadnice seděly
+                    # Nastavíme pevnou šířku pro zobrazení
                     DISPLAY_WIDTH = 800 
                     
                     if not (add_mode or edit_id):
-                        # Zobrazení uložených zón
-                        st.image(img, use_container_width=False, width=DISPLAY_WIDTH)
+                        # Klasické zobrazení uložených zón
+                        st.image(img, width=DISPLAY_WIDTH)
                     else:
-                        # Kreslení nové zóny
-                        # Musíme cropperu říct, že plátno má přesně DISPLAY_WIDTH
+                        # Kreslení zóny - použijeme box_width pro vynucení velikosti
+                        # Odstranil jsem use_container_width, který házel chybu
                         st_cropper(img, realtime_update=True, box_color='#FF9800', 
-                                   key=c_key, use_container_width=False)
+                                   key=c_key, box_width=DISPLAY_WIDTH))
 
                 st.divider()
                 st.caption("⚙️ Správa zón")
