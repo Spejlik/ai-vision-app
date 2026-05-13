@@ -164,13 +164,12 @@ if menu == "Konfigurace":
                                 cropper_result = st.session_state[c_key]
                                 coords = cropper_result['coords']
                                 
-                                # --- KLÍČ K PŘESNOSTI (Master = 0,0) ---
-                                # Zjistíme, jak moc Streamlit obrázek zmenšil na plátně
-                                # img je v tomto kroku už ten oříznutý Master z disku
-                                canvas_w = cropper_result.get('width', img.width)
+                                # Teď už víme přesně, jak je plátno široké (800px)
+                                # Pokud cropper nevrací 'width', použijeme naši konstantu
+                                canvas_w = cropper_result.get('width', 800)
+                                
                                 ratio = img.width / canvas_w
                                 
-                                # Přepočet souřadnic (už bez přičítání ax, ay!)
                                 r_x = int(coords['left'] * ratio)
                                 r_y = int(coords['top'] * ratio)
                                 r_w = int(coords['width'] * ratio)
@@ -189,11 +188,17 @@ if menu == "Konfigurace":
                                 st.rerun()
 
                 with col_main:
-                    # Tady používáme col_main, aby to odpovídalo definici nahoře
+                    # FIX: Vynutíme fixní šířku pro oba stavy, aby souřadnice seděly
+                    DISPLAY_WIDTH = 800 
+                    
                     if not (add_mode or edit_id):
-                        st.image(img, use_container_width=True)
+                        # Zobrazení uložených zón
+                        st.image(img, use_container_width=False, width=DISPLAY_WIDTH)
                     else:
-                        st_cropper(img, realtime_update=True, box_color='#FF9800', key=c_key)
+                        # Kreslení nové zóny
+                        # Musíme cropperu říct, že plátno má přesně DISPLAY_WIDTH
+                        st_cropper(img, realtime_update=True, box_color='#FF9800', 
+                                   key=c_key, use_container_width=False)
 
                 st.divider()
                 st.caption("⚙️ Správa zón")
