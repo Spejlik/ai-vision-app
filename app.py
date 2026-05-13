@@ -81,7 +81,7 @@ if menu == "Konfigurace":
 
     # ... (začátek app.py zůstává stejný)
 
-    # KROK 3: ROI DEFINICE (Finální verze pro novou knihovnu)
+    # KROK 3: ROI DEFINICE
     elif st.session_state.step == 3:
         masters = database.get_masters(st.session_state.active_project)
         if not masters:
@@ -98,16 +98,18 @@ if menu == "Konfigurace":
                 valeo_green = "#97BE0D"
                 edit_id = st.session_state.get('edit_roi_id', None)
 
-                # 1. Vykreslení uložených zelených zón do obrázku
+                # 1. Vykreslení zelených zón
                 for r in old_rois:
                     if edit_id == r[0]: continue
                     draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], outline=valeo_green, width=3)
                     draw.text((r[2]+5, r[3]-20), f"{r[1]} [N{r[6]}]", fill=valeo_green)
 
-                c_l, c_r = st.columns([2, 1])
+                # 2. ROZLOŽENÍ SLOUPCŮ (Zmenšení obrazu pro ntb)
+                c_l, c_r = st.columns([1.8, 1.0])
                 
                 with c_r:
                     st.write("### ➕ Akce")
+                    # Přepínač zmizí při editaci, aby se netloukly klíče
                     add_mode = st.toggle("PŘIDAT NOVOU", key="add_toggle") if not edit_id else False
                     
                     if add_mode or edit_id:
@@ -120,31 +122,40 @@ if menu == "Konfigurace":
                         name = st.text_input("Název:", value=d_name, placeholder="Název zóny", label_visibility="collapsed")
                         nok = st.selectbox("NOK:", range(1, 9), index=d_nok, format_func=lambda x: f"NOK {x}")
                         
+                        # UNIKÁTNÍ KLÍČ: pro každou situaci jiný, aby se Streamlit nezasekl
                         c_key = f"c_{edit_id if edit_id else 'new'}_{len(old_rois)}"
-                        if st.button("💾 ULOŽIT", type="primary", use_container_width=True):
-                            c = st.session_state[c_key]['coords']
-                            if edit_id:
-                                database.update_roi_position(edit_id, int(c['left']), int(c['top']), int(c['width']), int(c['height']))
-                                database.update_roi_nok(edit_id, nok + 1) # +1 protože selectbox indexuje od 0
-                                st.session_state.edit_roi_id = None
+                        
+                        btn_label = "💾 POTVRDIT ZMĚNU" if edit_id else "💾 ULOŽIT NOVOU"
+                        if st.button(btn_label, type="primary", use_container_width=True):
+                            # Kontrola, zda jsou data v session_state
+                            if c_key in st.session_state and st.session_state[c_key] is not None:
+                                c = st.session_state[c_key]['coords']
+                                if edit_id:
+                                    database.update_roi_position(edit_id, int(c['left']), int(c['top']), int(c['width']), int(c['height']))
+                                    database.update_roi_nok(edit_id, nok + 1)
+                                    st.session_state.edit_roi_id = None
+                                else:
+                                    database.save_roi(curr_m[0], name, int(c['left']), int(c['top']), int(c['width']), int(c['height']), nok + 1)
+                                    if 'add_toggle' in st.session_state: del st.session_state['add_toggle']
+                                st.rerun()
                             else:
-                                database.save_roi(curr_m[0], name, int(c['left']), int(c['top']), int(c['width']), int(c['height']), nok + 1)
-                                if 'add_toggle' in st.session_state: del st.session_state['add_toggle']
-                            st.rerun()
+                                st.warning("Pohněte rámečkem pro aktivaci uložení.")
                         
                         if edit_id and st.button("❌ ZRUŠIT EDITACI", use_container_width=True):
                             st.session_state.edit_roi_id = None
                             st.rerun()
 
                 with c_l:
-    # Obalíme cropper do dalšího sloupce nebo kontejneru pro fixaci šířky
-    roi = st_cropper(img, realtime_update=True, box_color='#FF9800', key=c_key)
+                    # Cropper nebo náhled (o velikost se stará poměr sloupců [1.8, 1.0])
+                    if not (add_mode or edit_id):
+                        st.image(img, use_container_width=True)
                     else:
-                        st_cropper(img, realtime_update=True, box_color='#FF9800', key=c_key, width=550)
+                        # BEZ parametru width, aby to neházelo TypeError
+                        st_cropper(img, realtime_update=True, box_color='#FF9800', key=c_key)
 
-                # Seznam zón (Správa)
+                # 3. SPRÁVA (Zobrazení v řádku)
                 st.divider()
-                st.caption("⚙️ Správa uložených zón")
+                st.caption("⚙️ Správa zón")
                 m_cols = st.columns(4)
                 for idx, r in enumerate(old_rois):
                     with m_cols[idx % 4]:
