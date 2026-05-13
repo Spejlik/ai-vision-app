@@ -155,7 +155,6 @@ if menu == "Konfigurace":
                 rx, ry, rw, rh = 0, 0, 100, 100
                 if st.session_state.manual_add_active:
                     with st.container(border=True):
-                        # Pokud editujeme, načteme původní hodnoty
                         d_name, d_x, d_y, d_w, d_h = "Zóna", W//3, H//3, 150, 150
                         if st.session_state.edit_roi_id:
                             e_roi = next((r for r in old_rois if r[0] == st.session_state.edit_roi_id), None)
@@ -180,6 +179,7 @@ if menu == "Konfigurace":
                             st.session_state.edit_roi_id = None
                             st.rerun()
 
+                # --- TADY BYLA CHYBA (nyní správně odsazeno vpravo) ---
                 st.divider()
                 st.subheader("📋 Seznam zón")
                 for r in old_rois:
