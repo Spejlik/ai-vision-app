@@ -96,4 +96,15 @@ def update_roi_position(roi_id, x, y, w, h):
     c = conn.cursor()
     c.execute("UPDATE rois SET x=?, y=?, w=?, h=? WHERE id=?", (x, y, w, h, roi_id))
     conn.commit()
+    conn.close()
+
+def add_master(project_name, master_name, x, y, w, h, path):
+    conn = sqlite3.connect('inspections.db')
+    c = conn.cursor()
+    # Tabulka 'masters' má sloupce: project_name, master_name, x, y, w, h, path
+    c.execute('''INSERT INTO masters 
+                 (project_name, master_name, x, y, w, h, img_path) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?)''', 
+              (project_name, master_name, x, y, w, h, path))
+    conn.commit()
     conn.close()    
