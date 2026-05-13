@@ -136,31 +136,32 @@ if menu == "Konfigurace":
             col_main, col_side = st.columns([1.6, 1.0])
             
             with col_main:
-                # Vykreslování zón do obrázku
+                # 1. PŘÍPRAVA KRESLENÍ
                 draw = ImageDraw.Draw(img)
                 valeo_green = "#97BE0D"
                 orange = "#FF9800"
                 
+                # 2. NEJDŘÍV NAKRESLI VŠECHNY ULOŽENÉ ZÓNY (Zelené)
                 for r in old_rois:
                     draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], outline=valeo_green, width=5)
                     draw.text((r[2]+5, r[3]+5), f"{r[1]}", fill=valeo_green)
                 
-                # Pokud se zrovna tvoří/edituje, vykresli oranžový náhled
+                # 3. POKUD SE PRÁVĚ NASTAVUJE NOVÁ (Oranžová)
+                # Musíme ty hodnoty ze sliderů vytáhnout i sem
                 if st.session_state.get('manual_add_active', False):
-                    # Tyto proměnné (rx, ry, rw, rh) se definují níže v col_side
-                    # ale díky Streamlit rerun mechanismu budou dostupné
-                    pass 
+                    # Tady je trik: musíme nakreslit rámeček pomocí hodnot, 
+                    # které uživatel zrovna mění v pravém sloupci.
+                    # Streamlit je "uvidí" díky tomu, že slidery mají klíče.
+                    try:
+                        # rx, ry atd. musí mít v pravém sloupci definované 'key'
+                        draw.rectangle([rx, ry, rx+rw, ry+rh], outline=orange, width=6)
+                        draw.text((rx+5, ry-20), "NÁHLED", fill=orange)
+                    except NameError:
+                        # Pokud proměnné ještě neexistují (při prvním načtení), nic nekresli
+                        pass
 
+                # 4. TEPRVE TEĎ ZOBRAZ FINÁLNÍ OBRÁZEK
                 st.image(img, use_container_width=True)
-
-            with col_side:
-                st.subheader("➕ Správa zón")
-                
-                # Tlačítko pro start přidávání
-                if not st.session_state.get('manual_add_active', False):
-                    if st.button("✨ VYTVOŘIT NOVOU ZÓNU", use_container_width=True, type="primary"):
-                        st.session_state.manual_add_active = True
-                        st.rerun()
                 
                 # FORMULÁŘ PRO EDITACI / PŘIDÁVÁNÍ
                 if st.session_state.get('manual_add_active', False):
