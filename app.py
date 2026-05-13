@@ -120,49 +120,74 @@ if menu == "Konfigurace":
                     draw.text((r[2], r[3] - 15), label, fill="blue")
                 
                 c_l, c_r = st.columns([3, 1])
+                # ... in section elif st.session_state.step == 3:
+
                 with c_l:
                     # Načteme existující ROI pro vizuální kontrolu
                     draw = ImageDraw.Draw(img)
                     old_rois = database.get_rois(curr_m[0])
                     for r in old_rois:
-                        # Vykreslení modrých rámečků pro všechny uložené ROI
+                        # Vykreslení ZELENÝCH rámečků pro všechny uložené ROI (posunutí opraveno)
                         shape = [r[2], r[3], r[2]+r[4], r[3]+r[5]]
-                        draw.rectangle(shape, outline="blue", width=5)
+                        draw.rectangle(shape, outline="lime", width=5) # Lime is a very bright green
                         label = f"{r[1]} [NOK {r[6]}]"
-                        draw.text((r[2], r[3] - 15), label, fill="blue")
+                        draw.text((r[2], r[3] - 15), label, fill="lime")
                     
-                    # Cropper pro novou ROI
-                    st.write("📌 Tažením rámečku definujte NOVOU zónu:")
-                    roi = st_cropper(img, realtime_update=True, box_color='#FF9800', key=f"cropper_{len(old_rois)}")
+                    # LOGIKA PRO SKRÝVÁNÍ CROPPERU
+                    # Zobrazíme cropper pouze pokud uživatel zadává název nebo existují ROI
+                    st.write("📌 Aktuálně definované zóny (zeleně):")
+                    
+                    # Vybereme klíč pro cropper. f"cropper_{len(old_rois)}"
+                    # Tento klíč se mění s počtem ROI, což vynucuje reset cropperu.
+                    cropper_key = f"cropper_{len(old_rois)}"
+                    
+                    # Zobrazit st_cropper pouze pokud jsou definovány dřívější ROI, aby se ukázaly.
+                    # Nová oranžová ROI se objeví až uživatel začne kreslit.
+                    # components.html(...) - Tady je limit Streamlit_cropper.
+                    # Není snadné vynutit skrytí oranžového rámečku BEZ kliknutí.
+                    # Obejdeme to vizuálním vysvětlením.
+                    
+                    # Pokud je to první ROI, cropper se zobrazí automaticky (limitace komponenty).
+                    # Pokud jsou další, zobrazí se též, ale souřadnice jsou nové.
+                    if len(old_rois) == 0:
+                        st.info("Tažením rámečku definujte první zónu. Oranžový rámeček zmizí po uložení.")
+                    else:
+                        st.info("Zelené zóny jsou uložené. Tažením definujte DALŠÍ zónu. Oranžový rámeček zmizí po uložení.")
+                        
+                    roi = st_cropper(img, realtime_update=True, box_color='#FF9800', key=cropper_key)
 
                 with c_r:
                     st.write("### ➕ Přidat novou kontrolu")
-                    new_roi_name = st.text_input("Název nové kontroly:", key="new_roi_input")
+                    new_roi_name = st.text_input("Název nové kontroly:", key="new_roi_input", placeholder="např. Guma dolití ot1")
                     nok_code = st.selectbox("Kód pro vyřazení (robot):", options=range(1, 9), format_func=lambda x: f"NOK {x}")
                     
-                    if st.button("💾 ULOŽIT TUTO ZÓNU", use_container_width=True):
-                        if 'roi_cropper' in st.session_state or f"cropper_{len(old_rois)}" in st.session_state:
-                            # Získáme souřadnice z aktuálního cropperu
-                            current_key = f"cropper_{len(old_rois)}"
-                            coords = st.session_state[current_key]['coords']
+                    if st.button("💾 ULOŽIT TUTO ZÓNU", type="primary", use_container_width=True):
+                        # Kontrola zda klíč existuje a není None
+                        if cropper_key in st.session_state and st.session_state[cropper_key] is not None:
+                            coords = st.session_state[cropper_key]['coords']
                             
-                            database.save_roi(
-                                curr_m[0], 
-                                new_roi_name, 
-                                int(coords['left']), 
-                                int(coords['top']), 
-                                int(coords['width']), 
-                                int(coords['height']),
-                                nok_code
-                            )
-                            st.success(f"Zóna '{new_roi_name}' přidána!")
-                            time.sleep(0.5)
-                            st.rerun() # Refresh pro zobrazení nové modré zóny
+                            if new_roi_name:
+                                database.save_roi(
+                                    curr_m[0], 
+                                    new_roi_name, 
+                                    int(coords['left']), 
+                                    int(coords['top']), 
+                                    int(coords['width']), 
+                                    int(coords['height']),
+                                    nok_code
+                                )
+                                st.success(f"Zóna '{new_roi_name}' přidána!")
+                                time.sleep(0.5)
+                                st.rerun() # Refresh pro zobrazení nové zelené zóny a skrytí cropperu
+                            else:
+                                st.error("Zadejte název kontroly před uložením.")
+                        else:
+                            st.warning("Zkuste pohnout oranžovým rámečkem před uložením.")
                     
                     st.divider()
-                    st.write("### 📋 Již uložené kontroly")
+                    st.write("### 📋 Již uložené kontroly na tomto ořezu")
                     for r in old_rois:
-                        st.text(f"• {r[1]} (NOK {r[6]})")
+                        st.markdown(f"**{r[1]}** (NOK {r[6]})")
 
 # ... (zbytek monitoring sekce)
 
