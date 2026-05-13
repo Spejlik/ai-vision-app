@@ -49,7 +49,7 @@ if menu == "Konfigurace":
     st.title("⚙️ Nastavení systému")
     
     # Průvodce kroky
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     with c1:
         if c1.button("📁", help="Projekty"): st.session_state.step = 1
     with c2:
