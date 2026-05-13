@@ -198,7 +198,7 @@ if menu == "Konfigurace":
                         # Kreslení zóny - použijeme box_width pro vynucení velikosti
                         # Odstranil jsem use_container_width, který házel chybu
                         st_cropper(img, realtime_update=True, box_color='#FF9800', 
-                                   key=c_key, box_width=DISPLAY_WIDTH))
+                                   key=c_key, box_width=DISPLAY_WIDTH)
 
                 st.divider()
                 st.caption("⚙️ Správa zón")
