@@ -85,49 +85,55 @@ elif menu == "⚙️ Nastavení":
         else:
             st.warning("⚠️ Nejdříve vyberte produkt v Kroku 1!")
 
-    # --- STRÁNKA 3: DEFINICE ROI ---
-elif st.session_state.set_step == 3:
-    active_p = st.session_state.get('active_p')
-    img = st.session_state.get('master_image')
+    # --- STRÁNKA 3: DEFINICE ROI (Čistá verze bez náhledů) ---
+    elif st.session_state.set_step == 3:
+        active_p = st.session_state.get('active_p')
+        img = st.session_state.get('master_image')
 
-    if active_p and img:
-        st.subheader(f"🔍 Konfigurace inspekcí pro: {active_p}")
-        
-        col_l, col_r = st.columns([3, 1])
-        
-        with col_l:
-            # Uživatel vidí velký obrázek a kreslí ROI
-            roi_data = st_cropper(img, realtime_update=True, box_color='#FF9800', key="cropper_final")
+        if active_p and img:
+            st.subheader(f"🔍 Konfigurace inspekcí pro: {active_p}")
             
-        with col_r:
-            st.write("### Přidat inspekci")
-            roi_name = st.text_input("Název (např. Kontrola količku)")
+            col_foto, col_menu = st.columns([3, 1])
             
-            if st.button("ULOŽIT INSPEKCI", use_container_width=True, type="primary"):
-                c_state = st.session_state.get('cropper_final')
-                if c_state and roi_name:
-                    box = c_state.get('coords')
-                    # Uložíme čistá procentuální data nebo poměrové souřadnice
-                    # Pro zobrazení v inspekci (image_57c352.jpg) se výřez provede až tam
-                    database.save_roi_template(
-                        active_p, 
-                        roi_name,
-                        box['left'], box['top'], box['width'], box['height']
-                    )
-                    st.success(f"Inspekce '{roi_name}' přidána")
-                    st.rerun()
+            with col_foto:
+                # Velký náhled pro zaměření
+                roi_data = st_cropper(img, realtime_update=True, box_color='#FF9800', key="cropper_final")
+            
+            with col_menu:
+                st.write("### Přidat inspekci")
+                roi_name = st.text_input("Název kontroly", placeholder="např. količek P1")
+                
+                if st.button("➕ ULOŽIT INSPEKCI", use_container_width=True, type="primary"):
+                    c_state = st.session_state.get('cropper_final')
+                    if c_state and roi_name:
+                        # Ukládáme pouze čisté souřadnice z cropperu
+                        box = c_state.get('coords')
+                        database.save_roi_template(
+                            active_p, 
+                            roi_name,
+                            int(box['left']), int(box['top']), 
+                            int(box['width']), int(box['height'])
+                        )
+                        st.success(f"Inspekce '{roi_name}' přidána")
+                        time.sleep(0.5)
+                        st.rerun()
+                    else:
+                        st.warning("Zadejte název a pohněte rámečkem!")
 
-        st.divider()
-        # Seznam inspekcí bez náhledů - jen textový přehled jako na image_57c67a.jpg
-        st.subheader("Seznam aktivních inspekcí")
-        saved_rois = database.get_roi_templates(active_p)
-        for r in saved_rois:
-            with st.expander(f"✅ {r[2]}"):
-                st.write(f"Typ: Klasifikátor | Pozice: {r[3]}, {r[4]}")
-                if st.button("Smazat", key=f"del_{r[0]}"):
-                    database.delete_roi_template(r[0])
-                    st.rerun()
+            st.divider()
+            # SEZNAM INSPEKCÍ - Textový přehled bez obrázků
+            st.subheader("📋 Aktivní kontroly v projektu")
+            saved_rois = database.get_roi_templates(active_p)
+            
+            if saved_rois:
+                for r in saved_rois:
+                    with st.expander(f"⚙️ {r[2]}"):
+                        c1, c2 = st.columns([3, 1])
+                        c1.write(f"**Typ:** Klasifikátor | **Snímek:** Master | **ID:** {r[0]}")
+                        if c2.button("SMAZAT", key=f"del_{r[0]}", use_container_width=True):
+                            database.delete_roi_template(r[0])
+                            st.rerun()
             else:
-                st.info("Zatím žádné kontroly.")
+                st.info("Zatím nejsou definovány žádné inspekce.")
         else:
-            st.warning("⚠️ Chybí data! Vraťte se ke Kroku 1 (Produkt) a Kroku 2 (Master).")
+            st.warning("⚠️ Chybí data! Vyberte produkt (Krok 1) a nahrajte Master (Krok 2).")
