@@ -160,31 +160,25 @@ if menu == "Konfigurace":
                         
                         if st.button("💾 ULOŽIT", type="primary", use_container_width=True):
                             if c_key in st.session_state and st.session_state[c_key] is not None:
-                                cropper_data = st.session_state[c_key]
+                                coords = st.session_state[c_key]['coords']
                                 
-                                # --- OPRAVA KeyError: 'width' ---
-                                # Pokud cropper nevrací 'width', použijeme šířku originálu
-                                # Tím pádem bude ratio vždy 1.0 (vše sedí na pixel)
-                                actual_width = img.width
-                                
-                                # Zkusíme získat width z cropperu, pokud tam není, použijeme actual_width
-                                canvas_width = cropper_data.get('width', actual_width)
-                                
-                                ratio = actual_width / canvas_width
-                                
-                                coords = cropper_data['coords']
-                                r_x = int(coords['left'] * ratio)
-                                r_y = int(coords['top'] * ratio)
-                                r_w = int(coords['width'] * ratio)
-                                r_h = int(coords['height'] * ratio)
+                                # BEREME PŘÍMO HODNOTY Z CROPPERU (bez ratio a bez offsetu)
+                                # Pokud to "odskakuje", zkusíme tyto čisté hodnoty:
+                                r_x = int(coords['left'])
+                                r_y = int(coords['top'])
+                                r_w = int(coords['width'])
+                                r_h = int(coords['height'])
 
                                 if edit_id:
                                     database.update_roi_position(edit_id, r_x, r_y, r_w, r_h)
                                     database.update_roi_nok(edit_id, nok + 1)
                                     st.session_state.edit_roi_id = None
                                 else:
+                                    # curr_m[0] je ID masteru
                                     database.save_roi(curr_m[0], name, r_x, r_y, r_w, r_h, nok + 1)
-                                    if 'add_toggle' in st.session_state: del st.session_state['add_toggle']
+                                    if 'add_toggle' in st.session_state: 
+                                        st.session_state.add_toggle = False
+                                
                                 st.rerun()
 
                 with col_main:
