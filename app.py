@@ -19,11 +19,34 @@ with st.sidebar:
 # --- 1. MONITORING ---
 if menu == "📊 Monitoring":
     st.title("📊 Monitoring výroby")
-    prods = database.get_products()
-    if prods:
-        st.selectbox("Vyberte aktivní produkt pro kontrolu", prods)
+    
+    active_p = st.session_state.get('active_p')
+    img = st.session_state.get('master_image')
+
+    if active_p and img:
+        st.write(f"Snímání produktu: **{active_p}**")
+        
+        # Načteme všechny ROI pro tento produkt
+        rois = database.get_roi_templates(active_p)
+        
+        if rois:
+            # Vytvoříme mřížku (např. 3 sloupce) jako na image_57c352.jpg
+            cols = st.columns(3)
+            for i, r in enumerate(rois):
+                with cols[i % 3]:
+                    # Tady se děje to kouzlo: oříznutí podle uložených dat
+                    # r[3]=x, r[4]=y, r[5]=w, r[6]=h
+                    crop = img.crop((r[3], r[4], r[3]+r[5], r[4]+r[6]))
+                    
+                    st.image(crop, use_container_width=True)
+                    st.caption(f"🔍 {r[2]}")
+                    
+                    # Simulace OK/NOK stavu
+                    st.markdown("🟢 **Stav: OK**")
+        else:
+            st.info("Nejdříve definujte ROI v nastavení.")
     else:
-        st.info("Nejsou definovány žádné produkty.")
+        st.warning("⚠️ Chybí data! Vyberte produkt a Master snímek v nastavení.")
 
 # --- 2. UČENÍ ---
 elif menu == "🧠 Učení a Trénink":
