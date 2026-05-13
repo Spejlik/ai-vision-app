@@ -188,17 +188,15 @@ if menu == "Konfigurace":
                                 st.rerun()
 
                 with col_main:
-                    # Nastavíme pevnou šířku pro zobrazení
                     DISPLAY_WIDTH = 800 
                     
                     if not (add_mode or edit_id):
-                        # Klasické zobrazení uložených zón
+                        # Zobrazení uložených zón
                         st.image(img, width=DISPLAY_WIDTH)
                     else:
-                        # Kreslení zóny - použijeme box_width pro vynucení velikosti
-                        # Odstranil jsem use_container_width, který házel chybu
+                        # Kreslení zóny - parametr 'canvas_width' je ten správný
                         st_cropper(img, realtime_update=True, box_color='#FF9800', 
-                                   key=c_key, box_width=DISPLAY_WIDTH)
+                                   key=c_key, canvas_width=DISPLAY_WIDTH)
 
                 st.divider()
                 st.caption("⚙️ Správa zón")
