@@ -5,11 +5,38 @@ import database
 import camera_manager
 import time
 import os
+import streamlit as st
 
 # Inicializace
 st.set_page_config(layout="wide", page_title="AI Vision Inspection")
 database.init_db()
 cam = camera_manager.BaslerCam()
+
+# TENTO BLOK ODSTRANÍ VOLNÉ MÍSTO NAHOŘE
+st.markdown("""
+    <style>
+        /* Odstranění okrajů hlavní nádoby */
+        .block-container {
+            padding-top: 1rem;
+            padding-bottom: 0rem;
+            margin-top: 0rem;
+        }
+        /* Zmenšení mezery nad nadpisem */
+        header {
+            visibility: hidden;
+        }
+        #root > div:nth-child(1) > div > div > div > div > section > div {
+            padding-top: 0rem;
+        }
+        /* Úprava nadpisu, aby nebyl tak vysoký */
+        h1 {
+            padding-top: 0rem;
+            margin-top: -2rem;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+# ... zbytek tvého kódu (st.sidebar, atd.)
 
 if 'step' not in st.session_state: st.session_state.step = 1
 if 'active_project' not in st.session_state: st.session_state.active_project = None
