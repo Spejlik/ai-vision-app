@@ -103,30 +103,40 @@ if menu == "Konfigurace":
         else:
             m_names = [m[2] for m in masters]
             sel_m_name = st.selectbox("Vyberte Master snímek:", m_names)
+            
+            # Získáme data vybraného masteru
             curr_m = next(m for m in masters if m[2] == sel_m_name)
             
-            img = Image.open('master_dummy.jpg') # Tady by byl curr_m[8]
+            # OPRAVA: Načteme skutečnou cestu k oříznutému souboru z databáze
+            # curr_m[8] odpovídá sloupci img_path v tabulce masters
+            path_to_img = curr_m[8] 
             
-            c_l, c_r = st.columns([3, 1])
-            
-            with c_l:
-                # Vykreslení stávajících ROI (modře)
-                draw = ImageDraw.Draw(img)
-                old_rois = database.get_rois(curr_m[0])
-                for r in old_rois:
-                    draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], outline="blue", width=5)
+            if os.path.exists(path_to_img):
+                img = Image.open(path_to_img)
                 
-                # Cropper pro novou ROI
-                roi = st_cropper(img, realtime_update=True, box_color='#FF9800', key="cropper")
-            
-            with c_r:
-                new_roi_name = st.text_input("Název kontroly:")
-                if st.button("💾 ULOŽIT KONTROLU", use_container_width=True):
-                    coords = st.session_state['cropper']['coords']
-                    database.save_roi(curr_m[0], new_roi_name, int(coords['left']), int(coords['top']), int(coords['width']), int(coords['height']))
-                    st.toast("ROI uložena!")
-                    time.sleep(0.5)
-                    st.rerun()
+                c_l, c_r = st.columns([3, 1])
+                
+                with c_l:
+                    # Vykreslení stávajících ROI (modře)
+                    draw = ImageDraw.Draw(img)
+                    old_rois = database.get_rois(curr_m[0])
+                    for r in old_rois:
+                        # r[3]=x, r[4]=y, r[5]=w, r[6]=h
+                        draw.rectangle([r[3], r[4], r[3]+r[5], r[4]+r[6]], outline="blue", width=5)
+                    
+                    # Cropper pro novou ROI na OŘÍZNUTÉM obrázku
+                    roi = st_cropper(img, realtime_update=True, box_color='#FF9800', key="cropper")
+                
+                with c_r:
+                    new_roi_name = st.text_input("Název kontroly:")
+                    if st.button("💾 ULOŽIT KONTROLU", use_container_width=True):
+                        coords = st.session_state['cropper']['coords']
+                        database.save_roi(curr_m[0], new_roi_name, int(coords['left']), int(coords['top']), int(coords['width']), int(coords['height']))
+                        st.toast(f"Kontrola '{new_roi_name}' uložena!")
+                        time.sleep(0.5)
+                        st.rerun()
+            else:
+                st.error(f"Soubor Masteru nebyl nalezen na cestě: {path_to_img}")
 
 elif menu == "Monitoring":
     st.title("📊 Živý monitoring")
