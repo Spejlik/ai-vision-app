@@ -88,11 +88,10 @@ with tab2:
             cv2.rectangle(preview, (ax, ay), (ax+aw, ay+ah), (255, 0, 0), 10)
             st.image(preview, caption="Definice AOI", use_container_width=True)
 
-# --- TAB 3: ZÓNY (ROI S EDITACÍ) ---
+# --- TAB 3: ZÓNY (ROI S EXPLICITNÍM ZVÝRAZNĚNÍM EDITACE) ---
 with tab3:
     st.subheader("📍 Správa inspekčních zón")
     
-    # Inicializace stavu pro editaci
     if 'editing_id' not in st.session_state:
         st.session_state.editing_id = None
 
@@ -111,11 +110,15 @@ with tab3:
             c_z1, c_z2 = st.columns([1, 2])
             
             with c_z1:
-                st.write("### ➕ Nastavení zóny")
-                
-                # Pokud editujeme, předvyplníme hodnoty z DB
+                # Najdeme data editované zóny
                 current_roi = next((r for r in all_rois if r[0] == st.session_state.editing_id), None)
                 
+                if st.session_state.editing_id:
+                    st.markdown(f"### ✏️ Editace: <span style='color:#ff4b4b'>{current_roi[1] if current_roi else ''}</span>", unsafe_allow_html=True)
+                else:
+                    st.write("### ➕ Nová zóna")
+
+                # Dynamické hodnoty
                 default_name = current_roi[1] if current_roi else "Nová zóna"
                 default_x = current_roi[2] if current_roi else W//2
                 default_y = current_roi[3] if current_roi else H//2
@@ -134,13 +137,9 @@ with tab3:
                 with col_btn1:
                     if st.button("💾 ULOŽIT", type="primary", use_container_width=True):
                         if st.session_state.editing_id:
-                            # Tady by měla být funkce update_roi, ale pro zjednodušení 
-                            # starou smažeme a uložíme novou pod stejným názvem
                             database.delete_roi(st.session_state.editing_id)
-                        
                         database.save_roi(m_id, zn, zx, zy, zw, zh, nok)
                         st.session_state.editing_id = None
-                        st.success("Uloženo!")
                         st.rerun()
                 
                 with col_btn2:
@@ -151,27 +150,39 @@ with tab3:
                 st.divider()
                 st.write("### 📋 Seznam zón")
                 for r in all_rois:
+                    is_editing = (r[0] == st.session_state.editing_id)
+                    # Zvýraznění pozadí v seznamu pomocí Markdownu
+                    bg_color = "rgba(255, 75, 75, 0.2)" if is_editing else "transparent"
+                    
+                    st.markdown(f"<div style='background-color:{bg_color}; padding:5px; border-radius:5px;'>", unsafe_allow_html=True)
                     col_txt, col_ed, col_del = st.columns([3, 1, 1])
-                    col_txt.write(f"**{r[1]}**")
+                    label = f"🎯 **{r[1]}**" if is_editing else r[1]
+                    col_txt.write(label)
                     
                     if col_ed.button("✏️", key=f"ed_{r[0]}"):
                         st.session_state.editing_id = r[0]
                         st.rerun()
-                        
                     if col_del.button("🗑️", key=f"del_{r[0]}"):
                         database.delete_roi(r[0])
                         st.rerun()
+                    st.markdown("</div>", unsafe_allow_html=True)
 
             with c_z2:
                 draw = ImageDraw.Draw(img_roi)
                 for r in all_rois:
-                    # Pokud zónu právě editujeme, nekreslíme ji zeleně (bude oranžová ze sliderů)
-                    if r[0] != st.session_state.editing_id:
-                        draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], outline="#deff9a", width=5)
+                    if r[0] == st.session_state.editing_id:
+                        # Editovaná zóna - TUČNÁ ČERVENÁ
+                        draw.rectangle([zx, zy, zx+zw, zy+zh], outline="#ff4b4b", width=8)
+                        draw.text((zx, zy-25), f"EDITUJI: {zn}", fill="#ff4b4b")
+                    else:
+                        # Ostatní zóny - TENKÁ ZELENÁ
+                        draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], outline="#deff9a", width=3)
                         draw.text((r[2], r[3]-20), r[1], fill="#deff9a")
                 
-                # Náhled aktuální úpravy
-                draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=3)
+                # Pokud vytváříme novou (a nic needitujeme), nakreslíme ji oranžově
+                if not st.session_state.editing_id:
+                    draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=3)
+                
                 st.image(img_roi, use_container_width=True)
 
 # --- TAB 4: I/O ---
