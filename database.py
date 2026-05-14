@@ -5,18 +5,21 @@ from datetime import datetime
 # --- LOKÁLNÍ SQLITE (Konfigurace systému) ---
 
 def init_db():
-    """Inicializace lokální databáze vision_system.db."""
+    """Inicializace lokální databáze vision_system.db s opravou syntaxe."""
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
+    
     # Tabulka pro Master obrázky (projekty) a jejich AOI (ořez)
+    # Opraveno: Přidány správné mezery mezi typem a DEFAULT
     c.execute('''CREATE TABLE IF NOT EXISTS masters 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   name TEXT, 
                   image_path TEXT,
-                  x INTEGERDEFAULT 0, 
+                  x INTEGER DEFAULT 0, 
                   y INTEGER DEFAULT 0, 
                   w INTEGER DEFAULT 1920, 
                   h INTEGER DEFAULT 1080)''')
+    
     # Tabulka pro ROI (zóny inspekce)
     c.execute('''CREATE TABLE IF NOT EXISTS rois 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
@@ -24,6 +27,7 @@ def init_db():
                   name TEXT, 
                   x INTEGER, y INTEGER, w INTEGER, h INTEGER, 
                   nok_type INTEGER)''')
+    
     conn.commit()
     conn.close()
     print("✅ Lokální SQLite databáze byla inicializována.")
@@ -37,18 +41,17 @@ def save_project(name):
     conn.close()
 
 def add_master(master_id, name, x, y, w, h, path):
-    """Uloží/Aktualizuje data pro Master obrázek (funkce, která ti chyběla)."""
+    """Uloží/Aktualizuje data pro Master obrázek."""
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    # Zjistíme, jestli už projekt existuje
     c.execute("UPDATE masters SET name=?, x=?, y=?, w=?, h=?, image_path=? WHERE id=?", 
               (name, x, y, w, h, path, master_id))
     conn.commit()
     conn.close()
-    print(f"✅ Master '{name}' pro projekt ID {master_id} byl aktualizován.")
+    print(f"✅ Master '{name}' aktualizován.")
 
 def get_projects():
-    """Načte seznam všech projektů pro výběr v aplikaci."""
+    """Načte seznam všech projektů."""
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
     c.execute("SELECT id, name, image_path, x, y, w, h FROM masters")
@@ -85,5 +88,4 @@ def save_result_to_mariadb(host, project_name, result_bool):
         cursor.close()
         conn.close()
     except Exception as e:
-        # Vypíše chybu do konzole (např. bridge.py), ale nezastaví program
         print(f"ℹ️ SQL Server nedostupný: {e}")
