@@ -17,8 +17,8 @@ class BaslerCam:
     def get_frame(self):
         if self.demo_mode:
             # Zkusí načíst obrázek z disku, jinak vytvoří šedý obdélník
-            if os.path.exists("test_image.jpg"):
-                frame = cv2.imread("test_image.jpg")
+            if os.path.exists("test_images/test_image.jpg"):
+                frame = cv2.imread("test_images/test_image.jpg")
             else:
                 frame = np.full((1080, 1920, 3), 128, dtype=np.uint8)
                 cv2.putText(frame, "DEMO: Chybi test_image.jpg", (500, 500), 
