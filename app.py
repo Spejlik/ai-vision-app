@@ -30,63 +30,57 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 4. Boční panel - Projekt
+# --- SIDEBAR: SPRÁVA PROJEKTŮ ---
 with st.sidebar:
-    st.title("🎛️ Projekt")
-    projs = database.get_projects()
-    if projs:
-        options = [p[1] for p in projs]
-        st.session_state.active_project = st.selectbox("Vyberte projekt", options)
-    else:
-        new_p = st.text_input("Název nového projektu")
-        if st.button("Vytvořit"):
-            database.save_project(new_p)
-            st.rerun()
-
-# 5. Definice záložek
-tab1, tab2, tab3, tab4 = st.tabs(["🚀 BĚH", "🎯 MASTER", "🔍 ZÓNY", "🔌 I/O"])
-
-# --- TAB 1: RUNTIME ---
-with tab1:
-    st.subheader("Živý monitoring")
-    st.info("Systém připraven k inspekci.")
-
-# --- TAB 2: MASTER (Opravené slidery a ořez) ---
-with tab2:
-    st.subheader(f"Nastavení Masteru: {st.session_state.active_project}")
-    col_ctrl, col_img = st.columns([1, 2])
+    st.title("📂 Správa projektů")
     
-    with col_ctrl:
-        if st.button("📸 NAČÍST OBRAZ Z KAMERY", use_container_width=True):
-            st.session_state.setup_image_buffer = cam.get_frame()
-
-        if st.session_state.setup_image_buffer is not None:
-            h, w = st.session_state.setup_image_buffer.shape[:2]
-            ax = st.slider("X pozice", 0, w-100, 0, key="ms_x")
-            ay = st.slider("Y pozice", 0, h-100, 0, key="ms_y")
-            aw = st.slider("Šířka", 100, w, 1280, key="ms_w")
-            ah = st.slider("Výška", 100, h, 1024, key="ms_h")
-            
-            m_name = st.text_input("Název Masteru", "P1")
-            
-            if st.button("💾 ULOŽIT OŘEZANÝ MASTER", type="primary", use_container_width=True):
-                # Skutečný ořez matice
-                img_to_crop = st.session_state.setup_image_buffer
-                cropped = img_to_crop[ay:ay+ah, ax:ax+aw]
-                
-                if not os.path.exists("masters"): os.makedirs("masters")
-                path = f"masters/{st.session_state.active_project}_{m_name}.png"
-                cv2.imwrite(path, cv2.cvtColor(cropped, cv2.COLOR_RGB2BGR))
-                
-                database.add_master(st.session_state.active_project, path, ax, ay, aw, ah)
-                st.success("Master uložen a oříznut!")
+    projs = database.get_projects()
+    project_names = [p[1] for p in projs]
+    
+    # Hlavní výběr
+    st.session_state.active_project = st.selectbox("Aktivní projekt", project_names if project_names else ["Žádný"])
+    
+    st.divider()
+    
+    # Sekce pro vytvoření a kopírování
+    with st.expander("✨ Nový / Kopírovat"):
+        new_p_name = st.text_input("Název nového projektu")
+        col_new, col_copy = st.columns(2)
+        
+        if col_new.button("Vytvořit prázdný", use_container_width=True):
+            if new_p_name:
+                database.save_project(new_p_name)
+                st.rerun()
+        
+        if col_copy.button("Kopírovat akt.", use_container_width=True):
+            if new_p_name and st.session_state.active_project != "Žádný":
+                database.duplicate_project(st.session_state.active_project, new_p_name)
                 st.rerun()
 
-    with col_img:
-        if st.session_state.setup_image_buffer is not None:
-            preview = st.session_state.setup_image_buffer.copy()
-            cv2.rectangle(preview, (ax, ay), (ax+aw, ay+ah), (255, 0, 0), 10)
-            st.image(preview, caption="Definice AOI", use_container_width=True)
+    # Sekce pro údržbu
+    with st.expander("🛠️ Údržba projektu"):
+        if st.session_state.active_project != "Žádný":
+            st.warning(f"Akce pro: {st.session_state.active_project}")
+            
+            # Přejmenování
+            new_title = st.text_input("Přejmenovat na:")
+            if st.button("Potvrdit přejmenování"):
+                # Tady by byla SQL UPDATE masters SET name = new_title WHERE name = active_project
+                st.info("Funkce ve vývoji...") 
+
+            st.divider()
+            
+            # Smazání
+            if st.button("🗑️ SMAZAT PROJEKT", type="secondary", use_container_width=True):
+                if st.session_state.active_project:
+                    database.delete_project(st.session_state.active_project)
+                    st.rerun()
+                    
+    # Záloha (export do JSON/CSV by byl fajn, ale zatím uděláme info)
+    if st.button("💾 ZÁLOHOVAT DB"):
+        import shutil
+        shutil.copy("vision_system.db", "vision_system_backup.db")
+        st.success("Záloha vytvořena!")
 
 # --- TAB 3: ZÓNY (ROI S EXPLICITNÍM ZVÝRAZNĚNÍM EDITACE) ---
 with tab3:

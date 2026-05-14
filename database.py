@@ -96,3 +96,38 @@ def delete_roi(roi_id):
     c.execute("DELETE FROM rois WHERE id=?", (roi_id,))
     conn.commit()
     conn.close()
+    
+def delete_project(project_name):
+    conn = sqlite3.connect('vision_system.db')
+    c = conn.cursor()
+    # Získáme ID projektu
+    c.execute("SELECT id FROM masters WHERE name=?", (project_name,))
+    p_id = c.fetchone()
+    if p_id:
+        # Smažeme zóny a pak projekt
+        c.execute("DELETE FROM rois WHERE master_id=?", (p_id[0],))
+        c.execute("DELETE FROM masters WHERE id=?", (p_id[0],))
+    conn.commit()
+    conn.close()
+
+def duplicate_project(old_name, new_name):
+    conn = sqlite3.connect('vision_system.db')
+    c = conn.cursor()
+    # 1. Načteme starý projekt
+    c.execute("SELECT image_path, x, y, w, h FROM masters WHERE name=?", (old_name,))
+    old_data = c.fetchone()
+    if old_data:
+        # 2. Vytvoříme nový projekt se stejnými daty
+        c.execute("INSERT INTO masters (name, image_path, x, y, w, h) VALUES (?, ?, ?, ?, ?, ?)",
+                  (new_name, old_data[0], old_data[1], old_data[2], old_data[3], old_data[4]))
+        new_id = c.lastrowid
+        # 3. Zkopírujeme i zóny
+        c.execute("SELECT id FROM masters WHERE name=?", (old_name,))
+        old_id = c.fetchone()[0]
+        c.execute("SELECT name, x, y, w, h, nok_type FROM rois WHERE master_id=?", (old_id,))
+        rois = c.fetchall()
+        for r in rois:
+            c.execute("INSERT INTO rois (master_id, name, x, y, w, h, nok_type) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                      (new_id, r[0], r[1], r[2], r[3], r[4], r[5]))
+    conn.commit()
+    conn.close()    
