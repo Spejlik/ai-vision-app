@@ -5,6 +5,17 @@ import camera_manager
 import os
 from PIL import Image
 
+# --- INICIALIZACE (Vlož hned pod definici tabů) ---
+if 'setup_image_buffer' not in st.session_state:
+    st.session_state.setup_image_buffer = None
+
+if 'setup_frame' not in st.session_state:
+    st.session_state.setup_frame = None
+
+# --- TAB 2: SETUP MASTER ---
+with tab2:
+    # Tvůj stávající kód pro Master...
+    
 # 1. Globální konfigurace a styl
 st.set_page_config(layout="wide", page_title="Vision System Terminal")
 
