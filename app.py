@@ -12,12 +12,16 @@ st.set_page_config(layout="wide", page_title="Vision System Terminal")
 database.init_db()
 cam = camera_manager.BaslerCam()
 
-# 3. Inicializace Session State
+# 3. Inicializace Session State (Pojistka proti AttributeError)
 if 'setup_image_buffer' not in st.session_state:
     st.session_state.setup_image_buffer = None
 if 'active_project' not in st.session_state:
     st.session_state.active_project = None
 if 'editing_id' not in st.session_state:
+    st.session_state.editing_id = None
+# --- TENTO ŘÁDEK CHYBĚL ---
+if 'selected_master_id' not in st.session_state:
+    st.session_state.selected_master_id = None:
     st.session_state.editing_id = None
 
 # CSS Styl
