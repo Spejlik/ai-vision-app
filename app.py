@@ -52,84 +52,81 @@ with st.sidebar:
 # 3. Hlavní rozhraní pomocí Záložek (Tabs)
 tab_run, tab_setup, tab_io = st.tabs(["🚀 BĚH (RUNTIME)", "⚙️ NASTAVENÍ (SETUP)", "🔌 I/O DIAGNOSTIKA"])
 
-# --- TAB: NASTAVENÍ (SETUP) ---
-# --- TAB: NASTAVENÍ (SETUP) ---
-with tab_setup:
-    # 1. POJISTKA PROTI TŘESENÍ (Buffer obrázku)
+# --- TAB 2: SETUP MASTER ---
+with tab2:
     if 'setup_image_buffer' not in st.session_state:
         st.session_state.setup_image_buffer = None
 
     col_ctrl, col_img = st.columns([1, 2])
     
     with col_ctrl:
-        # Tlačítko pro načtení
-        if st.button("📸 NAČÍST / AKTUALIZOVAT OBRAZ", use_container_width=True):
+        if st.button("📸 NAČÍST OBRAZ PRO MASTER", use_container_width=True):
             st.session_state.setup_image_buffer = cam.get_frame()
 
         if st.session_state.setup_image_buffer is not None:
-            st.divider()
-            st.write("### 📏 Nastavení ořezu (AOI)")
-            
-            # Zjistíme rozlišení načteného snímku pro limity sliderů
             h, w = st.session_state.setup_image_buffer.shape[:2]
+            ax = st.slider("X pozice", 0, w, 0, key="m_x")
+            ay = st.slider("Y pozice", 0, h, 0, key="m_y")
+            aw = st.slider("Šířka", 100, w, 1280, key="m_w")
+            ah = st.slider("Výška", 100, h, 1024, key="m_h")
             
-            # SLIDERY - Rychlé a plynulé posouvání (včerejší styl)
-            ax = st.slider("X pozice", 0, w, 0, key="slider_x")
-            ay = st.slider("Y pozice", 0, h, 0, key="slider_y")
-            aw = st.slider("Šířka (px)", 100, w, 1280, key="slider_w")
-            ah = st.slider("Výška (px)", 100, h, 1024, key="slider_h")
+            m_name = st.text_input("Název Masteru", "P1")
             
-            st.divider()
-            m_name = st.text_input("ID Masteru", "P1")
-            
-            if st.button("💾 ULOŽIT MASTER SNÍMEK", type="primary", use_container_width=True):
-                # Ořez ze stabilního bufferu
-                img_to_crop = st.session_state.setup_image_buffer
-                # Ošetření, aby ořez nešel mimo obraz
-                safe_h = min(ah, h - ay)
-                safe_w = min(aw, w - ax)
-                cropped = img_to_crop[ay : ay + safe_h, ax : ax + safe_w]
-                
+            if st.button("💾 ULOŽIT OŘEZANÝ MASTER", type="primary", use_container_width=True):
+                # KLÍČOVÁ OPRAVA: Skutečné oříznutí matice
+                cropped = st.session_state.setup_image_buffer[ay:ay+ah, ax:ax+aw]
                 path = f"masters/{st.session_state.active_project}_{m_name}.png"
                 if not os.path.exists("masters"): os.makedirs("masters")
                 cv2.imwrite(path, cv2.cvtColor(cropped, cv2.COLOR_RGB2BGR))
-                database.add_master(st.session_state.active_project, path, ax, ay, safe_w, safe_h)
-                st.success(f"Uloženo! Master má rozlišení {safe_w}x{safe_h}")
-        else:
-            st.info("Klikni na tlačítko nahoře pro zobrazení sliderů a obrazu.")
+                
+                # Uložíme do DB i informaci o tom, že toto je ořez
+                database.add_master(st.session_state.active_project, path, ax, ay, aw, ah)
+                st.success(f"Uloženo a oříznuto na {aw}x{ah}")
+                st.rerun()
 
     with col_img:
-        if st.session_state.setup_image_buffer is not None:
-            # Vykreslení rámečku nad statickým snímkem
-            preview = st.session_state.setup_image_buffer.copy()
-            # Modrý rámeček ořezu
-            cv2.rectangle(preview, (ax, ay), (ax+aw, ay+ah), (255, 0, 0), 10)
-            st.image(preview, caption="Definice AOI (pomocí sliderů)", use_container_width=True)
-            
-# --- TAB: BĚH (Sledování inspekce) ---
-with tab_run:
-    if st.session_state.active_project:
-        c1, c2 = st.columns([3, 1])
-        with c1:
-            st.subheader("Poslední inspekce")
-            # Zde bude obraz z reálného triggeru
-            st.image("https://via.placeholder.com/1280x720.png?text=Waiting+for+Trigger", use_container_width=True)
-        with c2:
-            st.subheader("Výsledek")
-            st.markdown("<h1 style='text-align: center; color: green;'>PASS</h1>", unsafe_allow_html=True)
-            st.metric("Celkem OK", "1245 ks")
-            st.metric("Celkem NOK", "12 ks")
-    else:
-        st.info("Vyberte nebo vytvořte projekt v záložce Nastavení.")
+        if st.session_state.setup_frame is None and st.session_state.setup_image_buffer is not None:
+             preview = st.session_state.setup_image_buffer.copy()
+             cv2.rectangle(preview, (ax, ay), (ax+aw, ay+ah), (255, 0, 0), 10)
+             st.image(preview, use_container_width=True)
 
-# --- TAB: I/O (Diagnostika registrů) ---
-with tab_io:
-    st.subheader("Stav Modbus registrů")
-    ci, co = st.columns(2)
-    with ci:
-        st.write("**Vstupy (PLC -> PC)**")
-        st.checkbox("Trigger (Reg 8)", value=False, disabled=True)
-    with co:
-        st.write("**Výstupy (PC -> PLC)**")
-        st.checkbox("Ready (Reg 7)", value=True, disabled=True)
-        st.checkbox("Result OK (Reg 0)", value=False, disabled=True)
+# --- TAB 3: ZÓNY (ROI & NOK) ---
+with tab3:
+    masters = database.get_masters(st.session_state.active_project)
+    if not masters or masters[0][2] == "":
+        st.warning("⚠️ Nejdříve uložte Master v předchozí záložce!")
+    else:
+        m_id, m_name, m_path = masters[0][0], masters[0][1], masters[0][2]
+        img = Image.open(m_path).convert("RGB")
+        W, H = img.size
+        
+        col_z_ctrl, col_z_img = st.columns([1, 2])
+        
+        with col_z_ctrl:
+            st.subheader("📍 Nová inspekční zóna")
+            zn = st.text_input("Název zóny:", "Spona_L")
+            zx = st.slider("ROI X", 0, W, W//2, key="roi_x")
+            zy = st.slider("ROI Y", 0, H, H//2, key="roi_y")
+            zw = st.slider("ROI Šířka", 10, W, 100, key="roi_w")
+            zh = st.slider("ROI Výška", 10, H, 100, key="roi_h")
+            nok = st.selectbox("Přiřadit NOK (PLC registr):", range(1, 11))
+            
+            if st.button("💾 ULOŽIT ZÓNU A NOK", use_container_width=True, type="primary"):
+                database.save_roi(m_id, zn, zx, zy, zw, zh, nok)
+                st.success(f"Zóna {zn} (NOK {nok}) uložena!")
+                st.rerun()
+
+            st.divider()
+            rois = database.get_rois(m_id)
+            for r in rois:
+                st.write(f"✅ {r[1]} -> NOK {r[6]}")
+
+        with col_z_img:
+            from PIL import ImageDraw
+            draw = ImageDraw.Draw(img)
+            # Vykreslení uložených
+            for r in rois:
+                draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], outline="#deff9a", width=5)
+            # Aktivní náhled
+            draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=3)
+            st.image(img, use_container_width=True)
