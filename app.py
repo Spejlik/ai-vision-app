@@ -77,47 +77,67 @@ if menu == "Konfigurace":
     elif st.session_state.step == 2:
         st.subheader(f"🖼️ Nastavení Masteru pro: {st.session_state.active_project}")
         
+        # --- INICIALIZACE SNÍMKU ---
+        if 'master_setup_frame' not in st.session_state:
+            st.session_state.master_setup_frame = None
+
         col_img, col_ctrl = st.columns([1.5, 1.0])
         
         with col_ctrl:
-            st.caption("Nastavení ořezu (AOI)")
-            ax = st.slider("X pozice", 0, 2000, 0)
-            ay = st.slider("Y pozice", 0, 2000, 0)
-            aw = st.slider("Šířka", 100, 2500, 1280)
-            ah = st.slider("Výška", 100, 2500, 1080)
+            st.write("### 🎮 Ovládání")
+            # Tlačítko pro nový snímek - jen toto volá kameru
+            if st.button("📸 SNÍMAT NOVÝ OBRAZ", type="primary", use_container_width=True):
+                with st.spinner("Snímám..."):
+                    st.session_state.master_setup_frame = cam.get_frame()
+            
+            st.divider()
+            st.caption("📍 Nastavení ořezu (AOI)")
+            
+            # Slidery s klíči, aby se netřásly
+            # Pokud nemáme snímek, použijeme výchozí rozlišení 2500x2000
+            max_w = st.session_state.master_setup_frame.shape[1] if st.session_state.master_setup_frame is not None else 2500
+            max_h = st.session_state.master_setup_frame.shape[0] if st.session_state.master_setup_frame is not None else 2000
+
+            ax = st.slider("X pozice", 0, max_w - 100, 0, key="aoi_x")
+            ay = st.slider("Y pozice", 0, max_h - 100, 0, key="aoi_y")
+            aw = st.slider("Šířka", 100, max_w - ax, 1280, key="aoi_w")
+            ah = st.slider("Výška", 100, max_h - ay, 1080, key="aoi_h")
+            
             m_name = st.text_input("Název Master snímku:", placeholder="např. MQB_P1")
             
-            if st.button("📸 VYFOTIT A ULOŽIT", type="primary", use_container_width=True):
-                if not m_name:
+            if st.button("💾 ULOŽIT MASTER", use_container_width=True):
+                if st.session_state.master_setup_frame is None:
+                    st.error("Nejdříve musíte pořídit snímek!")
+                elif not m_name:
                     st.error("Zadejte název snímku!")
                 else:
-                    # 1. Vyfotíme celou scénu
-                    raw_frame = cam.get_frame()
-                    pil_img = Image.fromarray(raw_frame)
-                    
-                    # 2. PROVEDEME OŘEZ (Toto je ten odrazový můstek)
-                    # Teď už neukládáme celou fotku, ale jen to, co jsi vybral slidery
+                    # PROVEDEME OŘEZ PRO ULOŽENÍ
+                    pil_img = Image.fromarray(st.session_state.master_setup_frame)
                     cropped_master = pil_img.crop((ax, ay, ax + aw, ay + ah))
                     
-                    # 3. Uložíme oříznutý Master
                     os.makedirs("masters", exist_ok=True)
                     file_path = f"masters/{st.session_state.active_project}_{m_name}.png"
                     cropped_master.save(file_path)
                     
-                    # 4. Zapíšeme do DB
+                    # Zápis do DB (předpokládáme, že tvůj database.py přijímá tyto parametry)
                     database.add_master(st.session_state.active_project, m_name, ax, ay, aw, ah, file_path)
                     
-                    st.success(f"Master '{m_name}' uložen jako výřez!")
+                    st.success(f"Master '{m_name}' uložen!")
+                    time.sleep(1)
                     st.rerun()
 
         with col_img:
-            # Živý náhled s výřezem
-            raw_frame = cam.get_frame()
-            pil_raw = Image.fromarray(raw_frame)
-            preview_crop = pil_raw.crop((ax, ay, ax + aw, ay + ah))
-            
-            st.image(preview_crop, caption="Náhled AOI (to, co uvidí AI)", use_container_width=True)
-            st.write(f"📏 Rozlišení: {aw} x {ah} px")
+            if st.session_state.master_setup_frame is not None:
+                # Výřez pro náhled
+                pil_raw = Image.fromarray(st.session_state.master_setup_frame)
+                preview_crop = pil_raw.crop((ax, ay, ax + aw, ay + ah))
+                
+                # Zmenšíme náhled pro web, aby byl plynulý (max šířka 800px)
+                st.image(preview_crop, caption="Náhled AOI (to, co uvidí AI)", use_container_width=True)
+                st.write(f"📏 Aktuální rozlišení výřezu: **{aw} x {ah} px**")
+            else:
+                # Placeholder, pokud ještě není nic vyfoceno
+                st.warning("Klikněte na 'SNÍMAT NOVÝ OBRAZ' pro zobrazení náhledu z kamery.")
 
     # KROK 3: ROI DEFINICE
     elif st.session_state.step == 3:
