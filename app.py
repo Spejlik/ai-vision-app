@@ -21,7 +21,7 @@ if 'editing_id' not in st.session_state:
     st.session_state.editing_id = None
 # --- TENTO ŘÁDEK CHYBĚL ---
 if 'selected_master_id' not in st.session_state:
-    st.session_state.selected_master_id = None:
+    st.session_state.selected_master_id = None
     st.session_state.editing_id = None
 
 # CSS Styl
