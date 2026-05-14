@@ -130,7 +130,7 @@ with tab3:
                 m_id, m_name, m_path = m[0], m[1], m[2]
                 with cols[i % 8]:
                     if os.path.exists(m_path):
-                        # Pevná šířka pro úhledné miniatury
+                        # Pevná výška náhledu 100px zajistí, že galerie bude kompaktní
                         st.image(m_path, width=120)
                         
                         is_selected = (m_id == st.session_state.selected_master_id)
@@ -154,58 +154,64 @@ with tab3:
             W, H = img_roi.size
             all_rois = database.get_rois(m_id)
             
-            c_z1, c_z2 = st.columns([1, 2])
+            # --- ROZLOŽENÍ EDITORU (Sloupce pro úsporu místa) ---
+            # Poměr 1:1 zajistí, že fotka nebude dominovat celé obrazovce
+            col_ctrl, col_viz = st.columns([1, 1.2]) 
             
-            with c_z1:
-                # Najdeme data editované zóny
+            with col_ctrl:
+                # --- FORMULÁŘ ---
                 current_roi = next((r for r in all_rois if r[0] == st.session_state.editing_id), None)
                 
                 if st.session_state.editing_id:
-                    st.markdown(f"### ✏️ Editace: <span style='color:#ff4b4b'>{current_roi[1] if current_roi else ''}</span>", unsafe_allow_html=True)
+                    st.markdown(f"### ✏️ Editace: <span style='color:#ff4b4b'>{current_roi[1]}</span>", unsafe_allow_html=True)
                 else:
                     st.write("### ➕ Nová zóna")
 
-                zn = st.text_input("Název zóny", value=current_roi[1] if current_roi else "Nová zóna")
-                zx = st.slider("ROI X", 0, W, current_roi[2] if current_roi else W//2)
-                zy = st.slider("ROI Y", 0, H, current_roi[3] if current_roi else H//2)
-                zw = st.slider("ROI Šířka", 10, W, current_roi[4] if current_roi else 150)
-                zh = st.slider("ROI Výška", 10, H, current_roi[5] if current_roi else 150)
-                nok = st.selectbox("NOK registr", range(1, 11), index=(current_roi[6]-1) if current_roi else 0)
+                zn = st.text_input("Název", value=current_roi[1] if current_roi else "Nová zóna", key="roi_name")
                 
-                col_btn1, col_btn2 = st.columns(2)
-                with col_btn1:
-                    if st.button("💾 ULOŽIT", type="primary", use_container_width=True):
-                        if st.session_state.editing_id:
-                            database.delete_roi(st.session_state.editing_id)
-                        database.save_roi(m_id, zn, zx, zy, zw, zh, nok)
-                        st.session_state.editing_id = None
-                        st.rerun()
-                with col_btn2:
-                    if st.button("✖️ ZRUŠIT", use_container_width=True):
-                        st.session_state.editing_id = None
-                        st.rerun()
+                # Menší slidery (pomocí columns uvnitř sloupce)
+                s1, s2 = st.columns(2)
+                zx = s1.number_input("X", 0, W, current_roi[2] if current_roi else W//2)
+                zy = s2.number_input("Y", 0, H, current_roi[3] if current_roi else H//2)
+                zw = s1.number_input("Šířka", 10, W, current_roi[4] if current_roi else 150)
+                zh = s2.number_input("Výška", 10, H, current_roi[5] if current_roi else 150)
+                
+                nok = st.selectbox("PLC Chyba", range(1, 11), index=(current_roi[6]-1) if current_roi else 0)
+                
+                c1, c2 = st.columns(2)
+                if c1.button("💾 ULOŽIT", type="primary", use_container_width=True):
+                    if st.session_state.editing_id:
+                        database.delete_roi(st.session_state.editing_id)
+                    database.save_roi(m_id, zn, zx, zy, zw, zh, nok)
+                    st.session_state.editing_id = None
+                    st.rerun()
+                if c2.button("✖️ ZRUŠIT", use_container_width=True):
+                    st.session_state.editing_id = None
+                    st.rerun()
 
                 st.divider()
-                st.write("### 📋 Seznam zón")
+                # Seznam zón v kompaktním provedení
+                st.write("📋 Uložené zóny:")
                 for r in all_rois:
                     is_editing = (r[0] == st.session_state.editing_id)
-                    bg_color = "rgba(255, 75, 75, 0.2)" if is_editing else "transparent"
-                    st.markdown(f"<div style='background-color:{bg_color}; padding:5px; border-radius:5px;'>", unsafe_allow_html=True)
-                    col_txt, col_ed, col_del = st.columns([3, 1, 1])
-                    col_txt.write(f"🎯 **{r[1]}**" if is_editing else r[1])
-                    if col_ed.button("✏️", key=f"ed_{r[0]}"):
+                    st.markdown(f"<div style='background-color:{'rgba(255, 75, 75, 0.1)' if is_editing else 'transparent'}; padding:2px;'>", unsafe_allow_html=True)
+                    cx, ce, cd = st.columns([3, 1, 1])
+                    cx.caption(f"{r[1]} (NOK {r[6]})")
+                    if ce.button("✏️", key=f"ed_{r[0]}"):
                         st.session_state.editing_id = r[0]
                         st.rerun()
-                    if col_del.button("🗑️", key=f"del_{r[0]}"):
+                    if cd.button("🗑️", key=f"del_{r[0]}"):
                         database.delete_roi(r[0])
                         st.rerun()
                     st.markdown("</div>", unsafe_allow_html=True)
 
-            with c_z2:
+            with col_viz:
+                # --- VIZUALIZACE ---
+                # Fotka se nyní automaticky přizpůsobí šířce sloupce
                 draw = ImageDraw.Draw(img_roi)
                 for r in all_rois:
                     if r[0] == st.session_state.editing_id:
-                        draw.rectangle([zx, zy, zx+zw, zy+zh], outline="#ff4b4b", width=8)
+                        draw.rectangle([zx, zy, zx+zw, zy+zh], outline="#ff4b4b", width=6)
                     else:
                         draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], outline="#deff9a", width=3)
                         draw.text((r[2], r[3]-20), r[1], fill="#deff9a")
@@ -213,7 +219,8 @@ with tab3:
                 if not st.session_state.editing_id:
                     draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=3)
                 
-                st.image(img_roi, use_container_width=True)
+                # Zobrazení fotky - use_container_width ji udrží v pravém sloupci
+                st.image(img_roi, use_container_width=True, caption=f"Pracovní náhled: {m_name}")
         else:
             st.error(f"Soubor {m_path} nenalezen.")
 
