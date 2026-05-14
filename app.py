@@ -3,23 +3,12 @@ import cv2
 import database
 import camera_manager
 import os
-from PIL import Image
+from PIL import Image, ImageDraw
 
-# --- INICIALIZACE (Vlož hned pod definici tabů) ---
-if 'setup_image_buffer' not in st.session_state:
-    st.session_state.setup_image_buffer = None
-
-if 'setup_frame' not in st.session_state:
-    st.session_state.setup_frame = None
-
-# --- TAB 2: SETUP MASTER ---
-with tab2:
-    # Tvůj stávající kód pro Master...
-    
-# 1. Globální konfigurace a styl
+# 1. GLOBÁLNÍ KONFIGURACE (Musí být úplně nahoře, bez odsazení!)
 st.set_page_config(layout="wide", page_title="Vision System Terminal")
 
-# CSS pro minimalizaci okrajů a profesionální vzhled
+# 2. CSS STYL (Bez odsazení na začátku řádků)
 st.markdown("""
     <style>
         .block-container { padding-top: 1rem; padding-bottom: 0rem; }
@@ -37,41 +26,29 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Inicializace hardwaru
+# 3. INICIALIZACE DATABÁZE A PROMĚNNÝCH
 database.init_db()
 cam = camera_manager.BaslerCam()
 
-# 2. Sidebar - Statické informace a výběr projektu
-with st.sidebar:
-    st.title("🎛️ Ovládací panel")
-    
-    projs = database.get_projects()
-    project_names = [p[1] for p in projs] if projs else []
-    
-    if project_names:
-        active_p = st.selectbox("Aktivní projekt", project_names)
-        st.session_state.active_project = active_p
-    else:
-        st.warning("Vytvořte projekt v sekci Nastavení.")
-        st.session_state.active_project = None
+if 'setup_image_buffer' not in st.session_state:
+    st.session_state.setup_image_buffer = None
+if 'setup_frame' not in st.session_state:
+    st.session_state.setup_frame = None
+if 'active_project' not in st.session_state:
+    st.session_state.active_project = None
 
-    st.divider()
-    st.subheader("📡 Status linky")
-    st.success("SYSTÉM READY")
-    st.metric("Takt", "1.2 s")
-    
-# 1. Definice záložek (Tento řádek musí být PŘED "with tab1:", "with tab2:", atd.)
+# 4. DEFINICE TABŮ
 tab1, tab2, tab3, tab4 = st.tabs(["🚀 BĚH (RUNTIME)", "🎯 NASTAVENÍ MASTER", "🔍 ZÓNY (ROI)", "🔌 I/O DIAGNOSTIKA"])
 
 # --- TAB 1: RUNTIME ---
 with tab1:
     st.subheader("Živý monitoring")
-    # tvůj kód pro běh...
+    # Zde pokračuje tvůj kód pro Tab 1...
 
-# --- TAB 2: SETUP MASTER --- (Tady ti to házelo chybu)
+# --- TAB 2: SETUP MASTER ---
 with tab2:
-    st.subheader("Konfigurace Master snímku")
-    # tvůj kód pro Master...
+    # Zde vlož ten kód pro Master, co jsme ladili (slidery, ořez atd.)
+    # Musí být odsazený o 4 mezery doprava!
 
 # --- TAB 3: ZÓNY ---
 with tab3:
