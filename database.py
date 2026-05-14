@@ -13,7 +13,6 @@ def init_db():
     """Inicializace lokální SQLite databáze."""
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    # Tabulka masters musí obsahovat sloupce pro ořez (x,y,w,h) a cestu k souboru
     c.execute('''CREATE TABLE IF NOT EXISTS masters 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   name TEXT, 
@@ -41,7 +40,7 @@ def save_project(name):
     conn.close()
 
 def get_projects():
-    """Načte seznam všech projektů (vyžadováno v app.py na řádku 73)."""
+    """Načte seznam všech projektů."""
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
     c.execute("SELECT id, name, image_path, x, y, w, h FROM masters")
@@ -65,7 +64,7 @@ def add_master(master_id, name, x, y, w, h, frame):
     """Uloží obrázek na disk a aktualizuje záznam v DB."""
     try:
         file_path = os.path.join(MASTER_FOLDER, f"master_{master_id}.jpg")
-        cv2.imwrite(file_path, frame) # Uložíme reálný snímek
+        cv2.imwrite(file_path, frame)
         
         conn = sqlite3.connect('vision_system.db')
         c = conn.cursor()
@@ -77,6 +76,34 @@ def add_master(master_id, name, x, y, w, h, frame):
     except Exception as e:
         print(f"Chyba při add_master: {e}")
         return False
+
+# --- FUNKCE PRO ZÓNY (ROI) ---
+
+def get_rois(master_id):
+    """Načte všechny inspekční zóny pro daný Master/Projekt."""
+    conn = sqlite3.connect('vision_system.db')
+    c = conn.cursor()
+    c.execute("SELECT id, name, x, y, w, h, nok_type FROM rois WHERE master_id=?", (master_id,))
+    rois = c.fetchall()
+    conn.close()
+    return rois
+
+def save_roi(master_id, name, x, y, w, h, nok_type):
+    """Uloží novou inspekční zónu."""
+    conn = sqlite3.connect('vision_system.db')
+    c = conn.cursor()
+    c.execute("INSERT INTO rois (master_id, name, x, y, w, h, nok_type) VALUES (?, ?, ?, ?, ?, ?, ?)",
+              (master_id, name, int(x), int(y), int(w), int(h), nok_type))
+    conn.commit()
+    conn.close()
+
+def delete_roi(roi_id):
+    """Smaže konkrétní zónu."""
+    conn = sqlite3.connect('vision_system.db')
+    c = conn.cursor()
+    c.execute("DELETE FROM rois WHERE id=?", (roi_id,))
+    conn.commit()
+    conn.close()
 
 # --- MARIADB (Pro halu) ---
 def save_result_to_mariadb(host, project_name, result_bool):
