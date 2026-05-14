@@ -106,23 +106,56 @@ with tab2:
             cv2.rectangle(preview, (ax, ay), (ax+aw, ay+ah), (255, 0, 0), 10)
             st.image(preview, use_container_width=True)
 
-# --- TAB 3: ZÓNY ---
+# --- TAB 3: ZÓNY (S VÝBĚREM MASTERU) ---
 with tab3:
     st.subheader("📍 Správa inspekčních zón")
-    masters = database.get_masters(st.session_state.active_project)
     
-    if not masters or not masters[0][2]:
-        st.warning("Nejdříve uložte Master v záložce 🎯 MASTER")
+    # 1. Získání všech Masterů pro aktivní projekt
+    all_masters = database.get_masters(st.session_state.active_project)
+    
+    if not all_masters:
+        st.warning("⚠️ Nejdříve vytvořte alespoň jeden Master snímek v záložce 🎯 MASTER")
     else:
-        m_id, m_name, m_path = masters[0][0], masters[0][1], masters[0][2]
+        # --- SEKCE VÝBĚRU MASTERU (HORIZONTÁLNÍ GALERIE) ---
+        st.write("### 🖼️ Vyberte Master snímek pro editaci")
+        
+        # Vytvoříme řadu sloupců pro náhledy
+        cols = st.columns(len(all_masters) if len(all_masters) < 5 else 5)
+        
+        # Inicializace vybraného masteru v session_state
+        if 'selected_master_id' not in st.session_state:
+            st.session_state.selected_master_id = all_masters[0][0]
+
+        for i, m in enumerate(all_masters):
+            m_id, m_name, m_path = m[0], m[1], m[2]
+            with cols[i % 5]:
+                if os.path.exists(m_path):
+                    st.image(m_path, caption=m_name, use_container_width=True)
+                    if st.button(f"Vybrat {m_name}", key=f"sel_{m_id}", use_container_width=True):
+                        st.session_state.selected_master_id = m_id
+                        st.rerun()
+                else:
+                    st.error(f"Chybí soubor: {m_name}")
+
+        st.divider()
+
+        # 2. NAČTENÍ DAT PRO VYBRANÝ MASTER
+        selected_m = next((m for m in all_masters if m[0] == st.session_state.selected_master_id), all_masters[0])
+        m_id, m_name, m_path = selected_m[0], selected_m[1], selected_m[2]
+        
+        st.info(f"🔎 Editujete zóny pro Master: **{m_name}**")
+
         if os.path.exists(m_path):
             img_roi = Image.open(m_path).convert("RGB")
             W, H = img_roi.size
             all_rois = database.get_rois(m_id)
+            
             c_z1, c_z2 = st.columns([1, 2])
             
             with c_z1:
+                # --- FORMULÁŘ PRO ROI ---
                 current_roi = next((r for r in all_rois if r[0] == st.session_state.editing_id), None)
+                
                 if st.session_state.editing_id:
                     st.markdown(f"### ✏️ Editace: <span style='color:#ff4b4b'>{current_roi[1] if current_roi else ''}</span>", unsafe_allow_html=True)
                 else:
@@ -149,7 +182,7 @@ with tab3:
                         st.rerun()
 
                 st.divider()
-                st.write("### 📋 Seznam zón")
+                st.write("### 📋 Seznam zón pro tento Master")
                 for r in all_rois:
                     is_editing = (r[0] == st.session_state.editing_id)
                     bg_color = "rgba(255, 75, 75, 0.2)" if is_editing else "transparent"
@@ -165,6 +198,7 @@ with tab3:
                     st.markdown("</div>", unsafe_allow_html=True)
 
             with c_z2:
+                # --- KRESLENÍ ---
                 draw = ImageDraw.Draw(img_roi)
                 for r in all_rois:
                     if r[0] == st.session_state.editing_id:
@@ -173,11 +207,13 @@ with tab3:
                     else:
                         draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], outline="#deff9a", width=3)
                         draw.text((r[2], r[3]-20), r[1], fill="#deff9a")
+                
                 if not st.session_state.editing_id:
                     draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=3)
+                
                 st.image(img_roi, use_container_width=True)
         else:
-            st.error(f"Soubor {m_path} nenalezen.")
+            st.error(f"Soubor {m_path} nebyl nalezen.")
 
 # --- TAB 4: I/O ---
 with tab4:
