@@ -48,6 +48,24 @@ with st.sidebar:
     st.subheader("📡 Status linky")
     st.success("SYSTÉM READY")
     st.metric("Takt", "1.2 s")
+    
+# 1. Definice záložek (Tento řádek musí být PŘED "with tab1:", "with tab2:", atd.)
+tab1, tab2, tab3, tab4 = st.tabs(["🚀 BĚH (RUNTIME)", "🎯 NASTAVENÍ MASTER", "🔍 ZÓNY (ROI)", "🔌 I/O DIAGNOSTIKA"])
+
+# --- TAB 1: RUNTIME ---
+with tab1:
+    st.subheader("Živý monitoring")
+    # tvůj kód pro běh...
+
+# --- TAB 2: SETUP MASTER --- (Tady ti to házelo chybu)
+with tab2:
+    st.subheader("Konfigurace Master snímku")
+    # tvůj kód pro Master...
+
+# --- TAB 3: ZÓNY ---
+with tab3:
+    st.subheader("Definice ROI")
+    # tvůj kód pro Zóny...    
 
 # 3. Hlavní rozhraní pomocí Záložek (Tabs)
 tab_run, tab_setup, tab_io = st.tabs(["🚀 BĚH (RUNTIME)", "⚙️ NASTAVENÍ (SETUP)", "🔌 I/O DIAGNOSTIKA"])
