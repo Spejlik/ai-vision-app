@@ -111,7 +111,7 @@ with tab3:
     st.write("### 🖼️ Galerie Masterů")
         
         # Container pro miniatury, aby se nelepily na okraje
-        thumb_container = st.container()
+thumb_container = st.container()
         
         with thumb_container:
             # Vytvoříme řadu sloupců
