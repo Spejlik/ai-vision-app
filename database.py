@@ -2,15 +2,14 @@ import sqlite3
 import mysql.connector
 from datetime import datetime
 
-# --- LOKÁLNÍ SQLITE (Konfigurace systému) ---
+# --- LOKÁLNÍ SQLITE (Konfigurace ve stylu Elvac/Vision Builder) ---
 
 def init_db():
-    """Inicializace lokální databáze vision_system.db s opravou syntaxe."""
+    """Inicializace lokální databáze vision_system.db."""
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
     
-    # Tabulka pro Master obrázky (projekty) a jejich AOI (ořez)
-    # Opraveno: Přidány správné mezery mezi typem a DEFAULT
+    # Tabulka pro Master (hlavní projekty a AOI)
     c.execute('''CREATE TABLE IF NOT EXISTS masters 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   name TEXT, 
@@ -20,7 +19,7 @@ def init_db():
                   w INTEGER DEFAULT 1920, 
                   h INTEGER DEFAULT 1080)''')
     
-    # Tabulka pro ROI (zóny inspekce)
+    # Tabulka pro ROI (inspekční zóny - jako v Elvacu)
     c.execute('''CREATE TABLE IF NOT EXISTS rois 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   master_id INTEGER, 
@@ -33,7 +32,7 @@ def init_db():
     print("✅ Lokální SQLite databáze byla inicializována.")
 
 def save_project(name):
-    """Vytvoří nový projekt v databázi."""
+    """Vytvoří nový projekt."""
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
     c.execute("INSERT INTO masters (name, image_path) VALUES (?, ?)", (name, ""))
@@ -41,26 +40,33 @@ def save_project(name):
     conn.close()
 
 def add_master(master_id, name, x, y, w, h, path):
-    """Uloží/Aktualizuje data pro Master obrázek."""
+    """Aktualizuje master data (AOI)."""
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
     c.execute("UPDATE masters SET name=?, x=?, y=?, w=?, h=?, image_path=? WHERE id=?", 
               (name, x, y, w, h, path, master_id))
     conn.commit()
     conn.close()
-    print(f"✅ Master '{name}' aktualizován.")
 
-def get_projects():
-    """Načte seznam všech projektů."""
+# Tato funkce ti chyběla (v app.py voláš get_masters)
+def get_masters(project_id=None):
+    """Alias pro get_projects, aby seděl na tvůj app.py."""
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    c.execute("SELECT id, name, image_path, x, y, w, h FROM masters")
+    if project_id:
+        c.execute("SELECT id, name, image_path, x, y, w, h FROM masters WHERE id=?", (project_id,))
+    else:
+        c.execute("SELECT id, name, image_path, x, y, w, h FROM masters")
     data = c.fetchall()
     conn.close()
     return data
 
+def get_projects():
+    """Záložní funkce pro seznam projektů."""
+    return get_masters()
+
 def get_rois(master_id):
-    """Načte inspekční zóny pro vybraný projekt."""
+    """Načte zóny pro konkrétní projekt."""
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
     c.execute("SELECT * FROM rois WHERE master_id=?", (master_id,))
@@ -68,10 +74,10 @@ def get_rois(master_id):
     conn.close()
     return data
 
-# --- VZDÁLENÁ MARIADB (Výsledky pro Elvac systém) ---
+# --- VZDÁLENÁ MARIADB (Výsledky Elvac) ---
 
 def save_result_to_mariadb(host, project_name, result_bool):
-    """Zapíše výsledek inspekce na centrální SQL server."""
+    """Zapíše výsledek do centrálního SQL na hale (IP 10.42.0.100)."""
     try:
         conn = mysql.connector.connect(
             host=host,
@@ -88,4 +94,4 @@ def save_result_to_mariadb(host, project_name, result_bool):
         cursor.close()
         conn.close()
     except Exception as e:
-        print(f"ℹ️ SQL Server nedostupný: {e}")
+        print(f"ℹ️ SQL Server 10.42.0.100 nedostupný: {e}")
