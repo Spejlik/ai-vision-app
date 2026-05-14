@@ -52,26 +52,24 @@ with st.sidebar:
 # 3. Hlavní rozhraní pomocí Záložek (Tabs)
 tab_run, tab_setup, tab_io = st.tabs(["🚀 BĚH (RUNTIME)", "⚙️ NASTAVENÍ (SETUP)", "🔌 I/O DIAGNOSTIKA"])
 
-# --- TAB: NASTAVENÍ (Zde vyřešíme zmizelé AOI) ---
+# --- TAB: NASTAVENÍ (SETUP) ---
 with tab_setup:
     st.subheader("Konfigurace Master snímku a AOI")
     
-    # Rozdělení na sloupce: vlevo parametry, vpravo obraz
+    # Inicializace paměti pro snímek, aby se netřásl
+    if 'setup_frame' not in st.session_state:
+        st.session_state.setup_frame = None
+
     col_ctrl, col_img = st.columns([1, 2])
     
     with col_ctrl:
-        with st.expander("📁 Správa projektů", expanded=not bool(project_names)):
-            new_p = st.text_input("Název nového projektu:")
-            if st.button("Vytvořit projekt", use_container_width=True):
-                if new_p:
-                    database.save_project(new_p)
-                    st.rerun()
+        # Tlačítko, které pořídí snímek jen když chceš (zastaví třesení)
+        if st.button("📸 NAČÍST / AKTUALIZOVAT ŽIVÝ NÁHLED", use_container_width=True):
+            st.session_state.setup_frame = cam.get_frame()
 
-        if st.session_state.active_project:
+        if st.session_state.setup_frame is not None:
             st.divider()
-            st.write(f"**Nastavení AOI pro: {st.session_state.active_project}**")
-            
-            # Parametry ořezu
+            # Slidery nyní pracují se statickým snímkem v paměti
             ax = st.number_input("X pozice", 0, 4000, 0)
             ay = st.number_input("Y pozice", 0, 4000, 0)
             aw = st.number_input("Šířka (px)", 100, 4000, 1280)
@@ -80,28 +78,25 @@ with tab_setup:
             st.divider()
             m_name = st.text_input("ID Masteru", "P1")
             
-            if st.button("📸 VYFOTIT A ULOŽIT MASTER", type="primary", use_container_width=True):
-                raw_frame = cam.get_frame()
-                # Ořez podle zadaných parametrů
-                cropped = raw_frame[ay:ay+ah, ax:ax+aw]
+            if st.button("💾 VYFOTIT A ULOŽIT MASTER", type="primary", use_container_width=True):
+                # Ořez ze snímku, který máme v paměti
+                cropped = st.session_state.setup_frame[ay:ay+ah, ax:ax+aw]
                 
-                if not os.path.exists("masters"): os.makedirs("masters")
                 path = f"masters/{st.session_state.active_project}_{m_name}.png"
-                
-                # Uložení (OpenCV pracuje v BGR, Streamlit v RGB)
+                if not os.path.exists("masters"): os.makedirs("masters")
                 cv2.imwrite(path, cv2.cvtColor(cropped, cv2.COLOR_RGB2BGR))
                 database.add_master(st.session_state.active_project, path, ax, ay, aw, ah)
-                st.success("✅ Master snímek uložen.")
+                st.success("✅ Master uložen!")
+        else:
+            st.info("Klikněte na tlačítko nahoře pro načtení obrazu z kamery.")
 
     with col_img:
-        # Živý náhled (nebo poslední snímek)
-        live_frame = cam.get_frame()
-        # Vykreslení AOI rámečku do živého obrazu pro kontrolu před vyfocením
-        preview = live_frame.copy()
-        cv2.rectangle(preview, (ax, ay), (ax+aw, ay+ah), (255, 0, 0), 8)
-        
-        st.image(preview, caption="Živý náhled s vyznačeným AOI rámečkem", use_container_width=True)
-
+        if st.session_state.setup_frame is not None:
+            # Vykreslení rámečku nad statickým snímkem
+            preview = st.session_state.setup_frame.copy()
+            cv2.rectangle(preview, (ax, ay), (ax+aw, ay+ah), (255, 0, 0), 8)
+            st.image(preview, caption="Nastavení AOI (statický náhled)", use_container_width=True)
+            
 # --- TAB: BĚH (Sledování inspekce) ---
 with tab_run:
     if st.session_state.active_project:
