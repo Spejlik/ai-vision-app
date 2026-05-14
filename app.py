@@ -53,57 +53,40 @@ with st.sidebar:
 tab_run, tab_setup, tab_io = st.tabs(["🚀 BĚH (RUNTIME)", "⚙️ NASTAVENÍ (SETUP)", "🔌 I/O DIAGNOSTIKA"])
 
 # --- TAB: NASTAVENÍ (SETUP) ---
-with tab_setup:
-    st.subheader("Konfigurace Master snímku a AOI")
-    
-    # 1. BUFFER SNÍMKU: Pokud v paměti nic není, inicializujeme to jako None
-    if 'static_master_frame' not in st.session_state:
-        st.session_state.static_master_frame = None
+# 1. NA ZAČÁTEK SOUBORU (pod importy) přidej tuhle pojistku:
+if 'master_image_cache' not in st.session_state:
+    st.session_state.master_image_cache = None
 
+# 2. V TABU SETUP TO UDĚLEJ TAKTO:
+with tab_setup:
     col_ctrl, col_img = st.columns([1, 2])
     
     with col_ctrl:
-        # Tlačítko pro načtení fotky (z disku/kamery)
-        if st.button("📸 NAČÍST STATICKÝ SNÍMEK", use_container_width=True):
-            # Tady cam.get_frame() vrátí tu tvou fotku
-            st.session_state.static_master_frame = cam.get_frame()
-            st.success("Snímek načten do paměti.")
+        # Tlačítko teď funguje jako spoušť - načte fotku jen JEDNOU
+        if st.button("📸 NAČÍST OBRAZ Z KAMERY / DISKU", use_container_width=True):
+            st.session_state.master_image_cache = cam.get_frame()
+            st.rerun() # Vynutíme jeden čistý překres
 
-        # Pokud máme snímek v paměti, zobrazíme ovládání
-        if st.session_state.static_master_frame is not None:
-            st.divider()
-            # Hodnoty ořezu
-            ax = st.number_input("X pozice", 0, 4000, 0, key="setup_x")
-            ay = st.number_input("Y pozice", 0, 4000, 0, key="setup_y")
-            aw = st.number_input("Šířka (px)", 100, 4000, 1280, key="setup_w")
-            ah = st.number_input("Výška (px)", 100, 4000, 1024, key="setup_h")
-            
-            st.divider()
-            m_name = st.text_input("ID Masteru", "P1", key="setup_name")
-            
-            if st.button("💾 POTVRDIT A ULOŽIT OŘEZ", type="primary", use_container_width=True):
-                # Provedeme ořez ze snímku v paměti
-                img_data = st.session_state.static_master_frame
-                cropped = img_data[ay:ay+ah, ax:ax+aw]
-                
-                path = f"masters/{st.session_state.active_project}_{m_name}.png"
-                if not os.path.exists("masters"): os.makedirs("masters")
-                
-                # Uložíme na disk
-                cv2.imwrite(path, cv2.cvtColor(cropped, cv2.COLOR_RGB2BGR))
-                database.add_master(st.session_state.active_project, path, ax, ay, aw, ah)
-                st.success(f"✅ Ořez uložen jako: {path}")
-        else:
-            st.info("Pro zobrazení nastavení ořezu nejdříve klikněte na 'NAČÍST STATICKÝ SNÍMEK'.")
+        # Nastavení AOI (Slidery)
+        # Používáme pevné klíče 'key', aby Streamlit věděl, že se ty prvky nemění
+        ax = st.number_input("X pozice", 0, 4000, 0, key="fixed_x")
+        ay = st.number_input("Y pozice", 0, 4000, 0, key="fixed_y")
+        aw = st.number_input("Šířka (px)", 100, 4000, 1280, key="fixed_w")
+        ah = st.number_input("Výška (px)", 100, 4000, 1024, key="fixed_h")
 
     with col_img:
-        if st.session_state.static_master_frame is not None:
-            # Vykreslíme červený rámeček AOI nad fotkou v paměti
-            preview = st.session_state.static_master_frame.copy()
-            cv2.rectangle(preview, (ax, ay), (ax+aw, ay+ah), (255, 0, 0), 10)
+        # TADY JE TA ZMĚNA: Pokud nemáme v cache fotku, nic nevykreslujeme
+        if st.session_state.master_image_cache is not None:
+            # Vezmeme fotku z cache, ne z kamery!
+            img_to_show = st.session_state.master_image_cache.copy()
             
-            # Zobrazíme v placeholderu pro maximální stabilitu
-            st.image(preview, caption="Definice AOI na statickém snímku", use_container_width=True)
+            # Vykreslíme AOI rámeček
+            cv2.rectangle(img_to_show, (ax, ay), (ax+aw, ay+ah), (255, 0, 0), 10)
+            
+            # Zobrazení - placeholder zajistí, že obraz nebude skákat
+            st.image(img_to_show, use_container_width=True)
+        else:
+            st.info("Obraz se zobrazí po kliknutí na tlačítko vlevo.")
             
 # --- TAB: BĚH (Sledování inspekce) ---
 with tab_run:
