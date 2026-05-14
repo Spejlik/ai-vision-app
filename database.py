@@ -2,7 +2,7 @@ import sqlite3
 import mysql.connector
 from datetime import datetime
 
-# --- LOKÁLNÍ SQLITE (pro konfiguraci zón) ---
+# --- LOKÁLNÍ SQLITE (Konfigurace) ---
 
 def init_db():
     """Inicializace lokální databáze vision_system.db."""
@@ -22,14 +22,32 @@ def init_db():
     conn.close()
     print("✅ Lokální SQLite databáze byla inicializována.")
 
+def save_project(name):
+    """Uloží nový název projektu do databáze."""
+    conn = sqlite3.connect('vision_system.db')
+    c = conn.cursor()
+    c.execute("INSERT INTO masters (name, image_path) VALUES (?, ?)", (name, ""))
+    conn.commit()
+    conn.close()
+    print(f"✅ Projekt '{name}' byl uložen.")
+
 def get_projects():
-    """Načte všechny dostupné mastery/projekty pro Streamlit."""
+    """Načte všechny dostupné mastery/projekty."""
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
     c.execute("SELECT id, name, image_path FROM masters")
     data = c.fetchall()
     conn.close()
     return data
+
+def delete_project(project_id):
+    """Smaže projekt a jeho zóny."""
+    conn = sqlite3.connect('vision_system.db')
+    c = conn.cursor()
+    c.execute("DELETE FROM masters WHERE id=?", (project_id,))
+    c.execute("DELETE FROM rois WHERE master_id=?", (project_id,))
+    conn.commit()
+    conn.close()
 
 def get_rois(master_id):
     """Načte zóny pro konkrétní projekt."""
@@ -40,7 +58,7 @@ def get_rois(master_id):
     conn.close()
     return data
 
-# --- VZDÁLENÁ MARIADB (pro výsledky Elvac) ---
+# --- VZDÁLENÁ MARIADB (Výsledky na hale) ---
 
 def save_result_to_mariadb(host, project_name, result_bool):
     """Zapíše výsledek do centrálního SQL na hale."""
@@ -60,5 +78,4 @@ def save_result_to_mariadb(host, project_name, result_bool):
         cursor.close()
         conn.close()
     except Exception as e:
-        # Výpis do černého okna bridge.py
-        print(f"ℹ️ SQL Server nedostupný: {e}")
+        print(f"ℹ️ SQL Server nedostupný (Simulace): {e}")
