@@ -56,46 +56,54 @@ tab_run, tab_setup, tab_io = st.tabs(["🚀 BĚH (RUNTIME)", "⚙️ NASTAVENÍ 
 with tab_setup:
     st.subheader("Konfigurace Master snímku a AOI")
     
-    # Inicializace paměti pro snímek, aby se netřásl
-    if 'setup_frame' not in st.session_state:
-        st.session_state.setup_frame = None
+    # 1. BUFFER SNÍMKU: Pokud v paměti nic není, inicializujeme to jako None
+    if 'static_master_frame' not in st.session_state:
+        st.session_state.static_master_frame = None
 
     col_ctrl, col_img = st.columns([1, 2])
     
     with col_ctrl:
-        # Tlačítko, které pořídí snímek jen když chceš (zastaví třesení)
-        if st.button("📸 NAČÍST / AKTUALIZOVAT ŽIVÝ NÁHLED", use_container_width=True):
-            st.session_state.setup_frame = cam.get_frame()
+        # Tlačítko pro načtení fotky (z disku/kamery)
+        if st.button("📸 NAČÍST STATICKÝ SNÍMEK", use_container_width=True):
+            # Tady cam.get_frame() vrátí tu tvou fotku
+            st.session_state.static_master_frame = cam.get_frame()
+            st.success("Snímek načten do paměti.")
 
-        if st.session_state.setup_frame is not None:
+        # Pokud máme snímek v paměti, zobrazíme ovládání
+        if st.session_state.static_master_frame is not None:
             st.divider()
-            # Slidery nyní pracují se statickým snímkem v paměti
-            ax = st.number_input("X pozice", 0, 4000, 0)
-            ay = st.number_input("Y pozice", 0, 4000, 0)
-            aw = st.number_input("Šířka (px)", 100, 4000, 1280)
-            ah = st.number_input("Výška (px)", 100, 4000, 1024)
+            # Hodnoty ořezu
+            ax = st.number_input("X pozice", 0, 4000, 0, key="setup_x")
+            ay = st.number_input("Y pozice", 0, 4000, 0, key="setup_y")
+            aw = st.number_input("Šířka (px)", 100, 4000, 1280, key="setup_w")
+            ah = st.number_input("Výška (px)", 100, 4000, 1024, key="setup_h")
             
             st.divider()
-            m_name = st.text_input("ID Masteru", "P1")
+            m_name = st.text_input("ID Masteru", "P1", key="setup_name")
             
-            if st.button("💾 VYFOTIT A ULOŽIT MASTER", type="primary", use_container_width=True):
-                # Ořez ze snímku, který máme v paměti
-                cropped = st.session_state.setup_frame[ay:ay+ah, ax:ax+aw]
+            if st.button("💾 POTVRDIT A ULOŽIT OŘEZ", type="primary", use_container_width=True):
+                # Provedeme ořez ze snímku v paměti
+                img_data = st.session_state.static_master_frame
+                cropped = img_data[ay:ay+ah, ax:ax+aw]
                 
                 path = f"masters/{st.session_state.active_project}_{m_name}.png"
                 if not os.path.exists("masters"): os.makedirs("masters")
+                
+                # Uložíme na disk
                 cv2.imwrite(path, cv2.cvtColor(cropped, cv2.COLOR_RGB2BGR))
                 database.add_master(st.session_state.active_project, path, ax, ay, aw, ah)
-                st.success("✅ Master uložen!")
+                st.success(f"✅ Ořez uložen jako: {path}")
         else:
-            st.info("Klikněte na tlačítko nahoře pro načtení obrazu z kamery.")
+            st.info("Pro zobrazení nastavení ořezu nejdříve klikněte na 'NAČÍST STATICKÝ SNÍMEK'.")
 
     with col_img:
-        if st.session_state.setup_frame is not None:
-            # Vykreslení rámečku nad statickým snímkem
-            preview = st.session_state.setup_frame.copy()
-            cv2.rectangle(preview, (ax, ay), (ax+aw, ay+ah), (255, 0, 0), 8)
-            st.image(preview, caption="Nastavení AOI (statický náhled)", use_container_width=True)
+        if st.session_state.static_master_frame is not None:
+            # Vykreslíme červený rámeček AOI nad fotkou v paměti
+            preview = st.session_state.static_master_frame.copy()
+            cv2.rectangle(preview, (ax, ay), (ax+aw, ay+ah), (255, 0, 0), 10)
+            
+            # Zobrazíme v placeholderu pro maximální stabilitu
+            st.image(preview, caption="Definice AOI na statickém snímku", use_container_width=True)
             
 # --- TAB: BĚH (Sledování inspekce) ---
 with tab_run:
