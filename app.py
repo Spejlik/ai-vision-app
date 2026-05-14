@@ -3,86 +3,129 @@ import cv2
 import database
 import camera_manager
 import os
-from PIL import Image, ImageDraw
+from PIL import Image
 
-# Konfigurace stránky
-st.set_page_config(layout="wide", page_title="AI Vision Inspection")
+# 1. Globální konfigurace a styl
+st.set_page_config(layout="wide", page_title="Vision System Terminal")
 
-# Inicializace DB a Kamery
+# CSS pro minimalizaci okrajů a profesionální vzhled
+st.markdown("""
+    <style>
+        .block-container { padding-top: 1rem; padding-bottom: 0rem; }
+        header { visibility: hidden; }
+        .stTabs [data-baseweb="tab-list"] { gap: 10px; }
+        .stTabs [data-baseweb="tab"] {
+            height: 50px;
+            white-space: pre-wrap;
+            background-color: #f0f2f6;
+            border-radius: 5px;
+            gap: 1px;
+            padding-left: 20px;
+            padding-right: 20px;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+# Inicializace hardwaru
 database.init_db()
 cam = camera_manager.BaslerCam()
 
-# Session State inicializace
-if 'step' not in st.session_state: st.session_state.step = 1
-if 'active_project' not in st.session_state: st.session_state.active_project = None
-
-# Sidebar Menu
-st.sidebar.title("📷 Menu")
-menu = st.sidebar.radio("Navigace", ["Konfigurace", "Monitoring"])
-
-if menu == "Konfigurace":
-    st.title("⚙️ Nastavení systému")
+# 2. Sidebar - Statické informace a výběr projektu
+with st.sidebar:
+    st.title("🎛️ Ovládací panel")
     
-    # Navigační tlačítka
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        if st.button("📁 Projekty"): st.session_state.step = 1
-    with c2:
-        if st.button("🎯 Master"): st.session_state.step = 2
-    with c3:
-        if st.button("🔍 Zóny"): st.session_state.step = 3
+    projs = database.get_projects()
+    project_names = [p[1] for p in projs] if projs else []
     
+    if project_names:
+        active_p = st.selectbox("Aktivní projekt", project_names)
+        st.session_state.active_project = active_p
+    else:
+        st.warning("Vytvořte projekt v sekci Nastavení.")
+        st.session_state.active_project = None
+
     st.divider()
+    st.subheader("📡 Status linky")
+    st.success("SYSTÉM READY")
+    st.metric("Takt", "1.2 s")
 
-    # KROK 1: PROJEKTY
-    if st.session_state.step == 1:
-        st.subheader("📁 Správa projektů")
-        new_p = st.text_input("Vytvořit nový projekt:")
-        if st.button("Uložit projekt"):
-            if new_p:
-                database.save_project(new_p)
-                st.success(f"Projekt {new_p} vytvořen")
-        
-        projs = database.get_projects()
-        if projs:
-            st.session_state.active_project = st.selectbox("Vyberte projekt:", [p[1] for p in projs])
+# 3. Hlavní rozhraní pomocí Záložek (Tabs)
+tab_run, tab_setup, tab_io = st.tabs(["🚀 BĚH (RUNTIME)", "⚙️ NASTAVENÍ (SETUP)", "🔌 I/O DIAGNOSTIKA"])
 
-    # KROK 2: MASTER
-    elif st.session_state.step == 2:
-        st.subheader(f"🖼️ Master pro: {st.session_state.active_project}")
-        ax = st.sidebar.number_input("X", 0, 3000, 0)
-        ay = st.sidebar.number_input("Y", 0, 3000, 0)
-        aw = st.sidebar.number_input("Šířka", 100, 3000, 1280)
-        ah = st.sidebar.number_input("Výška", 100, 3000, 1024)
-        
-        if st.button("📸 VYFOTIT A ULOŽIT"):
-            frame = cam.get_frame()
-            cropped = frame[ay:ay+ah, ax:ax+aw]
+# --- TAB: NASTAVENÍ (Zde vyřešíme zmizelé AOI) ---
+with tab_setup:
+    st.subheader("Konfigurace Master snímku a AOI")
+    
+    # Rozdělení na sloupce: vlevo parametry, vpravo obraz
+    col_ctrl, col_img = st.columns([1, 2])
+    
+    with col_ctrl:
+        with st.expander("📁 Správa projektů", expanded=not bool(project_names)):
+            new_p = st.text_input("Název nového projektu:")
+            if st.button("Vytvořit projekt", use_container_width=True):
+                if new_p:
+                    database.save_project(new_p)
+                    st.rerun()
+
+        if st.session_state.active_project:
+            st.divider()
+            st.write(f"**Nastavení AOI pro: {st.session_state.active_project}**")
             
-            if not os.path.exists("masters"): os.makedirs("masters")
-            path = f"masters/{st.session_state.active_project}.png"
-            cv2.imwrite(path, cv2.cvtColor(cropped, cv2.COLOR_RGB2BGR))
+            # Parametry ořezu
+            ax = st.number_input("X pozice", 0, 4000, 0)
+            ay = st.number_input("Y pozice", 0, 4000, 0)
+            aw = st.number_input("Šířka (px)", 100, 4000, 1280)
+            ah = st.number_input("Výška (px)", 100, 4000, 1024)
             
-            database.add_master(st.session_state.active_project, path, ax, ay, aw, ah)
-            st.success("Master uložen!")
-            st.image(cropped)
+            st.divider()
+            m_name = st.text_input("ID Masteru", "P1")
+            
+            if st.button("📸 VYFOTIT A ULOŽIT MASTER", type="primary", use_container_width=True):
+                raw_frame = cam.get_frame()
+                # Ořez podle zadaných parametrů
+                cropped = raw_frame[ay:ay+ah, ax:ax+aw]
+                
+                if not os.path.exists("masters"): os.makedirs("masters")
+                path = f"masters/{st.session_state.active_project}_{m_name}.png"
+                
+                # Uložení (OpenCV pracuje v BGR, Streamlit v RGB)
+                cv2.imwrite(path, cv2.cvtColor(cropped, cv2.COLOR_RGB2BGR))
+                database.add_master(st.session_state.active_project, path, ax, ay, aw, ah)
+                st.success("✅ Master snímek uložen.")
 
-    # KROK 3: ZÓNY
-    elif st.session_state.step == 3:
-        st.subheader(f"🔍 Definice zón pro: {st.session_state.active_project}")
-        masters = database.get_masters(st.session_state.active_project)
+    with col_img:
+        # Živý náhled (nebo poslední snímek)
+        live_frame = cam.get_frame()
+        # Vykreslení AOI rámečku do živého obrazu pro kontrolu před vyfocením
+        preview = live_frame.copy()
+        cv2.rectangle(preview, (ax, ay), (ax+aw, ay+ah), (255, 0, 0), 8)
         
-        if masters and masters[0][2]:
-            img_path = masters[0][2]
-            if os.path.exists(img_path):
-                img = Image.open(img_path)
-                st.image(img, use_container_width=True)
-                # Zde můžeš přidat kreslení ROI, pokud ho máš v záloze
-            else:
-                st.error("Soubor s Masterem nebyl nalezen.")
-        else:
-            st.warning("Nejdříve uložte Master v kroku 2.")
+        st.image(preview, caption="Živý náhled s vyznačeným AOI rámečkem", use_container_width=True)
 
-elif menu == "Monitoring":
-    st.title("📊 Živý monitoring")
-    st.write("Systém je připraven.")
+# --- TAB: BĚH (Sledování inspekce) ---
+with tab_run:
+    if st.session_state.active_project:
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            st.subheader("Poslední inspekce")
+            # Zde bude obraz z reálného triggeru
+            st.image("https://via.placeholder.com/1280x720.png?text=Waiting+for+Trigger", use_container_width=True)
+        with c2:
+            st.subheader("Výsledek")
+            st.markdown("<h1 style='text-align: center; color: green;'>PASS</h1>", unsafe_allow_html=True)
+            st.metric("Celkem OK", "1245 ks")
+            st.metric("Celkem NOK", "12 ks")
+    else:
+        st.info("Vyberte nebo vytvořte projekt v záložce Nastavení.")
+
+# --- TAB: I/O (Diagnostika registrů) ---
+with tab_io:
+    st.subheader("Stav Modbus registrů")
+    ci, co = st.columns(2)
+    with ci:
+        st.write("**Vstupy (PLC -> PC)**")
+        st.checkbox("Trigger (Reg 8)", value=False, disabled=True)
+    with co:
+        st.write("**Výstupy (PC -> PLC)**")
+        st.checkbox("Ready (Reg 7)", value=True, disabled=True)
+        st.checkbox("Result OK (Reg 0)", value=False, disabled=True)
