@@ -106,116 +106,88 @@ with tab2:
             cv2.rectangle(preview, (ax, ay), (ax+aw, ay+ah), (255, 0, 0), 10)
             st.image(preview, use_container_width=True)
 
-# --- TAB 3: ZÓNY (OPRAVENÉ PŘEPÍNÁNÍ A VELIKOSTI) ---
+# --- TAB 3: ZÓNY (ELVAC DASHBOARD STYLE) ---
 with tab3:
-    st.subheader("📍 Správa inspekčních zón")
+    # 1. Horní lišta s výběrem (Kompaktní Grid)
+    st.markdown("### 🗂️ Konfigurace inspekcí")
     
     all_masters = database.get_masters(st.session_state.active_project)
     
     if not all_masters:
-        st.warning("⚠️ Nejdříve vytvořte Master snímek v záložce 🎯 MASTER")
+        st.warning("Před pokračováním vytvořte produkt (Master)!")
     else:
-        # 1. SEKCE MINIATUR (Tady se přepíná mezi P1, P2 atd.)
-        st.write("### 🖼️ Výběr Masteru")
-        
-        # Inicializace: Pokud není nic vybráno, vybereme první Master v seznamu
-        if 'selected_master_id' not in st.session_state or \
-           not any(m[0] == st.session_state.selected_master_id for m in all_masters):
-            st.session_state.selected_master_id = all_masters[0][0]
-
-        # Mřížka pro miniatury
-        cols_thumb = st.columns(8)
-        for i, m in enumerate(all_masters):
-            m_id, m_name, m_path = m[0], m[1], m[2]
-            with cols_thumb[i % 8]:
-                if os.path.exists(m_path):
-                    # ZDE JE FIX: use_container_width=True zajistí, že se miniatura vejde do sloupce
+        # Miniatury v tmavém kontejneru se scrollingem (simulace gridu z fotky)
+        with st.container(border=True):
+            cols = st.columns(5) # 5 miniatur vedle sebe
+            for i, m in enumerate(all_masters):
+                m_id, m_name, m_path = m[0], m[1], m[2]
+                with cols[i % 5]:
+                    # Zobrazení fotky s popiskem pod ní (jako na fotce Elvacu)
                     st.image(m_path, use_container_width=True)
                     
-                    # Tlačítko pro výběr
-                    is_active = (m_id == st.session_state.selected_master_id)
-                    if st.button(f"{m_name}", key=f"btn_m_{m_id}", use_container_width=True, 
-                                 type="primary" if is_active else "secondary"):
+                    is_sel = (m_id == st.session_state.selected_master_id)
+                    if st.button(f"{m_name}", key=f"elvac_{m_id}", use_container_width=True, 
+                                 type="primary" if is_sel else "secondary"):
                         st.session_state.selected_master_id = m_id
                         st.rerun()
-                else:
-                    st.caption(f"❌ {m_name}")
 
         st.divider()
 
-        # 2. NAČTENÍ DAT PRO VYBRANÝ MASTER
-        sel_master = next((m for m in all_masters if m[0] == st.session_state.selected_master_id), all_masters[0])
-        m_id, m_name, m_path = sel_master[0], sel_master[1], sel_master[2]
+        # 2. Editační plocha (Rozdělení 1:1 pro úsporu místa na výšku)
+        sel_m = next((m for m in all_masters if m[0] == st.session_state.selected_master_id), all_masters[0])
+        m_id, m_path = sel_m[0], sel_m[2]
         
         if os.path.exists(m_path):
             img_roi = Image.open(m_path).convert("RGB")
             W, H = img_roi.size
             all_rois = database.get_rois(m_id)
             
-            # --- ROZLOŽENÍ EDITORU (Vlevo ovládání, vpravo fotka) ---
-            col_ctrl, col_viz = st.columns([1, 1.2]) 
+            # ELVAC STYLE: Ovládání v úzkém levém sloupci, velký náhled vpravo
+            col_side, col_main = st.columns([1, 1.5])
             
-            with col_ctrl:
-                st.info(f"Editujete: **{m_name}**")
-                current_roi = next((r for r in all_rois if r[0] == st.session_state.editing_id), None)
+            with col_side:
+                st.write("🔧 **NASTAVENÍ ROI**")
+                curr = next((r for r in all_rois if r[0] == st.session_state.editing_id), None)
                 
-                if st.session_state.editing_id:
-                    st.markdown(f"### ✏️ Editace: {current_roi[1]}", unsafe_allow_html=True)
-                else:
-                    st.write("### ➕ Nová zóna")
-
-                zn = st.text_input("Název zóny", value=current_roi[1] if current_roi else "Zóna 1")
+                zn = st.text_input("Označení", value=curr[1] if curr else "Nová inspekce")
                 
-                # Kompaktní zadávání souřadnic
-                s1, s2 = st.columns(2)
-                zx = s1.number_input("X", 0, W, current_roi[2] if current_roi else W//2)
-                zy = s2.number_input("Y", 0, H, current_roi[3] if current_roi else H//2)
-                zw = s1.number_input("Šířka", 10, W, current_roi[4] if current_roi else 100)
-                zh = s2.number_input("Výška", 10, H, current_roi[5] if current_roi else 100)
+                # Kompaktní souřadnice ve dvou řadách (včerejší plus/mínus styl)
+                r1, r2 = st.columns(2)
+                zx = r1.number_input("X", 0, W, curr[2] if curr else W//2)
+                zy = r2.number_input("Y", 0, H, curr[3] if curr else H//2)
+                zw = r1.number_input("Šířka", 10, W, curr[4] if curr else 100)
+                zh = r2.number_input("Výška", 10, H, curr[5] if curr else 100)
                 
-                nok = st.selectbox("PLC Registry", range(1, 11), index=(current_roi[6]-1) if current_roi else 0)
+                nok = st.selectbox("PLC Index", range(1, 11), index=(curr[6]-1) if curr else 0)
                 
-                b1, b2 = st.columns(2)
-                if b1.button("💾 ULOŽIT", type="primary", use_container_width=True):
-                    if st.session_state.editing_id:
-                        database.delete_roi(st.session_state.editing_id)
+                if st.button("➕ PŘIDAT / ULOŽIT", type="primary", use_container_width=True):
+                    if st.session_state.editing_id: database.delete_roi(st.session_state.editing_id)
                     database.save_roi(m_id, zn, zx, zy, zw, zh, nok)
                     st.session_state.editing_id = None
                     st.rerun()
-                if b2.button("✖️ ZRUŠIT", use_container_width=True):
-                    st.session_state.editing_id = None
-                    st.rerun()
-
-                st.write("📋 Seznam zón na tomto Masteru:")
+                
+                st.write("---")
+                st.write("📋 **SEZNAM**")
                 for r in all_rois:
-                    is_ed = (r[0] == st.session_state.editing_id)
-                    st.markdown(f"<div style='background-color:{'#ff4b4b22' if is_ed else 'transparent'}; padding:5px; border-radius:3px;'>", unsafe_allow_html=True)
-                    cx, ce, cd = st.columns([3, 1, 1])
-                    cx.write(f"**{r[1]}** (NOK {r[6]})")
-                    if ce.button("✏️", key=f"ed_roi_{r[0]}"):
+                    c_txt, c_btn = st.columns([3, 1])
+                    c_txt.caption(f"{r[1]} (ID:{r[6]})")
+                    if c_btn.button("✏️", key=f"e_{r[0]}"):
                         st.session_state.editing_id = r[0]
                         st.rerun()
-                    if cd.button("🗑️", key=f"del_roi_{r[0]}"):
-                        database.delete_roi(r[0])
-                        st.rerun()
-                    st.markdown("</div>", unsafe_allow_html=True)
 
-            with col_viz:
-                # Kreslení do obrázku
+            with col_main:
+                # Kreslení do obrázku (Obrázek se automaticky přizpůsobí sloupci)
                 draw = ImageDraw.Draw(img_roi)
                 for r in all_rois:
-                    if r[0] == st.session_state.editing_id:
-                        # Editovaná - Červená
-                        draw.rectangle([zx, zy, zx+zw, zy+zh], outline="#ff4b4b", width=5)
-                    else:
-                        # Ostatní - Zelená
-                        draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], outline="#deff9a", width=3)
-                        draw.text((r[2], r[3]-20), r[1], fill="#deff9a")
+                    color = "#ff4b4b" if r[0] == st.session_state.editing_id else "#deff9a"
+                    width = 6 if r[0] == st.session_state.editing_id else 3
+                    draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], outline=color, width=width)
                 
+                # Náhled nové ROI (pokud se právě needituje)
                 if not st.session_state.editing_id:
-                    draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=3)
-
-                # Zobrazení velké fotky - teď bude v pravém sloupci a nebude přetékat
+                    draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=2)
+                
+                # FINÁLNÍ ZOBRAZENÍ (omezená šířka, aby se nemuselo skrolovat)
                 st.image(img_roi, use_container_width=True)
         else:
             st.error(f"Soubor {m_path} nenalezen.")
