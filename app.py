@@ -106,29 +106,34 @@ with tab2:
             cv2.rectangle(preview, (ax, ay), (ax+aw, ay+ah), (255, 0, 0), 10)
             st.image(preview, use_container_width=True)
 
-# --- TAB 3: ZÓNY (S MINIATURAMI) ---
+# --- TAB 3: ZÓNY (S OPRAVENÝM ODSAZENÍM A MINIATURAMI) ---
 with tab3:
-    st.write("### 🖼️ Galerie Masterů")
+    st.subheader("📍 Správa inspekčních zón")
+    
+    all_masters = database.get_masters(st.session_state.active_project)
+    
+    if not all_masters:
+        st.warning("⚠️ Nejdříve vytvořte Master snímek v záložce 🎯 MASTER")
+    else:
+        # --- SEKCE MINIATUR (Galerie) ---
+        st.write("### 🖼️ Galerie Masterů")
         
-        # Container pro miniatury, aby se nelepily na okraje
-thumb_container = st.container()
-        
-        with thumb_container:
-            # Vytvoříme řadu sloupců
-            cols = st.columns(8) # Zvýšíme počet sloupců pro ještě menší náhledy
-            
-            if 'selected_master_id' not in st.session_state:
-                st.session_state.selected_master_id = all_masters[0][0]
+        # Inicializace vybraného masteru, pokud neexistuje
+        if 'selected_master_id' not in st.session_state:
+            st.session_state.selected_master_id = all_masters[0][0]
 
+        # Kontejner pro miniatury
+        thumb_container = st.container()
+        with thumb_container:
+            cols = st.columns(8)
             for i, m in enumerate(all_masters):
                 m_id, m_name, m_path = m[0], m[1], m[2]
                 with cols[i % 8]:
                     if os.path.exists(m_path):
-                        # KLÍČOVÁ ZMĚNA: Pevná šířka 150px zabrání obřím fotkám
-                        st.image(m_path, width=150)
+                        # Pevná šířka pro úhledné miniatury
+                        st.image(m_path, width=120)
                         
                         is_selected = (m_id == st.session_state.selected_master_id)
-                        # Označíme vybraný master červeným tlačítkem
                         if st.button(f"{m_name}", key=f"sel_{m_id}", use_container_width=True, 
                                      type="primary" if is_selected else "secondary"):
                             st.session_state.selected_master_id = m_id
@@ -137,9 +142,8 @@ thumb_container = st.container()
                         st.caption(f"❌ {m_name}")
 
         st.divider()
-        # ... zbytek kódu (editor) zůstává stejný
 
-        # 2. NAČTENÍ DAT PRO VYBRANÝ MASTER
+        # NAČTENÍ DAT PRO VYBRANÝ MASTER
         selected_m = next((m for m in all_masters if m[0] == st.session_state.selected_master_id), all_masters[0])
         m_id, m_name, m_path = selected_m[0], selected_m[1], selected_m[2]
         
@@ -153,7 +157,7 @@ thumb_container = st.container()
             c_z1, c_z2 = st.columns([1, 2])
             
             with c_z1:
-                # --- FORMULÁŘ PRO ROI ---
+                # Najdeme data editované zóny
                 current_roi = next((r for r in all_rois if r[0] == st.session_state.editing_id), None)
                 
                 if st.session_state.editing_id:
@@ -182,7 +186,7 @@ thumb_container = st.container()
                         st.rerun()
 
                 st.divider()
-                st.write("### 📋 Seznam zón pro tento Master")
+                st.write("### 📋 Seznam zón")
                 for r in all_rois:
                     is_editing = (r[0] == st.session_state.editing_id)
                     bg_color = "rgba(255, 75, 75, 0.2)" if is_editing else "transparent"
@@ -198,12 +202,10 @@ thumb_container = st.container()
                     st.markdown("</div>", unsafe_allow_html=True)
 
             with c_z2:
-                # --- KRESLENÍ ---
                 draw = ImageDraw.Draw(img_roi)
                 for r in all_rois:
                     if r[0] == st.session_state.editing_id:
                         draw.rectangle([zx, zy, zx+zw, zy+zh], outline="#ff4b4b", width=8)
-                        draw.text((zx, zy-25), f"EDITUJI: {zn}", fill="#ff4b4b")
                     else:
                         draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], outline="#deff9a", width=3)
                         draw.text((r[2], r[3]-20), r[1], fill="#deff9a")
@@ -213,7 +215,7 @@ thumb_container = st.container()
                 
                 st.image(img_roi, use_container_width=True)
         else:
-            st.error(f"Soubor {m_path} nebyl nalezen.")
+            st.error(f"Soubor {m_path} nenalezen.")
 
 # --- TAB 4: I/O ---
 with tab4:
