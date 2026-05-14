@@ -75,88 +75,42 @@ if menu == "Konfigurace":
 
     # KROK 2: NASTAVENÍ MASTERU A AOI
     elif st.session_state.step == 2:
-        st.subheader(f"🖼️ Nastavení Masteru pro: {st.session_state.active_project}")
+        st.subheader(f"🖼️ Master pro: {st.session_state.active_project}")
         
-        # Inicializace snímku v paměti
-        if 'master_setup_frame' not in st.session_state:
-            st.session_state.master_setup_frame = None
+        # Ovládací prvky pro ořez
+        ax = st.sidebar.number_input("X", 0, 3000, 0)
+        ay = st.sidebar.number_input("Y", 0, 3000, 0)
+        aw = st.sidebar.number_input("Šířka", 100, 3000, 1280)
+        ah = st.sidebar.number_input("Výška", 100, 3000, 1024)
+        m_name = st.text_input("Název Masteru", "P1")
 
-        col_img, col_ctrl = st.columns([1.5, 1.0])
-        
-        with col_ctrl:
-            st.write("### 🎮 Ovládání")
-            if st.button("📸 SNÍMAT NOVÝ OBRAZ", type="primary", use_container_width=True):
-                with st.spinner("Snímám..."):
-                    st.session_state.master_setup_frame = cam.get_frame()
+        if st.button("📸 VYFOTIT A ULOŽIT"):
+            frame = cam.get_frame() # Přímý odběr z kamery
+            # Ořez pomocí numpy (OpenCV standard)
+            cropped = frame[ay:ay+ah, ax:ax+aw]
             
-            st.divider()
-            if st.session_state.master_setup_frame is not None:
-                full_h, full_w = st.session_state.master_setup_frame.shape[:2]
-                
-                st.caption("📍 Nastavení ořezu (AOI)")
-                # Slidery s pevným rozsahem (řeší resetování výšky na 100)
-                ax = st.slider("X pozice", 0, full_w - 100, st.session_state.get('ms_x', 0), key="ms_x")
-                ay = st.slider("Y pozice", 0, full_h - 100, st.session_state.get('ms_y', 0), key="ms_y")
-                aw = st.slider("Šířka", 100, full_w, st.session_state.get('ms_w', 1280), key="ms_w")
-                ah = st.slider("Výška", 100, full_h, st.session_state.get('ms_h', 1080), key="ms_h")
-                
-                # Výpočet bezpečného ořezu (aby kód nespadl, když jde ořez mimo obraz)
-                safe_aw = min(aw, full_w - ax)
-                safe_ah = min(ah, full_h - ay)
-                
-                m_name = st.text_input("Název Master snímku:", placeholder="např. MQB_P1")
-                
-                if st.button("💾 ULOŽIT MASTER", use_container_width=True):
-                    if not m_name:
-                        st.error("Zadejte název snímku!")
-                    else:
-                        # Výřez pro uložení
-                        img_to_crop = st.session_state.master_setup_frame
-                        cropped_final = img_to_crop[ay : ay + safe_ah, ax : ax + safe_aw]
-                        
-                        os.makedirs("masters", exist_ok=True)
-                        file_path = f"masters/{st.session_state.active_project}_{m_name}.png"
-                        cv2.imwrite(file_path, cv2.cvtColor(cropped_final, cv2.COLOR_RGB2BGR))
-                        
-                        database.add_master(st.session_state.active_project, m_name, ax, ay, safe_aw, safe_ah, file_path)
-                        st.success(f"Master '{m_name}' uložen!")
-                        st.rerun()
-            else:
-                st.warning("Nejdříve pořiďte snímek tlačítkem nahoře.")
-
-        with col_img:
-            if st.session_state.master_setup_frame is not None:
-                # Živý náhled bezpečného ořezu
-                img_preview = st.session_state.master_setup_frame
-                preview_crop = img_preview[ay : ay + safe_ah, ax : ax + safe_aw]
-                
-                st.image(preview_crop, caption="Náhled AOI", use_container_width=True)
-                st.write(f"📏 Rozlišení výřezu: **{safe_aw} x {safe_ah} px**")
+            path = f"masters/{st.session_state.active_project}_{m_name}.png"
+            cv2.imwrite(path, cv2.cvtColor(cropped, cv2.COLOR_RGB2BGR))
+            
+            database.add_master(st.session_state.active_project, m_name, ax, ay, aw, ah, path)
+            st.success("Uloženo!")
+            st.image(cropped)
 
     # KROK 3: ROI DEFINICE
     elif st.session_state.step == 3:
-        # Načteme aktuální data o projektu z DB
-        projs = database.get_projects()
-        active_id = None
-        for p in projs:
-            if p[1] == st.session_state.active_project:
-                active_id = p[0]
-                break
-        
-        masters = database.get_masters(active_id)
-        
-        if not masters or not masters[0][2]: # masters[0][2] je image_path
-            st.error("❌ Pro tento projekt nebyl uložen žádný Master snímek. Vraťte se do kroku 2.")
+        masters = database.get_masters(st.session_state.active_project)
+        if not masters or masters[0][2] == "":
+            st.warning("Nejdříve uložte Master!")
         else:
-            curr_m = masters[0]
-            master_path = curr_m[2]
+            master_data = masters[0]
+            img_path = master_data[2]
             
-            # NAČTENÍ OBRÁZKU PŘÍMO Z DISKU (Cesta uložená v Masteru)
-            if os.path.exists(master_path):
-                img = Image.open(master_path).convert("RGB")
+            if os.path.exists(img_path):
+                img = Image.open(img_path)
+                st.image(img, caption="Aktivní Master pro definici zón")
+                # Zde pak pokračuje tvůj kód pro kreslení ROI...
             else:
-                st.error(f"Soubor {master_path} nebyl nalezen.")
-                st.stop()
+                st.error(f"Soubor {img_path} nebyl nalezen na disku!")
 
             W, H = img.size
             old_rois = database.get_rois(curr_m[0])
