@@ -111,33 +111,43 @@ with tab2:
             st.image(preview, use_container_width=True)
 
 # --- TAB 3: ZÓNY (ELVAC DASHBOARD STYLE) ---
+# --- TAB 3: ZÓNY (OPRAVENÝ ELVAC STYLE) ---
 with tab3:
-    # 1. Horní lišta s výběrem (Kompaktní Grid)
-    st.markdown("### 🗂️ Konfigurace inspekcí")
+    st.subheader("📍 Konfigurace inspekcí")
     
     all_masters = database.get_masters(st.session_state.active_project)
     
     if not all_masters:
         st.warning("Před pokračováním vytvořte produkt (Master)!")
     else:
-        # Miniatury v tmavém kontejneru se scrollingem (simulace gridu z fotky)
-        with st.container(border=True):
-            cols = st.columns(5) # 5 miniatur vedle sebe
-            for i, m in enumerate(all_masters):
-                m_id, m_name, m_path = m[0], m[1], m[2]
-                with cols[i % 5]:
-                    # Zobrazení fotky s popiskem pod ní (jako na fotce Elvacu)
+        # 1. HORNÍ GALERIE MINIATUR (Opravená logika přepínání)
+        # Použijeme kontejner s pevným stylem, aby miniatury byly malé
+        st.write("### 🖼️ Výběr pozice")
+        
+        # Pokud není vybráno, nastavíme první dostupný
+        if st.session_state.selected_master_id is None and all_masters:
+            st.session_state.selected_master_id = all_masters[0][0]
+
+        # Výpis miniatur do řady
+        cols = st.columns(6) 
+        for i, m in enumerate(all_masters):
+            m_id, m_name, m_path = m[0], m[1], m[2]
+            with cols[i % 6]:
+                if os.path.exists(m_path):
+                    # Zobrazení malého náhledu (vždy stejná výška)
                     st.image(m_path, use_container_width=True)
                     
-                    is_sel = (m_id == st.session_state.selected_master_id)
-                    if st.button(f"{m_name}", key=f"elvac_{m_id}", use_container_width=True, 
-                                 type="primary" if is_sel else "secondary"):
+                    is_active = (m_id == st.session_state.selected_master_id)
+                    # Tlačítko pod náhledem
+                    if st.button(f"{m_name}", key=f"sel_m_{m_id}", use_container_width=True, 
+                                 type="primary" if is_active else "secondary"):
                         st.session_state.selected_master_id = m_id
                         st.rerun()
 
         st.divider()
 
-        # 2. Editační plocha (Rozdělení 1:1 pro úsporu místa na výšku)
+        # 2. EDITORSKÁ PLOCHA (Kompaktní rozvržení)
+        # Najdeme data pro aktuálně vybraný Master
         sel_m = next((m for m in all_masters if m[0] == st.session_state.selected_master_id), all_masters[0])
         m_id, m_path = sel_m[0], sel_m[2]
         
@@ -146,8 +156,8 @@ with tab3:
             W, H = img_roi.size
             all_rois = database.get_rois(m_id)
             
-            # ELVAC STYLE: Ovládání v úzkém levém sloupci, velký náhled vpravo
-            col_side, col_main = st.columns([1, 1.5])
+            # ROZLOŽENÍ 1:2 (vlevo úzké ovládání, vpravo fotka)
+            col_side, col_main = st.columns([1, 1.8])
             
             with col_side:
                 st.write("🔧 **NASTAVENÍ ROI**")
@@ -155,44 +165,57 @@ with tab3:
                 
                 zn = st.text_input("Označení", value=curr[1] if curr else "Nová inspekce")
                 
-                # Kompaktní souřadnice ve dvou řadách (včerejší plus/mínus styl)
+                # Číselné vstupy místo sliderů pro úsporu místa a přesnost
                 r1, r2 = st.columns(2)
                 zx = r1.number_input("X", 0, W, curr[2] if curr else W//2)
                 zy = r2.number_input("Y", 0, H, curr[3] if curr else H//2)
                 zw = r1.number_input("Šířka", 10, W, curr[4] if curr else 100)
                 zh = r2.number_input("Výška", 10, H, curr[5] if curr else 100)
                 
-                nok = st.selectbox("PLC Index", range(1, 11), index=(curr[6]-1) if curr else 0)
+                nok = st.selectbox("PLC Index (Error code)", range(1, 11), index=(curr[6]-1) if curr else 0)
                 
                 if st.button("➕ PŘIDAT / ULOŽIT", type="primary", use_container_width=True):
-                    if st.session_state.editing_id: database.delete_roi(st.session_state.editing_id)
+                    if st.session_state.editing_id:
+                        database.delete_roi(st.session_state.editing_id)
                     database.save_roi(m_id, zn, zx, zy, zw, zh, nok)
                     st.session_state.editing_id = None
                     st.rerun()
                 
-                st.write("---")
-                st.write("📋 **SEZNAM**")
+                if st.session_state.editing_id:
+                    if st.button("✖️ ZRUŠIT EDITACI", use_container_width=True):
+                        st.session_state.editing_id = None
+                        st.rerun()
+
+                st.divider()
+                st.write("📋 **ULOŽENÉ INSPEKCE**")
                 for r in all_rois:
-                    c_txt, c_btn = st.columns([3, 1])
-                    c_txt.caption(f"{r[1]} (ID:{r[6]})")
-                    if c_btn.button("✏️", key=f"e_{r[0]}"):
+                    c_txt, c_ed, c_del = st.columns([3, 1, 1])
+                    c_txt.caption(f"{r[1]} (PLC:{r[6]})")
+                    if c_ed.button("✏️", key=f"e_roi_{r[0]}"):
                         st.session_state.editing_id = r[0]
+                        st.rerun()
+                    if c_del.button("🗑️", key=f"d_roi_{r[0]}"):
+                        database.delete_roi(r[0])
                         st.rerun()
 
             with col_main:
-                # Kreslení do obrázku (Obrázek se automaticky přizpůsobí sloupci)
+                # Kreslení do obrázku
                 draw = ImageDraw.Draw(img_roi)
                 for r in all_rois:
-                    color = "#ff4b4b" if r[0] == st.session_state.editing_id else "#deff9a"
-                    width = 6 if r[0] == st.session_state.editing_id else 3
-                    draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], outline=color, width=width)
+                    is_this_editing = (r[0] == st.session_state.editing_id)
+                    draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], 
+                                   outline="#ff4b4b" if is_this_editing else "#deff9a", 
+                                   width=6 if is_this_editing else 3)
+                    if not is_this_editing:
+                        draw.text((r[2], r[3]-20), r[1], fill="#deff9a")
                 
-                # Náhled nové ROI (pokud se právě needituje)
+                # Náhled nové zóny (oranžová), pokud nic needitujeme
                 if not st.session_state.editing_id:
                     draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=2)
-                
-                # FINÁLNÍ ZOBRAZENÍ (omezená šířka, aby se nemuselo skrolovat)
-                st.image(img_roi, use_container_width=True)
+
+                # KLÍČOVÝ FIX: Zobrazení pracovní fotky s pevnou šířkou
+                # To zabrání tomu, aby fotka byla "strašně veliká"
+                st.image(img_roi, use_container_width=True, caption=f"Pracovní náhled: {sel_m[1]}")
         else:
             st.error(f"Soubor {m_path} nenalezen.")
 
