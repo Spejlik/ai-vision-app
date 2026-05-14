@@ -88,42 +88,65 @@ with tab2:
             cv2.rectangle(preview, (ax, ay), (ax+aw, ay+ah), (255, 0, 0), 10)
             st.image(preview, caption="Definice AOI", use_container_width=True)
 
-# --- TAB 3: ZÓNY (Opravený IndentationError) ---
+# --- TAB 3: ZÓNY (ROI & EDITACE) ---
 with tab3:
-    st.subheader("Definice inspekčních zón (ROI)")
+    st.subheader("📍 Správa inspekčních zón")
     masters = database.get_masters(st.session_state.active_project)
     
     if not masters or not masters[0][2]:
         st.warning("Nejdříve uložte Master v záložce 🎯 MASTER")
     else:
         m_id, m_name, m_path = masters[0][0], masters[0][1], masters[0][2]
+        
         if os.path.exists(m_path):
             img_roi = Image.open(m_path).convert("RGB")
             W, H = img_roi.size
             
             c_z1, c_z2 = st.columns([1, 2])
-            with c_z1:
-                zn = st.text_input("Název zóny", "Spona_1")
-                zx = st.slider("ROI X", 0, W, W//2)
-                zy = st.slider("ROI Y", 0, H, H//2)
-                zw = st.slider("ROI Šířka", 10, W, 150)
-                zh = st.slider("ROI Výška", 10, H, 150)
-                nok = st.selectbox("NOK registr", range(1, 11))
-                
-                if st.button("💾 ULOŽIT ZÓNU"):
-                    database.save_roi(m_id, zn, zx, zy, zw, zh, nok)
-                    st.success("Zóna uložena!")
-                    st.rerun()
             
-            with c_z2:
-                draw = ImageDraw.Draw(img_roi)
+            with c_z1:
+                st.write("### ➕ Přidat / Editovat")
+                zn = st.text_input("Název zóny", "Nová zóna", help="Pojmenujte kontrolovaný prvek")
+                zx = st.slider("ROI X", 0, W, W//2, key="zx")
+                zy = st.slider("ROI Y", 0, H, H//2, key="zy")
+                zw = st.slider("ROI Šířka", 10, W, 150, key="zw")
+                zh = st.slider("ROI Výška", 10, H, 150, key="zh")
+                nok = st.selectbox("NOK registr (PLC)", range(1, 11), help="Číslo chyby posílané do PLC")
+                
+                if st.button("💾 ULOŽIT ZÓNU", type="primary", use_container_width=True):
+                    database.save_roi(m_id, zn, zx, zy, zw, zh, nok)
+                    st.success(f"Zóna '{zn}' uložena!")
+                    st.rerun()
+                
+                st.divider()
+                st.write("### 📋 Seznam uložených zón")
                 all_rois = database.get_rois(m_id)
+                
+                if not all_rois:
+                    st.info("Zatím nejsou definovány žádné zóny.")
+                else:
+                    for r in all_rois:
+                        # Rychlé smazání zóny přímo v seznamu
+                        col_name, col_del = st.columns([4, 1])
+                        col_name.write(f"**{r[1]}** (NOK {r[6]})")
+                        if col_del.button("🗑️", key=f"del_{r[0]}", help="Smazat zónu"):
+                            database.delete_roi(r[0])
+                            st.rerun()
+
+            with c_z2:
+                # Kreslení zón
+                draw = ImageDraw.Draw(img_roi)
+                # 1. Vykreslíme všechny už uložené zóny (zeleně)
                 for r in all_rois:
-                    draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], outline="green", width=5)
+                    draw.rectangle([r[2], r[3], r[2]+r[4], r[3]+r[5]], outline="#deff9a", width=5)
+                    draw.text((r[2], r[3]-20), r[1], fill="#deff9a")
+                
+                # 2. Vykreslíme tu, kterou právě ladíš (oranžově)
                 draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=3)
-                st.image(img_roi, use_container_width=True)
+                
+                st.image(img_roi, use_container_width=True, caption="Náhled Masteru se zónami")
         else:
-            st.error(f"Soubor {m_path} nenalezen.")
+            st.error(f"Master snímek na cestě {m_path} neexistuje.")
 
 # --- TAB 4: I/O ---
 with tab4:
