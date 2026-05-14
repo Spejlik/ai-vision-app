@@ -106,38 +106,43 @@ with tab2:
             cv2.rectangle(preview, (ax, ay), (ax+aw, ay+ah), (255, 0, 0), 10)
             st.image(preview, use_container_width=True)
 
-# --- TAB 3: ZÓNY (S VÝBĚREM MASTERU) ---
+# --- TAB 3: ZÓNY (S MINIATURAMI) ---
 with tab3:
     st.subheader("📍 Správa inspekčních zón")
     
-    # 1. Získání všech Masterů pro aktivní projekt
     all_masters = database.get_masters(st.session_state.active_project)
     
     if not all_masters:
-        st.warning("⚠️ Nejdříve vytvořte alespoň jeden Master snímek v záložce 🎯 MASTER")
+        st.warning("⚠️ Nejdříve vytvořte Master snímek v záložce 🎯 MASTER")
     else:
-        # --- SEKCE VÝBĚRU MASTERU (HORIZONTÁLNÍ GALERIE) ---
-        st.write("### 🖼️ Vyberte Master snímek pro editaci")
+        # --- SEKCE MINIATUR (Kompaktní mřížka) ---
+        st.write("### 🖼️ Galerie Masterů")
         
-        # Vytvoříme řadu sloupců pro náhledy
-        cols = st.columns(len(all_masters) if len(all_masters) < 5 else 5)
+        # Nastavíme počet miniatur na řádek (např. 6)
+        cols = st.columns(6)
         
-        # Inicializace vybraného masteru v session_state
         if 'selected_master_id' not in st.session_state:
             st.session_state.selected_master_id = all_masters[0][0]
 
         for i, m in enumerate(all_masters):
             m_id, m_name, m_path = m[0], m[1], m[2]
-            with cols[i % 5]:
+            with cols[i % 6]:
                 if os.path.exists(m_path):
-                    st.image(m_path, caption=m_name, use_container_width=True)
-                    if st.button(f"Vybrat {m_name}", key=f"sel_{m_id}", use_container_width=True):
+                    # Zobrazení malé miniatury
+                    st.image(m_path, use_container_width=True)
+                    
+                    # Tlačítko pod miniaturou - zvýrazníme vybraný
+                    is_selected = (m_id == st.session_state.selected_master_id)
+                    btn_type = "primary" if is_selected else "secondary"
+                    
+                    if st.button(f"{m_name}", key=f"sel_{m_id}", use_container_width=True, type=btn_type):
                         st.session_state.selected_master_id = m_id
                         st.rerun()
                 else:
-                    st.error(f"Chybí soubor: {m_name}")
+                    st.caption(f"❌ {m_name}")
 
         st.divider()
+        # ... zbytek kódu (editor) zůstává stejný
 
         # 2. NAČTENÍ DAT PRO VYBRANÝ MASTER
         selected_m = next((m for m in all_masters if m[0] == st.session_state.selected_master_id), all_masters[0])
