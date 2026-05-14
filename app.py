@@ -53,40 +53,58 @@ with st.sidebar:
 tab_run, tab_setup, tab_io = st.tabs(["🚀 BĚH (RUNTIME)", "⚙️ NASTAVENÍ (SETUP)", "🔌 I/O DIAGNOSTIKA"])
 
 # --- TAB: NASTAVENÍ (SETUP) ---
-# 1. NA ZAČÁTEK SOUBORU (pod importy) přidej tuhle pojistku:
-if 'master_image_cache' not in st.session_state:
-    st.session_state.master_image_cache = None
-
-# 2. V TABU SETUP TO UDĚLEJ TAKTO:
+# --- TAB: NASTAVENÍ (SETUP) ---
 with tab_setup:
+    # 1. POJISTKA PROTI TŘESENÍ (Buffer obrázku)
+    if 'setup_image_buffer' not in st.session_state:
+        st.session_state.setup_image_buffer = None
+
     col_ctrl, col_img = st.columns([1, 2])
     
     with col_ctrl:
-        # Tlačítko teď funguje jako spoušť - načte fotku jen JEDNOU
-        if st.button("📸 NAČÍST OBRAZ Z KAMERY / DISKU", use_container_width=True):
-            st.session_state.master_image_cache = cam.get_frame()
-            st.rerun() # Vynutíme jeden čistý překres
+        # Tlačítko pro načtení
+        if st.button("📸 NAČÍST / AKTUALIZOVAT OBRAZ", use_container_width=True):
+            st.session_state.setup_image_buffer = cam.get_frame()
 
-        # Nastavení AOI (Slidery)
-        # Používáme pevné klíče 'key', aby Streamlit věděl, že se ty prvky nemění
-        ax = st.number_input("X pozice", 0, 4000, 0, key="fixed_x")
-        ay = st.number_input("Y pozice", 0, 4000, 0, key="fixed_y")
-        aw = st.number_input("Šířka (px)", 100, 4000, 1280, key="fixed_w")
-        ah = st.number_input("Výška (px)", 100, 4000, 1024, key="fixed_h")
+        if st.session_state.setup_image_buffer is not None:
+            st.divider()
+            st.write("### 📏 Nastavení ořezu (AOI)")
+            
+            # Zjistíme rozlišení načteného snímku pro limity sliderů
+            h, w = st.session_state.setup_image_buffer.shape[:2]
+            
+            # SLIDERY - Rychlé a plynulé posouvání (včerejší styl)
+            ax = st.slider("X pozice", 0, w, 0, key="slider_x")
+            ay = st.slider("Y pozice", 0, h, 0, key="slider_y")
+            aw = st.slider("Šířka (px)", 100, w, 1280, key="slider_w")
+            ah = st.slider("Výška (px)", 100, h, 1024, key="slider_h")
+            
+            st.divider()
+            m_name = st.text_input("ID Masteru", "P1")
+            
+            if st.button("💾 ULOŽIT MASTER SNÍMEK", type="primary", use_container_width=True):
+                # Ořez ze stabilního bufferu
+                img_to_crop = st.session_state.setup_image_buffer
+                # Ošetření, aby ořez nešel mimo obraz
+                safe_h = min(ah, h - ay)
+                safe_w = min(aw, w - ax)
+                cropped = img_to_crop[ay : ay + safe_h, ax : ax + safe_w]
+                
+                path = f"masters/{st.session_state.active_project}_{m_name}.png"
+                if not os.path.exists("masters"): os.makedirs("masters")
+                cv2.imwrite(path, cv2.cvtColor(cropped, cv2.COLOR_RGB2BGR))
+                database.add_master(st.session_state.active_project, path, ax, ay, safe_w, safe_h)
+                st.success(f"Uloženo! Master má rozlišení {safe_w}x{safe_h}")
+        else:
+            st.info("Klikni na tlačítko nahoře pro zobrazení sliderů a obrazu.")
 
     with col_img:
-        # TADY JE TA ZMĚNA: Pokud nemáme v cache fotku, nic nevykreslujeme
-        if st.session_state.master_image_cache is not None:
-            # Vezmeme fotku z cache, ne z kamery!
-            img_to_show = st.session_state.master_image_cache.copy()
-            
-            # Vykreslíme AOI rámeček
-            cv2.rectangle(img_to_show, (ax, ay), (ax+aw, ay+ah), (255, 0, 0), 10)
-            
-            # Zobrazení - placeholder zajistí, že obraz nebude skákat
-            st.image(img_to_show, use_container_width=True)
-        else:
-            st.info("Obraz se zobrazí po kliknutí na tlačítko vlevo.")
+        if st.session_state.setup_image_buffer is not None:
+            # Vykreslení rámečku nad statickým snímkem
+            preview = st.session_state.setup_image_buffer.copy()
+            # Modrý rámeček ořezu
+            cv2.rectangle(preview, (ax, ay), (ax+aw, ay+ah), (255, 0, 0), 10)
+            st.image(preview, caption="Definice AOI (pomocí sliderů)", use_container_width=True)
             
 # --- TAB: BĚH (Sledování inspekce) ---
 with tab_run:
