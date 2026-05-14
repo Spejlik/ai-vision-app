@@ -108,38 +108,33 @@ with tab2:
 
 # --- TAB 3: ZÓNY (S MINIATURAMI) ---
 with tab3:
-    st.subheader("📍 Správa inspekčních zón")
-    
-    all_masters = database.get_masters(st.session_state.active_project)
-    
-    if not all_masters:
-        st.warning("⚠️ Nejdříve vytvořte Master snímek v záložce 🎯 MASTER")
-    else:
-        # --- SEKCE MINIATUR (Kompaktní mřížka) ---
-        st.write("### 🖼️ Galerie Masterů")
+    st.write("### 🖼️ Galerie Masterů")
         
-        # Nastavíme počet miniatur na řádek (např. 6)
-        cols = st.columns(6)
+        # Container pro miniatury, aby se nelepily na okraje
+        thumb_container = st.container()
         
-        if 'selected_master_id' not in st.session_state:
-            st.session_state.selected_master_id = all_masters[0][0]
+        with thumb_container:
+            # Vytvoříme řadu sloupců
+            cols = st.columns(8) # Zvýšíme počet sloupců pro ještě menší náhledy
+            
+            if 'selected_master_id' not in st.session_state:
+                st.session_state.selected_master_id = all_masters[0][0]
 
-        for i, m in enumerate(all_masters):
-            m_id, m_name, m_path = m[0], m[1], m[2]
-            with cols[i % 6]:
-                if os.path.exists(m_path):
-                    # Zobrazení malé miniatury
-                    st.image(m_path, use_container_width=True)
-                    
-                    # Tlačítko pod miniaturou - zvýrazníme vybraný
-                    is_selected = (m_id == st.session_state.selected_master_id)
-                    btn_type = "primary" if is_selected else "secondary"
-                    
-                    if st.button(f"{m_name}", key=f"sel_{m_id}", use_container_width=True, type=btn_type):
-                        st.session_state.selected_master_id = m_id
-                        st.rerun()
-                else:
-                    st.caption(f"❌ {m_name}")
+            for i, m in enumerate(all_masters):
+                m_id, m_name, m_path = m[0], m[1], m[2]
+                with cols[i % 8]:
+                    if os.path.exists(m_path):
+                        # KLÍČOVÁ ZMĚNA: Pevná šířka 150px zabrání obřím fotkám
+                        st.image(m_path, width=150)
+                        
+                        is_selected = (m_id == st.session_state.selected_master_id)
+                        # Označíme vybraný master červeným tlačítkem
+                        if st.button(f"{m_name}", key=f"sel_{m_id}", use_container_width=True, 
+                                     type="primary" if is_selected else "secondary"):
+                            st.session_state.selected_master_id = m_id
+                            st.rerun()
+                    else:
+                        st.caption(f"❌ {m_name}")
 
         st.divider()
         # ... zbytek kódu (editor) zůstává stejný
