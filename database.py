@@ -24,17 +24,13 @@ def init_db():
     conn.commit()
     conn.close()
     
-def add_project(project_name):
+def add_project(name):
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    try:
-        # Používáme INSERT OR IGNORE, aby se aplikace nesekla, když projekt už existuje
-        c.execute("INSERT OR IGNORE INTO projects (name) VALUES (?)", (project_name,))
-        conn.commit()
-    except Exception as e:
-        print(f"Chyba při ukládání projektu: {e}")
-    finally:
-        conn.close()
+    # Ukládáme POUZE do tabulky projects
+    c.execute("INSERT OR IGNORE INTO projects (name) VALUES (?)", (name,))
+    conn.commit()
+    conn.close()
         
 def save_project(name):
     conn = sqlite3.connect('vision_system.db')
@@ -47,12 +43,11 @@ def save_project(name):
 def get_projects():
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    # Musíme brát data JEN z tabulky projects
+    # Taháme POUZE z tabulky projects
     c.execute("SELECT name FROM projects")
-    rows = c.fetchall()
+    data = [row[0] for row in c.fetchall()]
     conn.close()
-    # Převedeme seznam tuplů na seznam textů
-    return [row[0] for row in rows]
+    return data
 
 def add_master(name, image_path, x, y, w, h):
     conn = sqlite3.connect('vision_system.db')

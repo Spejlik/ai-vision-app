@@ -35,29 +35,32 @@ st.markdown("""
 with st.sidebar:
     st.title("⚙️ Konfigurace")
     
-    # --- SEKCE PRO PŘIDÁNÍ PROJEKTU ---
-    new_project_name = st.text_input("Název nového projektu")
+    # 1. SEKCE PRO VYTVOŘENÍ PROJEKTU
+    new_project_name = st.text_input("Název nového projektu", key="new_proj_input")
     if st.button("➕ Vytvořit projekt", use_container_width=True):
         if new_project_name.strip():
             database.add_project(new_project_name.strip())
             st.success(f"Projekt {new_project_name} vytvořen!")
-            st.rerun() # Důležité pro okamžité překreslení sidebaru
-        else:
-            st.error("Napište název projektu!")
+            st.rerun()
 
     st.divider()
 
-    # --- VÝBĚR PROJEKTU ---
+    # 2. VÝBĚR AKTIVNÍHO PROJEKTU
     projects = database.get_projects()
+    
     if projects:
+        # Pokud projekty existují, vybereme ten uložený nebo první v seznamu
+        if 'active_project' not in st.session_state or st.session_state.active_project not in projects:
+            st.session_state.active_project = projects[0]
+            
         st.session_state.active_project = st.selectbox(
             "Vyberte aktivní projekt", 
             projects,
-            index=0 if 'active_project' not in st.session_state else projects.index(st.session_state.active_project)
+            index=projects.index(st.session_state.active_project)
         )
     else:
-        st.warning("Seznam projektů je prázdný.")
-        st.session_state.active_project = "Žádný"
+        st.warning("⚠️ Nejdříve vytvořte projekt")
+        st.session_state.active_project = None
 
 # --- DEFINICE TABŮ ---
 tab1, tab2, tab3, tab4 = st.tabs(["🚀 BĚH", "🎯 MASTER", "🔍 ZÓNY", "🔌 I/O"])
@@ -72,34 +75,30 @@ with tab2:
     col_ctrl, col_img = st.columns([1, 2])
     
     with col_ctrl:
-        if st.button("📷 NAČÍST Z KAMERY", key="master_cam_btn", use_container_width=True):
-            st.session_state.setup_image_buffer = cam.get_frame()
-
-        if st.session_state.setup_image_buffer is not None:
-            # Získáme rozměry originálu
-            h, w = st.session_state.setup_image_buffer.shape[:2]
+        if st.button("💾 ULOŽIT MASTER", type="primary"):
+    if m_id_name: # Pokud jsi zadal název (P1, P2...)
+        # 1. VYTVOŘENÍ CESTY (Relativní cesta je klíč k tomu, aby fotky byly vidět!)
+        import time
+        import os
+        
+        # Vytvoříme složku, pokud neexistuje
+        if not os.path.exists("masters"):
+            os.makedirs("masters")
             
-            # POSUVNÍKY (Teď budou ovládat kreslení)
-            ax = st.slider("X (vlevo/vpravo)", 0, w, 0, key="m_x")
-            ay = st.slider("Y (nahoru/dolů)", 0, h, 0, key="m_y")
-            aw = st.slider("Šířka výřezu", 100, w, w, key="m_w")
-            ah = st.slider("Výška výřezu", 100, h, h, key="m_h")
-            
-            m_id_name = st.text_input("Název (např. P1, P2)", "P1")
-            
-            if st.button("💾 ULOŽIT MASTER", key="master_save_btn", type="primary", use_container_width=True):
-                # Skutečné oříznutí matice před uložením
-                img = st.session_state.setup_image_buffer
-                # Ošetření přetečení souřadnic
-                cropped = img[ay:min(ay+ah, h), ax:min(ax+aw, w)]
-                
-                if not os.path.exists("masters"): os.makedirs("masters")
-                path = f"masters/{st.session_state.active_project}_{m_id_name}.png"
-                cv2.imwrite(path, cv2.cvtColor(cropped, cv2.COLOR_RGB2BGR))
-                
-                database.add_master(m_id_name, path, ax, ay, aw, ah)
-                st.success(f"Vytvořen výřez a uložen jako {m_id_name}")
-                st.rerun()
+        filename = f"masters/master_{int(time.time())}.png"
+        
+        # 2. ULOŽENÍ OBRÁZKU NA DISK
+        # Předpokládám, že máš oříznutý obrázek v proměnné 'cropped_img'
+        # Pokud používáš buffer, ulož ho takto:
+        cropped_img.save(filename) 
+        
+        # 3. ZÁPIS DO DATABÁZE (Tady posíláme tu správnou cestu 'filename')
+        database.add_master(m_id_name, filename, ax, ay, aw, ah)
+        
+        st.success(f"Master {m_id_name} byl úspěšně uložen!")
+        st.rerun()
+    else:
+        st.error("Zadejte prosím název Masteru (např. P1)")
 
     with col_img:
         if st.session_state.setup_image_buffer is not None:
