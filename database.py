@@ -71,7 +71,6 @@ def get_all_masters():
 def save_roi(master_id, project_name, name, x, y, w, h, nok):
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    # Přidali jsme sloupec 'project' k ROI, aby zóna věděla, do jakého projektu patří
     c.execute("INSERT INTO rois (master_id, project, name, x, y, w, h, nok_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
               (master_id, project_name, name, x, y, w, h, nok))
     conn.commit()
@@ -80,7 +79,7 @@ def save_roi(master_id, project_name, name, x, y, w, h, nok):
 def get_rois(master_id, project_name):
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    # Načteme zóny, které patří k tomuto Masteru A ZÁROVEŇ k tomuto Projektu
+    # Filtrujeme podle Masteru I podle Projektu
     c.execute("SELECT * FROM rois WHERE master_id = ? AND project = ?", (master_id, project_name))
     data = c.fetchall()
     conn.close()
