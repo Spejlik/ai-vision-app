@@ -33,7 +33,8 @@ def save_project(name):
 def get_projects():
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    c.execute("SELECT id, name FROM masters")
+    # Musí se dotazovat JEN do tabulky projects
+    c.execute("SELECT id, name FROM projects") 
     data = c.fetchall()
     conn.close()
     return data
