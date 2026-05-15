@@ -3,16 +3,26 @@ import sqlite3
 def init_db():
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    # Tabulka masters musí mít sloupec 'project' pro filtrování
+    # Tabulka pro projekty
+    c.execute('CREATE TABLE IF NOT EXISTS projects (id INTEGER PRIMARY KEY, name TEXT UNIQUE)')
+    
+    # Tabulka pro Mastery - musí obsahovat project, name, image_path a souřadnice
     c.execute('''CREATE TABLE IF NOT EXISTS masters
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   project TEXT, 
                   name TEXT, 
-                  image_path TEXT)''')
-    # Ostatní tabulky (projects, rois...) nechej jak jsou
+                  image_path TEXT,
+                  x INTEGER, y INTEGER, w INTEGER, h INTEGER)''')
+    
+    # Tabulka pro ROI zóny
+    c.execute('''CREATE TABLE IF NOT EXISTS rois
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                  master_id INTEGER, 
+                  name TEXT, 
+                  x INTEGER, y INTEGER, w INTEGER, h INTEGER, 
+                  nok_type INTEGER)''')
     conn.commit()
     conn.close()
-
 def save_project(name):
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
@@ -28,11 +38,12 @@ def get_projects():
     conn.close()
     return data
 
-def add_master(project_name, path, x, y, w, h):
+def add_master(project, name, image_path, x, y, w, h):
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    c.execute("UPDATE masters SET image_path=?, x=?, y=?, w=?, h=? WHERE name=?", 
-              (path, x, y, w, h, project_name))
+    # Vložíme nový záznam pro Master
+    c.execute("INSERT INTO masters (project, name, image_path, x, y, w, h) VALUES (?, ?, ?, ?, ?, ?, ?)",
+              (project, name, image_path, x, y, w, h))
     conn.commit()
     conn.close()
 
