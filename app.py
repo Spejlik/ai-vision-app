@@ -143,17 +143,81 @@ with tab3:
             # Rozložení: Ovládání vlevo | Fotka vpravo
             col_ctrl, col_viz = st.columns([1, 1.5])
             
+            # ROZLOŽENÍ: Ovládání vlevo (1) | Fotka vpravo (1.8)
+            col_ctrl, col_viz = st.columns([1, 1.8])
+            
             with col_ctrl:
-                st.info(f"Pozice: **{m_name}**")
-                # Tady následuje tvůj kód pro zadávání X, Y, Šířka, Výška
-                # ... (text_inputy a number_inputy)
-                if st.button("💾 ULOŽIT ZÓNU", key="save_roi_final", type="primary", use_container_width=True):
-                    # Tady voláš uložení do DB
-                    st.rerun()
+                st.markdown(f"### 🔧 Nastavení pro: {m_name}")
+                
+                # Načteme existující ROI pro tento Master z DB
+                all_rois = database.get_rois(m_id)
+                
+                # Zjistíme, zda právě něco editujeme
+                curr_roi = next((r for r in all_rois if r[0] == st.session_state.editing_id), None)
+                
+                # --- FORMULÁŘ ---
+                with st.container(border=True):
+                    st.write("📝 **Detail zóny**")
+                    zn = st.text_input("Název / Označení", value=curr_roi[2] if curr_roi else f"Zóna {len(all_rois)+1}")
+                    
+                    r1, r2 = st.columns(2)
+                    zx = r1.number_input("X", 0, W, curr_roi[3] if curr_roi else 100)
+                    zy = r2.number_input("Y", 0, H, curr_roi[4] if curr_roi else 100)
+                    zw = r1.number_input("Šířka", 10, W, curr_roi[5] if curr_roi else 150)
+                    zh = r2.number_input("Výška", 10, H, curr_roi[6] if curr_roi else 150)
+                    
+                    # Výběr NOK (1 až 8)
+                    nok_list = [f"NOK {i}" for i in range(1, 9)]
+                    selected_nok = st.selectbox("Přiřazení chyby", nok_list, 
+                                                index=(curr_roi[7]-1) if curr_roi else 0)
+                    nok_val = int(selected_nok.split()[1])
+
+                    # Tlačítka akcí
+                    b1, b2 = st.columns(2)
+                    if b1.button("💾 ULOŽIT", type="primary", use_container_width=True):
+                        if st.session_state.editing_id:
+                            database.update_roi(st.session_state.editing_id, zn, zx, zy, zw, zh, nok_val)
+                        else:
+                            database.save_roi(m_id, zn, zx, zy, zw, zh, nok_val)
+                        st.session_state.editing_id = None
+                        st.rerun()
+                    
+                    if st.session_state.editing_id:
+                        if b2.button("🚫 ZRUŠIT", use_container_width=True):
+                            st.session_state.editing_id = None
+                            st.rerun()
+
+                st.divider()
+                
+                # --- SEZNAM ROI (Mazání a přejmenování) ---
+                st.write("📋 **Seznam inspekcí**")
+                for r in all_rois:
+                    with st.expander(f"{r[2]} (NOK {r[7]})"):
+                        e1, e2 = st.columns(2)
+                        if e1.button("✏️ Editovat", key=f"ed_roi_{r[0]}", use_container_width=True):
+                            st.session_state.editing_id = r[0]
+                            st.rerun()
+                        if e2.button("🗑️ Smazat", key=f"del_roi_{r[0]}", use_container_width=True):
+                            database.delete_roi(r[0])
+                            st.rerun()
 
             with col_viz:
-                # Zobrazení fotky - width=700 zajistí, že to na terminálu nebude obří
-                st.image(img_roi, width=700, caption=f"Pracovní náhled: {m_name}")
+                # Kreslení ROI do obrázku pomocí PIL
+                draw = ImageDraw.Draw(img_roi)
+                
+                # Vykreslení všech uložených ROI
+                for r in all_rois:
+                    is_editing = (r[0] == st.session_state.editing_id)
+                    # Barva: Červená pro editovanou, Zelená pro ostatní
+                    color = "#FF0000" if is_editing else "#00FF00"
+                    draw.rectangle([r[3], r[4], r[3]+r[5], r[4]+r[6]], outline=color, width=4)
+                    draw.text((r[3], r[4]-20), f"{r[2]} (NOK{r[7]})", fill=color)
+
+                # Pokud vytváříme novou (needitujeme existující), kreslíme oranžový náhled
+                if not st.session_state.editing_id:
+                    draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=2)
+                
+                st.image(img_roi, use_container_width=True)
 
 # --- TAB 4: I/O ---
 with tab4:

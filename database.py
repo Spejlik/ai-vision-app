@@ -142,5 +142,17 @@ def duplicate_project(old_name, new_name):
         for r in rois:
             c.execute("INSERT INTO rois (master_id, name, x, y, w, h, nok_type) VALUES (?, ?, ?, ?, ?, ?, ?)",
                       (new_id, r[0], r[1], r[2], r[3], r[4], r[5]))
+def update_roi(roi_id, name, x, y, w, h, nok):
+    conn = sqlite3.connect('vision_system.db')
+    c = conn.cursor()
+    c.execute("UPDATE rois SET name=?, x=?, y=?, w=?, h=?, nok_type=? WHERE id=?",
+              (name, x, y, w, h, nok, roi_id))
+    conn.commit()
+    conn.close()
+
+def delete_roi(roi_id):
+    conn = sqlite3.connect('vision_system.db')
+    c = conn.cursor()
+    c.execute("DELETE FROM rois WHERE id=?", (roi_id,))
     conn.commit()
     conn.close()    
