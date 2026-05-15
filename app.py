@@ -74,8 +74,11 @@ with tab2:
     with col_ctrl:
         m_id_name = st.text_input("Název Masteru (např. P1, Kamera_Vlevo)")
         
-        # Simulace souřadnic ořezu (zatím statické, můžeš přidat slidery)
-        ax, ay, aw, ah = 100, 100, 500, 500 
+        # VRÁCENÍ OVLÁDACÍCH PRVKŮ PRO OŘEZ
+        ax = st.number_input("X začátek", 0, 2000, 100)
+        ay = st.number_input("Y začátek", 0, 2000, 100)
+        aw = st.number_input("Šířka výřezu", 10, 2000, 500)
+        ah = st.number_input("Výška výřezu", 10, 2000, 500)
 
         if st.button("💾 ULOŽIT MASTER", type="primary", use_container_width=True):
             if m_id_name and st.session_state.setup_image_buffer:
