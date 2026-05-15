@@ -72,31 +72,24 @@ with tab2:
     col_ctrl, col_img = st.columns([1, 2])
     
     with col_ctrl:
-        m_id_name = st.text_input("Název Masteru (např. P1)")
-        
-        # SLIDERY PRO OŘEZ (Místo tukání do čísel)
-        ax = st.slider("X začátek", 0, 2000, 100)
-        ay = st.slider("Y začátek", 0, 2000, 100)
-        aw = st.slider("Šířka výřezu", 10, 2000, 500)
-        ah = st.slider("Výška výřezu", 10, 2000, 500)
-
-        if st.button("💾 ULOŽIT MASTER", type="primary", use_container_width=True):
-            if m_id_name and st.session_state.setup_image_buffer:
-                if not os.path.exists("masters"):
-                    os.makedirs("masters")
-                    
-                filename = f"masters/master_{int(time.time())}.png"
+                st.markdown(f"### 🔧 Nastavení pro: {m_name}")
                 
-                # Provedení ořezu a uložení
-                img = st.session_state.setup_image_buffer
-                cropped_img = img.crop((ax, ay, ax + aw, ay + ah))
-                cropped_img.save(filename)
+                zn = st.text_input("Název / Označení zóny", value=f"Zóna {len(all_rois)+1}")
                 
-                # Zápis do DB (Globální master bez vazby na projekt)
-                database.add_master(m_id_name, filename, ax, ay, aw, ah)
+                # Výběr NOK výstupu pro PLC
+                nok_val = st.selectbox("Přiřazení chyby (NOK 1-8)", range(1, 9), index=0)
                 
-                st.success(f"Master {m_id_name} uložen!")
-                st.rerun()
+                # Slidery
+                zx = st.slider("Pozice X", 0, W, 100)
+                zy = st.slider("Pozice Y", 0, H, 100)
+                zw = st.slider("Šířka", 10, W, 150)
+                zh = st.slider("Výška", 10, H, 150)
+                
+                if st.button("💾 ULOŽIT ZÓNU", type="primary", use_container_width=True):
+                    # Tady posíláme vše do databáze (včetně projektu a nok)
+                    database.save_roi(m_id, active_p, zn, zx, zy, zw, zh, nok_val)
+                    st.success(f"Zóna {zn} uložena!")
+                    st.rerun()
             else:
                 st.error("Chybí název nebo obraz z kamery!")
 
@@ -160,13 +153,28 @@ with tab3:
                     database.save_roi(m_id, active_p, "Nová zóna", zx, zy, zw, zh, 1)
                     st.rerun()
 
-            with c_viz:
+            with col_viz:
+                from PIL import ImageDraw
                 draw = ImageDraw.Draw(img_roi)
-                for r in all_rois:
-                    draw.rectangle([r[3], r[4], r[3]+r[5], r[4]+r[6]], outline="#00FF00", width=3)
                 
-                draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=5)
-                st.image(img_roi, width=700)
+                # 1. Vykreslení UŽ ULOŽENÝCH zón ze seznamu all_rois
+                # Tato část zajistí, že uvidíš zelené rámečky s popisky
+                for r in all_rois:
+                    # Indexy podle nové tabulky: 3=název, 4=x, 5=y, 6=w, 7=h, 8=nok
+                    x_r, y_r, w_r, h_r = r[4], r[5], r[6], r[7]
+                    name_r, nok_r = r[3], r[8]
+                    
+                    # Zelený rámeček pro uloženou zónu
+                    draw.rectangle([x_r, y_r, x_r + w_r, y_r + h_r], outline="#00FF00", width=3)
+                    # Popisek nad rámečkem
+                    draw.text((x_r, y_r - 15), f"{name_r} (NOK{nok_r})", fill="#00FF00")
+
+                # 2. Vykreslení ORANŽOVÉHO NÁHLEDU (aktuální pozice sliderů)
+                draw.rectangle([zx, zy, zx + zw, zy + zh], outline="orange", width=5)
+                draw.text((zx, zy - 25), "NÁHLED NOVÉ ZÓNY", fill="orange")
+
+                # Zobrazení výsledného obrázku
+                st.image(img_roi, width=700, caption=f"Pracovní plocha: {m_name}")
 
 # --- TAB 4: I/O ---
 with tab4:
