@@ -39,10 +39,9 @@ def get_projects():
     conn.close()
     return data
 
-def add_master(name, image_path, x, y, w, h):
+def add_master(name, image_path, x, y, w, h): # 1, 2, 3, 4, 5, 6
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    # Už neukládáme 'project', pouze unikátní název pozice
     c.execute("INSERT INTO masters (name, image_path, x, y, w, h) VALUES (?, ?, ?, ?, ?, ?)",
               (name, image_path, x, y, w, h))
     conn.commit()

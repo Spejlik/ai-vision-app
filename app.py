@@ -86,7 +86,7 @@ with tab2:
                 path = f"masters/{st.session_state.active_project}_{m_id_name}.png"
                 cv2.imwrite(path, cv2.cvtColor(cropped, cv2.COLOR_RGB2BGR))
                 
-                database.add_master(st.session_state.active_project, m_id_name, path, ax, ay, aw, ah)
+                database.add_master(m_id_name, path, ax, ay, aw, ah)
                 st.success(f"Vytvořen výřez a uložen jako {m_id_name}")
                 st.rerun()
 
