@@ -108,23 +108,18 @@ with tab3:
     else:
         st.write("### 🗂️ Galerie Masterů")
         
-        # Inicializace session state pro výběr, pokud neexistuje
         if 'selected_master_id' not in st.session_state or st.session_state.selected_master_id is None:
             st.session_state.selected_master_id = all_masters[0][0]
 
-        # VYTVOŘENÍ HORIZONTÁLNÍ GALERIE (vše v jedné řadě)
         num_masters = len(all_masters)
-        # Vytvoříme sloupce (max 6-8, aby se to vešlo na obrazovku)
         cols = st.columns(num_masters if num_masters < 8 else 8)
         
         for i, m in enumerate(all_masters):
             m_id, m_name, m_path = m[0], m[1], m[2]
             with cols[i % 8]:
-                # Malý náhled (aby to nebylo obří)
                 if os.path.exists(m_path):
                     st.image(m_path, use_container_width=True)
                 
-                # Tlačítko pro výběr
                 is_active = (m_id == st.session_state.selected_master_id)
                 if st.button(f"🎯 {m_name}", key=f"sel_m_{m_id}", use_container_width=True, 
                              type="primary" if is_active else "secondary"):
@@ -137,18 +132,18 @@ with tab3:
         sel_m = next((m for m in all_masters if m[0] == st.session_state.selected_master_id), all_masters[0])
         m_id, m_name, m_path = sel_m[0], sel_m[1], sel_m[2]
         
-        # Dál už pokračuje tvůj kód pro col_ctrl a col_viz (editor)...
+        if os.path.exists(m_path):
+            img_roi = Image.open(m_path).convert("RGB")
+            W, H = img_roi.size
+            
+            # --- TADY ZAČÍNÁ OPRAVENÉ OUSAZENÍ SLOUPCŮ ---
+            col_ctrl, col_viz = st.columns([1, 1.8])
             
             with col_ctrl:
                 st.markdown(f"### 🔧 Nastavení pro: {m_name}")
-                
-                # Načteme existující ROI pro tento Master z DB
                 all_rois = database.get_rois(m_id)
-                
-                # Zjistíme, zda právě něco editujeme
                 curr_roi = next((r for r in all_rois if r[0] == st.session_state.editing_id), None)
                 
-                # --- FORMULÁŘ ---
                 with st.container(border=True):
                     st.write("📝 **Detail zóny**")
                     zn = st.text_input("Název / Označení", value=curr_roi[2] if curr_roi else f"Zóna {len(all_rois)+1}")
@@ -159,15 +154,13 @@ with tab3:
                     zw = r1.number_input("Šířka", 10, W, curr_roi[5] if curr_roi else 150)
                     zh = r2.number_input("Výška", 10, H, curr_roi[6] if curr_roi else 150)
                     
-                    # Výběr NOK (1 až 8)
                     nok_list = [f"NOK {i}" for i in range(1, 9)]
                     selected_nok = st.selectbox("Přiřazení chyby", nok_list, 
                                                 index=(curr_roi[7]-1) if curr_roi else 0)
                     nok_val = int(selected_nok.split()[1])
 
-                    # Tlačítka akcí
                     b1, b2 = st.columns(2)
-                    if b1.button("💾 ULOŽIT", type="primary", use_container_width=True):
+                    if b1.button("💾 ULOŽIT", key="save_roi_btn", type="primary", use_container_width=True):
                         if st.session_state.editing_id:
                             database.update_roi(st.session_state.editing_id, zn, zx, zy, zw, zh, nok_val)
                         else:
@@ -176,13 +169,11 @@ with tab3:
                         st.rerun()
                     
                     if st.session_state.editing_id:
-                        if b2.button("🚫 ZRUŠIT", use_container_width=True):
+                        if b2.button("🚫 ZRUŠIT", key="cancel_roi_btn", use_container_width=True):
                             st.session_state.editing_id = None
                             st.rerun()
 
                 st.divider()
-                
-                # --- SEZNAM ROI (Mazání a přejmenování) ---
                 st.write("📋 **Seznam inspekcí**")
                 for r in all_rois:
                     with st.expander(f"{r[2]} (NOK {r[7]})"):
@@ -195,21 +186,18 @@ with tab3:
                             st.rerun()
 
             with col_viz:
-                # Kreslení ROI zůstává stejné...
-                # ... (kód pro draw.rectangle)
+                # Simulace kreslení (zde doplň svůj draw.rectangle kód)
+                from PIL import ImageDraw
+                draw = ImageDraw.Draw(img_roi)
+                # ... kreslení ROI ...
 
-                # VÝPOČET PRO KOMPAKTNÍ ZOBRAZENÍ:
-                # Pokud je obrázek široký, omezíme ho na 700px. 
-                # Pokud je menší (výřez), necháme ho v původní velikosti.
                 display_width = min(W, 700) 
-
                 st.image(
                     img_roi, 
                     width=display_width, 
                     caption=f"Pracovní plocha: {m_name} ({W}x{H} px)"
                 )
-                
-                st.image(img_roi, use_container_width=True)
+                # OSTRANĚN DUPLICITNÍ ŘÁDEK st.image(img_roi, use_container_width=True)
 
 # --- TAB 4: I/O ---
 with tab4:
