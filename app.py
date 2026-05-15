@@ -11,26 +11,14 @@ st.set_page_config(layout="wide", page_title="Vision System Terminal")
 
 # 2. INICIALIZACE
 database.init_db()
-# cam = camera_manager.BaslerCam() # Odkomentuj, až budeš mít připojenou kameru
+# cam = camera_manager.BaslerCam() 
 
-# Inicializace Session State
 if 'setup_image_buffer' not in st.session_state:
     st.session_state.setup_image_buffer = None
 if 'active_project' not in st.session_state:
     st.session_state.active_project = None
-if 'editing_id' not in st.session_state:
-    st.session_state.editing_id = None
 if 'selected_master_id' not in st.session_state:
     st.session_state.selected_master_id = None
-
-# CSS pro profesionální vzhled
-st.markdown("""
-    <style>
-        .block-container { padding-top: 1rem; }
-        header { visibility: hidden; }
-        .stButton>button { border-radius: 5px; }
-    </style>
-""", unsafe_allow_html=True)
 
 # --- SIDEBAR: SPRÁVA PROJEKTŮ ---
 with st.sidebar:
@@ -72,27 +60,33 @@ with tab2:
     col_ctrl, col_img = st.columns([1, 2])
     
     with col_ctrl:
-                st.markdown(f"### 🔧 Nastavení pro: {m_name}")
+        st.write("### ✂️ Definice výřezu")
+        m_id_name = st.text_input("Název Masteru (např. Kamera 1)")
+        
+        # Slidery pro ořez (ax, ay, aw, ah)
+        ax = st.slider("X začátek", 0, 2000, 100)
+        ay = st.slider("Y začátek", 0, 2000, 100)
+        aw = st.slider("Šířka výřezu", 10, 2000, 500)
+        ah = st.slider("Výška výřezu", 10, 2000, 500)
+
+        if st.button("💾 ULOŽIT MASTER", type="primary", use_container_width=True):
+            if m_id_name and st.session_state.setup_image_buffer:
+                if not os.path.exists("masters"):
+                    os.makedirs("masters")
                 
-                zn = st.text_input("Název / Označení zóny", value=f"Zóna {len(all_rois)+1}")
+                filename = f"masters/master_{int(time.time())}.png"
+                # Ořez pomocí PIL
+                img = st.session_state.setup_image_buffer
+                cropped_img = img.crop((ax, ay, ax + aw, ay + ah))
+                cropped_img.save(filename)
                 
-                # Výběr NOK výstupu pro PLC
-                nok_val = st.selectbox("Přiřazení chyby (NOK 1-8)", range(1, 9), index=0)
-                
-                # Slidery
-                zx = st.slider("Pozice X", 0, W, 100)
-                zy = st.slider("Pozice Y", 0, H, 100)
-                zw = st.slider("Šířka", 10, W, 150)
-                zh = st.slider("Výška", 10, H, 150)
-                
-                if st.button("💾 ULOŽIT ZÓNU", type="primary", use_container_width=True):
-                    # Tady posíláme vše do databáze (včetně projektu a nok)
-                    database.save_roi(m_id, active_p, zn, zx, zy, zw, zh, nok_val)
-                    st.success(f"Zóna {zn} uložena!")
-                    st.rerun()
+                database.add_master(m_id_name, filename, ax, ay, aw, ah)
+                st.success(f"Master {m_id_name} uložen!")
+                st.rerun()
+            else:
+                st.error("Zadejte název a zachyťte snímek!")
 
     with col_img:
-        # Tlačítko pro simulaci snímku (dokud není kamera)
         if st.button("📸 Zachytit testovací snímek"):
             st.session_state.setup_image_buffer = Image.new('RGB', (1200, 800), color=(73, 109, 137))
         
@@ -100,7 +94,7 @@ with tab2:
             preview_img = st.session_state.setup_image_buffer.copy()
             draw = ImageDraw.Draw(preview_img)
             draw.rectangle([ax, ay, ax+aw, ay+ah], outline="red", width=5)
-            st.image(preview_img, use_container_width=True, caption="Náhled s budoucím ořezem")
+            st.image(preview_img, use_container_width=True, caption="Červený rámeček ukazuje budoucí ořez")
 
 # --- TAB 3: ZÓNY ---
 with tab3:
@@ -115,21 +109,22 @@ with tab3:
         if 'selected_master_id' not in st.session_state:
             st.session_state.selected_master_id = all_masters[0][0]
 
+        # Galerie masterů
         m_cols = st.columns(8)
         for i, m in enumerate(all_masters):
-            m_id, m_name, m_path = m[0], m[1], m[2]
+            m_id_loop, m_name_loop, m_path_loop = m[0], m[1], m[2]
             with m_cols[i % 8]:
-                if os.path.exists(m_path):
-                    st.image(m_path, use_container_width=True)
+                if os.path.exists(m_path_loop):
+                    st.image(m_path_loop, use_container_width=True)
                 
-                is_active = (m_id == st.session_state.selected_master_id)
-                if st.button(f"{m_name}", key=f"btn_m_{m_id}", use_container_width=True,
-                             type="primary" if is_active else "secondary"):
-                    st.session_state.selected_master_id = m_id
+                if st.button(f"{m_name_loop}", key=f"btn_m_{m_id_loop}", use_container_width=True,
+                             type="primary" if (m_id_loop == st.session_state.selected_master_id) else "secondary"):
+                    st.session_state.selected_master_id = m_id_loop
                     st.rerun()
 
         st.divider()
         
+        # Výběr dat pro aktuální master
         sel_m = next((m for m in all_masters if m[0] == st.session_state.selected_master_id), all_masters[0])
         m_id, m_name, m_path = sel_m[0], sel_m[1], sel_m[2]
         
@@ -140,39 +135,31 @@ with tab3:
             
             c_ctrl, c_viz = st.columns([1, 1.8])
             with c_ctrl:
-                st.markdown(f"### 🔧 Zóny: {m_name}")
-                # Slidery pro ROI
-                zx = st.slider("X", 0, W, 100, key="sx")
-                zy = st.slider("Y", 0, H, 100, key="sy")
-                zw = st.slider("Šířka", 10, W, 150, key="sw")
-                zh = st.slider("Výška", 10, H, 150, key="sh")
+                st.markdown(f"### 🔧 Nastavení zón: {m_name}")
+                zn = st.text_input("Název zóny", value=f"Zóna {len(all_rois)+1}")
+                nok_val = st.selectbox("Přiřazení chyby (NOK 1-8)", range(1, 9), index=0)
+                
+                zx = st.slider("X", 0, W, 50, key="sx")
+                zy = st.slider("Y", 0, H, 50, key="sy")
+                zw = st.slider("Šířka", 10, W, 100, key="sw")
+                zh = st.slider("Výška", 10, H, 100, key="sh")
                 
                 if st.button("💾 ULOŽIT ZÓNU", type="primary", use_container_width=True):
-                    database.save_roi(m_id, active_p, "Nová zóna", zx, zy, zw, zh, 1)
+                    database.save_roi(m_id, active_p, zn, zx, zy, zw, zh, nok_val)
+                    st.success("Zóna uložena!")
                     st.rerun()
 
-            with col_viz:
-                from PIL import ImageDraw
+            with c_viz:
                 draw = ImageDraw.Draw(img_roi)
-                
-                # 1. Vykreslení UŽ ULOŽENÝCH zón ze seznamu all_rois
-                # Tato část zajistí, že uvidíš zelené rámečky s popisky
+                # Kreslení uložených
                 for r in all_rois:
-                    # Indexy podle nové tabulky: 3=název, 4=x, 5=y, 6=w, 7=h, 8=nok
-                    x_r, y_r, w_r, h_r = r[4], r[5], r[6], r[7]
-                    name_r, nok_r = r[3], r[8]
-                    
-                    # Zelený rámeček pro uloženou zónu
-                    draw.rectangle([x_r, y_r, x_r + w_r, y_r + h_r], outline="#00FF00", width=3)
-                    # Popisek nad rámečkem
-                    draw.text((x_r, y_r - 15), f"{name_r} (NOK{nok_r})", fill="#00FF00")
+                    rx, ry, rw, rh = r[4], r[5], r[6], r[7]
+                    draw.rectangle([rx, ry, rx+rw, ry+rh], outline="#00FF00", width=3)
+                    draw.text((rx, ry-15), f"{r[3]} (NOK{r[8]})", fill="#00FF00")
 
-                # 2. Vykreslení ORANŽOVÉHO NÁHLEDU (aktuální pozice sliderů)
-                draw.rectangle([zx, zy, zx + zw, zy + zh], outline="orange", width=5)
-                draw.text((zx, zy - 25), "NÁHLED NOVÉ ZÓNY", fill="orange")
-
-                # Zobrazení výsledného obrázku
-                st.image(img_roi, width=700, caption=f"Pracovní plocha: {m_name}")
+                # Kreslení náhledu
+                draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=5)
+                st.image(img_roi, use_container_width=True, caption=f"Editace: {m_name}")
 
 # --- TAB 4: I/O ---
 with tab4:
