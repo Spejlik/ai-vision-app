@@ -33,20 +33,31 @@ st.markdown("""
 
 # --- SIDEBAR: SPRÁVA PROJEKTŮ ---
 with st.sidebar:
-    st.title("📂 Projekty")
-    projs = database.get_projects()
-    project_names = [p[1] for p in projs]
-    st.session_state.active_project = st.selectbox("Aktivní projekt", project_names if project_names else ["Žádný"])
+    st.title("⚙️ Konfigurace")
     
-    with st.expander("✨ Nový / Kopírovat"):
-        new_name = st.text_input("Název")
-        if st.button("Vytvořit", key="side_btn_new"):
-            database.save_project(new_name)
-            st.rerun()
-    
-    if st.button("🗑️ SMAZAT PROJEKT", key="side_btn_del"):
-        database.delete_project(st.session_state.active_project)
-        st.rerun()
+    # --- SEKCE PRO PŘIDÁNÍ PROJEKTU ---
+    new_project_name = st.text_input("Název nového projektu")
+    if st.button("➕ Vytvořit projekt", use_container_width=True):
+        if new_project_name.strip():
+            database.add_project(new_project_name.strip())
+            st.success(f"Projekt {new_project_name} vytvořen!")
+            st.rerun() # Důležité pro okamžité překreslení sidebaru
+        else:
+            st.error("Napište název projektu!")
+
+    st.divider()
+
+    # --- VÝBĚR PROJEKTU ---
+    projects = database.get_projects()
+    if projects:
+        st.session_state.active_project = st.selectbox(
+            "Vyberte aktivní projekt", 
+            projects,
+            index=0 if 'active_project' not in st.session_state else projects.index(st.session_state.active_project)
+        )
+    else:
+        st.warning("Seznam projektů je prázdný.")
+        st.session_state.active_project = "Žádný"
 
 # --- DEFINICE TABŮ ---
 tab1, tab2, tab3, tab4 = st.tabs(["🚀 BĚH", "🎯 MASTER", "🔍 ZÓNY", "🔌 I/O"])
