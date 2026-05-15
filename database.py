@@ -38,8 +38,8 @@ def add_master(project_name, path, x, y, w, h):
 def get_masters(project_name):
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    # Hledáme všechny mastery, kde sloupec project odpovídá vybranému projektu
-    c.execute("SELECT id, name, path FROM masters WHERE project=?", (project_name,))
+    # Změna z 'path' zpět na 'image_path', aby to sedělo s tvou DB
+    c.execute("SELECT id, name, image_path FROM masters WHERE project=?", (project_name,))
     data = c.fetchall()
     conn.close()
     return data
