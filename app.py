@@ -112,18 +112,22 @@ with tab3:
         if 'selected_master_id' not in st.session_state or st.session_state.selected_master_id is None:
             st.session_state.selected_master_id = all_masters[0][0]
 
+        # VYTVOŘENÍ HORIZONTÁLNÍ GALERIE
         num_masters = len(all_masters)
-        # Vytvoříme mřížku pro náhledy
         cols = st.columns(min(num_masters, 8))
         
         for i, m in enumerate(all_masters):
             m_id, m_name, m_path = m[0], m[1], m[2]
             with cols[i % 8]:
+                # ZOBRAZENÍ MINIATURY NAD TLAČÍTKEM
                 if os.path.exists(m_path):
                     st.image(m_path, use_container_width=True)
+                else:
+                    st.error("Missing img")
                 
+                # Tlačítko pod fotkou
                 is_active = (m_id == st.session_state.selected_master_id)
-                if st.button(f"🎯 {m_name}", key=f"sel_m_{m_id}", use_container_width=True, 
+                if st.button(f"{m_name}", key=f"sel_m_{m_id}", use_container_width=True, 
                              type="primary" if is_active else "secondary"):
                     st.session_state.selected_master_id = m_id
                     st.rerun()
