@@ -90,8 +90,6 @@ with tab2:
                     database.save_roi(m_id, active_p, zn, zx, zy, zw, zh, nok_val)
                     st.success(f"Zóna {zn} uložena!")
                     st.rerun()
-            else:
-                st.error("Chybí název nebo obraz z kamery!")
 
     with col_img:
         # Tlačítko pro simulaci snímku (dokud není kamera)
