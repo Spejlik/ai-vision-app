@@ -76,21 +76,21 @@ with tab2:
     
     with col_ctrl:
         if st.button("💾 ULOŽIT MASTER", type="primary"):
-    if m_id_name: # Pokud jsi zadal název (P1, P2...)
-        # 1. VYTVOŘENÍ CESTY (Relativní cesta je klíč k tomu, aby fotky byly vidět!)
-        import time
-        import os
+            if m_id_name: # Pokud jsi zadal název (P1, P2...)
+                # 1. VYTVOŘENÍ CESTY (Relativní cesta je klíč k tomu, aby fotky byly vidět!)
+                import time
+                import os
         
-        # Vytvoříme složku, pokud neexistuje
-        if not os.path.exists("masters"):
-            os.makedirs("masters")
+                # Vytvoříme složku, pokud neexistuje
+                if not os.path.exists("masters"):
+                os.makedirs("masters")
             
-        filename = f"masters/master_{int(time.time())}.png"
+                filename = f"masters/master_{int(time.time())}.png"
         
-        # 2. ULOŽENÍ OBRÁZKU NA DISK
-        # Předpokládám, že máš oříznutý obrázek v proměnné 'cropped_img'
-        # Pokud používáš buffer, ulož ho takto:
-        cropped_img.save(filename) 
+                # 2. ULOŽENÍ OBRÁZKU NA DISK
+                # Předpokládám, že máš oříznutý obrázek v proměnné 'cropped_img'
+                # Pokud používáš buffer, ulož ho takto:
+                cropped_img.save(filename) 
         
         # 3. ZÁPIS DO DATABÁZE (Tady posíláme tu správnou cestu 'filename')
         database.add_master(m_id_name, filename, ax, ay, aw, ah)
