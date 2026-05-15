@@ -75,7 +75,7 @@ def save_roi(master_id, project_name, name, x, y, w, h, nok):
     c.execute("INSERT INTO rois (master_id, project, name, x, y, w, h, nok_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
               (master_id, project_name, name, x, y, w, h, nok))
     conn.commit()
-    conn.close())
+    conn.close()
 
 def get_rois(master_id, project_name):  # <--- Musí zde být oba parametry!
     conn = sqlite3.connect('vision_system.db')
