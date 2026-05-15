@@ -3,11 +3,13 @@ import sqlite3
 def init_db():
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
+    # Tabulka masters musí mít sloupec 'project' pro filtrování
     c.execute('''CREATE TABLE IF NOT EXISTS masters
-             (id INTEGER PRIMARY KEY, project TEXT, name TEXT, image_path TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS rois 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, master_id INTEGER, name TEXT, 
-                  x INTEGER, y INTEGER, w INTEGER, h INTEGER, nok_type INTEGER)''')
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                  project TEXT, 
+                  name TEXT, 
+                  image_path TEXT)''')
+    # Ostatní tabulky (projects, rois...) nechej jak jsou
     conn.commit()
     conn.close()
 
@@ -37,8 +39,7 @@ def add_master(project_name, path, x, y, w, h):
 def get_masters(project_name):
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    # Tento dotaz vytáhne VŠECHNY mastery, které jsi v projektu vytvořil.
-    # Sloupec 'project' slouží jako pojistka, aby se ti nemíchaly různé držáky/výrobky.
+    # Teď už sloupec 'project' existuje, takže můžeme filtrovat
     c.execute("SELECT id, name, image_path FROM masters WHERE project = ?", (project_name,))
     data = c.fetchall()
     conn.close()
