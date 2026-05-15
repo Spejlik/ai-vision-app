@@ -110,34 +110,45 @@ with tab2:
             cv2.rectangle(preview, (ax, ay), (ax+aw, ay+ah), (255, 0, 0), 10)
             st.image(preview, use_container_width=True)
 
-# --- TAB 3: ZÓNY (OPRAVENÝ KOMPAKTNÍ LAYOUT) ---
+# --- TAB 3: ZÓNY (OPRAVA VELIKOSTI A VÝBĚRU) ---
 with tab3:
     all_masters = database.get_masters(st.session_state.active_project)
     
     if not all_masters:
-        st.warning("Před pokračováním vytvořte Master v záložce 🎯 MASTER")
+        st.warning("⚠️ Nejdříve vytvořte Master v záložce MASTER.")
     else:
-        # 1. HORIZONTÁLNÍ VÝBĚR (Miniatury jako tlačítka)
-        st.write("### 🗂️ Konfigurace inspekcí")
+        st.write("### 🗂️ Výběr Masteru (P1, P2...)")
         
-        # Inicializace výběru
-        if st.session_state.selected_master_id is None:
-            st.session_state.selected_master_id = all_masters[0][0]
-
-        # Vytvoříme řadu malých náhledů
-        cols = st.columns(len(all_masters) if len(all_masters) < 10 else 10)
+        # Horizontální přepínač - malé miniatury s pevnou šířkou
+        cols = st.columns(len(all_masters) if len(all_masters) < 8 else 8)
         for i, m in enumerate(all_masters):
-            m_id, m_name, m_path = m[0], m[1], m[2]
-            with cols[i % 10]:
-                is_active = (m_id == st.session_state.selected_master_id)
-                # Zobrazíme jen malý ořez/náhled jako tlačítko
-                if st.button(f"🖼️ {m_name}", key=f"btn_{m_id}", use_container_width=True, 
-                             type="primary" if is_active else "secondary"):
-                    st.session_state.selected_master_id = m_id
+            with cols[i % 8]:
+                # Tlačítko pro výběr - zobrazí název Masteru
+                is_active = (m[0] == st.session_state.selected_master_id)
+                if st.button(f"🖼️ {m[1]}", key=f"m_btn_{m[0]}", use_container_width=True, type="primary" if is_active else "secondary"):
+                    st.session_state.selected_master_id = m[0]
                     st.rerun()
 
         st.divider()
 
+        # Načtení dat vybraného Masteru
+        sel_m = next((m for m in all_masters if m[0] == st.session_state.selected_master_id), all_masters[0])
+        
+        # ROZLOŽENÍ: Ovládání vlevo (33%) | Fotka vpravo (66%)
+        c_left, c_right = st.columns([1, 2])
+        
+        with c_left:
+            st.markdown(f"**Editace pozice: {sel_m[1]}**")
+            # Sem vložte pole pro X, Y, Width, Height (number_inputy)
+            # ... (vaše stávající pole pro zadávání souřadnic)
+            st.button("💾 ULOŽIT ZÓNU", use_container_width=True, type="primary")
+
+        with c_right:
+            # ZOBRAZENÍ FOTKY S OMEZENÍM
+            if os.path.exists(sel_m[2]):
+                img = Image.open(sel_m[2])
+                # Tady je ten trik: width=600 zajistí, že fotka nebude přes celou zeď
+                st.image(img, width=600, caption=f"Pracovní plocha: {sel_m[1]}")
         # 2. KOMPAKTNÍ EDITOR (Vedle sebe)
         sel_m = next((m for m in all_masters if m[0] == st.session_state.selected_master_id), all_masters[0])
         m_id, m_name, m_path = sel_m[0], sel_m[1], sel_m[2]
