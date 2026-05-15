@@ -77,10 +77,10 @@ def save_roi(master_id, project_name, name, x, y, w, h, nok):
     conn.commit()
     conn.close()
 
-def get_rois(master_id, project_name): # <-- Musí zde být oba tyto názvy
+def get_rois(master_id, project_name):
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    # SQL dotaz musí odpovídat oběma parametrům
+    # SQL dotaz musí mít DVA parametry (?), aby odpovídal volání z app.py
     c.execute("SELECT * FROM rois WHERE master_id = ? AND project = ?", (master_id, project_name))
     data = c.fetchall()
     conn.close()
