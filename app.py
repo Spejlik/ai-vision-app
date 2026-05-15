@@ -100,41 +100,42 @@ with tab2:
             st.image(preview_img, use_container_width=True, caption="Červený rámeček ukazuje budoucí ořez")
 
 with tab3:
-    # 1. Načteme VŠECHNY mastery (globální knihovna)
-    all_masters = database.get_all_masters() 
+    # 1. HLAVIČKA PROJEKTU (Aby bylo jasno, co editujeme)
+    active_p = st.session_state.get('active_project', 'NEMÁTE VYBRANÝ PROJEKT')
+    st.info(f"🏗️ Aktuálně nastavujete zóny pro projekt: **{active_p}**")
+    
+    # 2. NAČTENÍ MASTERŮ
+    all_masters = database.get_all_masters()
     
     if not all_masters:
-        st.warning("⚠️ Knihovna masterů je prázdná. Nejdříve vytvořte Master v záložce MASTER.")
+        st.warning("⚠️ Knihovna Masterů je prázdná. Nejdříve vytvořte Master v záložce 🎯 MASTER.")
     else:
-        # TADY BYLA CHYBA: Tento blok musí být odsazený o 4 mezery od 'else:'
-        st.write("### 🗂️ Globální galerie Masterů")
+        st.write("### 🖼️ Vyberte pohled kamery (Master)")
         
-        if 'selected_master_id' not in st.session_state or st.session_state.selected_master_id is None:
+        # Pojistka pro session state
+        if 'selected_master_id' not in st.session_state:
             st.session_state.selected_master_id = all_masters[0][0]
 
-        # VYTVOŘENÍ HORIZONTÁLNÍ GALERIE
-        num_masters = len(all_masters)
-        cols = st.columns(min(num_masters, 8))
-        
+        # GALERIE (8 sloupců)
+        m_cols = st.columns(8)
         for i, m in enumerate(all_masters):
             m_id, m_name, m_path = m[0], m[1], m[2]
-            with cols[i % 8]:
-                # ZOBRAZENÍ MINIATURY NAD TLAČÍTKEM
+            with m_cols[i % 8]:
+                # TADY JE OPRAVA ZOBRAZENÍ FOTKY
                 if os.path.exists(m_path):
                     st.image(m_path, use_container_width=True)
                 else:
-                    st.error("Missing img")
+                    st.error("Chybí soubor")
                 
-                # Tlačítko pod fotkou
                 is_active = (m_id == st.session_state.selected_master_id)
-                if st.button(f"{m_name}", key=f"sel_m_{m_id}", use_container_width=True, 
+                if st.button(f"{m_name}", key=f"btn_m_{m_id}", use_container_width=True,
                              type="primary" if is_active else "secondary"):
                     st.session_state.selected_master_id = m_id
                     st.rerun()
 
         st.divider()
-
-        # NAČTENÍ DAT PRO VYBRANÝ MASTER
+        
+        # 3. EDITOR ZÓN (Načítání zón pro konkrétní Master A konkrétní Projekt)
         sel_m = next((m for m in all_masters if m[0] == st.session_state.selected_master_id), all_masters[0])
         m_id, m_name, m_path = sel_m[0], sel_m[1], sel_m[2]
         
@@ -142,8 +143,10 @@ with tab3:
             img_roi = Image.open(m_path).convert("RGB")
             W, H = img_roi.size
             
-            # --- TADY ZAČÍNÁ OPRAVENÉ OUSAZENÍ SLOUPCŮ ---
-            col_ctrl, col_viz = st.columns([1, 1.8])
+            # TADY VOLÁME ZÓNY FILTROVANÉ PODLE PROJEKTU I MASTERU
+            all_rois = database.get_rois(m_id, active_p)
+            
+            # ... dál pokračují sloupce col_ctrl a col_viz s editorerm
             
             with col_ctrl:
                 st.markdown(f"### 🔧 Nastavení pro: {m_name}")

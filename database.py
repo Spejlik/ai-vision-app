@@ -30,27 +30,30 @@ def save_project(name):
     conn.commit()
     conn.close()
 
+# Funkce pro Projekty (vlevo v sidebaru)
 def get_projects():
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    # Musí se dotazovat JEN do tabulky projects
-    c.execute("SELECT id, name FROM projects") 
-    data = c.fetchall()
+    # Taháme jen z tabulky projects!
+    c.execute("SELECT name FROM projects")
+    data = [row[0] for row in c.fetchall()]
     conn.close()
     return data
 
-def add_master(name, image_path, x, y, w, h): # 1, 2, 3, 4, 5, 6
+def add_master(name, image_path, x, y, w, h):
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
+    # image_path by mělo být např. "masters/P1.png"
     c.execute("INSERT INTO masters (name, image_path, x, y, w, h) VALUES (?, ?, ?, ?, ?, ?)",
               (name, image_path, x, y, w, h))
     conn.commit()
     conn.close()
 
-def get_all_masters(): # Přejmenováno pro jasnost
+# Funkce pro Mastery (horizontální galerie)
+def get_all_masters():
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    # Vytáhne úplně všechno z tabulky masters
+    # Taháme jen z tabulky masters!
     c.execute("SELECT id, name, image_path FROM masters")
     data = c.fetchall()
     conn.close()
