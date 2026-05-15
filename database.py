@@ -38,20 +38,20 @@ def get_projects():
     conn.close()
     return data
 
-def add_master(project, name, image_path, x, y, w, h):
+def add_master(name, image_path, x, y, w, h):
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    # Vložíme nový záznam pro Master
-    c.execute("INSERT INTO masters (project, name, image_path, x, y, w, h) VALUES (?, ?, ?, ?, ?, ?, ?)",
-              (project, name, image_path, x, y, w, h))
+    # Už neukládáme 'project', pouze unikátní název pozice
+    c.execute("INSERT INTO masters (name, image_path, x, y, w, h) VALUES (?, ?, ?, ?, ?, ?)",
+              (name, image_path, x, y, w, h))
     conn.commit()
     conn.close()
 
-def get_masters(project_name):
+def get_all_masters(): # Přejmenováno pro jasnost
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    # Teď už sloupec 'project' existuje, takže můžeme filtrovat
-    c.execute("SELECT id, name, image_path FROM masters WHERE project = ?", (project_name,))
+    # Vytáhne úplně všechno z tabulky masters
+    c.execute("SELECT id, name, image_path FROM masters")
     data = c.fetchall()
     conn.close()
     return data

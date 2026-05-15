@@ -101,15 +101,16 @@ with tab2:
 
 # --- TAB 3: ZÓNY (OPRAVENÝ COMPACT LAYOUT) ---
 with tab3:
-    all_masters = database.get_masters(st.session_state.active_project)
+    # Teď načítáme globální seznam, nefiltrovaný podle projektu
+    all_masters = database.get_all_masters() 
     
     if not all_masters:
-        st.warning("⚠️ Nejdříve vytvořte Master v záložce MASTER.")
+        st.warning("⚠️ Knihovna masterů je prázdná.")
     else:
-        st.write("### 🗂️ Galerie Masterů")
-        
-        if 'selected_master_id' not in st.session_state or st.session_state.selected_master_id is None:
-            st.session_state.selected_master_id = all_masters[0][0]
+        # Galerie teď ukáže vše, co je v DB
+        cols = st.columns(8)
+        for i, m in enumerate(all_masters):
+            # ... zbytek kódu pro zobrazení tlačítek zůstává stejný
 
         num_masters = len(all_masters)
         cols = st.columns(num_masters if num_masters < 8 else 8)
