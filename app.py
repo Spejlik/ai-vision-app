@@ -55,7 +55,7 @@ tab1, tab2, tab3, tab4 = st.tabs(["🚀 BĚH", "🎯 MASTER", "🔍 ZÓNY", "�
 with tab1:
     st.info(f"Systém připraven. Aktivní projekt: {st.session_state.active_project}")
 
-# --- TAB 2: MASTER (Ukládání P1, P2...) ---
+# --- TAB 2: MASTER (Interaktivní ořez) ---
 with tab2:
     st.subheader("📸 Nastavení Master snímků")
     col_ctrl, col_img = st.columns([1, 2])
@@ -65,26 +65,39 @@ with tab2:
             st.session_state.setup_image_buffer = cam.get_frame()
 
         if st.session_state.setup_image_buffer is not None:
+            # Získáme rozměry originálu
             h, w = st.session_state.setup_image_buffer.shape[:2]
-            ax = st.slider("X", 0, w, 0, key="m_x")
-            ay = st.slider("Y", 0, h, 0, key="m_y")
-            aw = st.slider("Šířka", 100, w, 1280, key="m_w")
-            ah = st.slider("Výška", 100, h, 1024, key="m_h")
+            
+            # POSUVNÍKY (Teď budou ovládat kreslení)
+            ax = st.slider("X (vlevo/vpravo)", 0, w, 0, key="m_x")
+            ay = st.slider("Y (nahoru/dolů)", 0, h, 0, key="m_y")
+            aw = st.slider("Šířka výřezu", 100, w, w, key="m_w")
+            ah = st.slider("Výška výřezu", 100, h, h, key="m_h")
+            
             m_id_name = st.text_input("Název (např. P1, P2)", "P1")
             
             if st.button("💾 ULOŽIT MASTER", key="master_save_btn", type="primary", use_container_width=True):
+                # Skutečné oříznutí matice před uložením
                 img = st.session_state.setup_image_buffer
-                cropped = img[ay:ay+ah, ax:ax+aw]
+                # Ošetření přetečení souřadnic
+                cropped = img[ay:min(ay+ah, h), ax:min(ax+aw, w)]
+                
                 if not os.path.exists("masters"): os.makedirs("masters")
                 path = f"masters/{st.session_state.active_project}_{m_id_name}.png"
                 cv2.imwrite(path, cv2.cvtColor(cropped, cv2.COLOR_RGB2BGR))
+                
                 database.add_master(st.session_state.active_project, path, ax, ay, aw, ah)
-                st.success(f"Uloženo jako {m_id_name}")
+                st.success(f"Vytvořen výřez a uložen jako {m_id_name}")
                 st.rerun()
 
     with col_img:
         if st.session_state.setup_image_buffer is not None:
-            st.image(st.session_state.setup_image_buffer, use_container_width=True)
+            # VYTVOŘENÍ NÁHLEDU S ČERVENÝM RÁMEČKEM
+            preview_img = st.session_state.setup_image_buffer.copy()
+            # Nakreslíme rámeček přímo do kopie obrazu pro náhled
+            cv2.rectangle(preview_img, (ax, ay), (ax+aw, ay+ah), (255, 0, 0), 5)
+            
+            st.image(preview_img, use_container_width=True, caption="Červený rámeček ukazuje budoucí ořez")
 
 # --- TAB 3: ZÓNY (Elvac Style Compact) ---
 with tab3:
