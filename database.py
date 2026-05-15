@@ -71,6 +71,7 @@ def get_all_masters():
 def save_roi(master_id, project_name, name, x, y, w, h, nok):
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
+    # Tady přidáváme 'project_name' do INSERTu
     c.execute("INSERT INTO rois (master_id, project, name, x, y, w, h, nok_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
               (master_id, project_name, name, x, y, w, h, nok))
     conn.commit()
@@ -79,12 +80,12 @@ def save_roi(master_id, project_name, name, x, y, w, h, nok):
 def get_rois(master_id, project_name):
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    # Filtrujeme podle Masteru I podle Projektu
+    # SQL dotaz teď musí kontrolovat dvě věci: Master ID a Název projektu
     c.execute("SELECT * FROM rois WHERE master_id = ? AND project = ?", (master_id, project_name))
     data = c.fetchall()
     conn.close()
     return data
-
+    
 def delete_roi(roi_id):
     """Smaže konkrétní zónu."""
     conn = sqlite3.connect('vision_system.db')
