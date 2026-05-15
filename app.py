@@ -99,21 +99,22 @@ with tab2:
             
             st.image(preview_img, use_container_width=True, caption="Červený rámeček ukazuje budoucí ořez")
 
-# --- TAB 3: ZÓNY (OPRAVENÝ COMPACT LAYOUT) ---
 with tab3:
-    # Teď načítáme globální seznam, nefiltrovaný podle projektu
+    # 1. Načteme VŠECHNY mastery (globální knihovna)
     all_masters = database.get_all_masters() 
     
     if not all_masters:
-        st.warning("⚠️ Knihovna masterů je prázdná.")
+        st.warning("⚠️ Knihovna masterů je prázdná. Nejdříve vytvořte Master v záložce MASTER.")
     else:
-        # Galerie teď ukáže vše, co je v DB
-        cols = st.columns(8)
-        for i, m in enumerate(all_masters):
-            # ... zbytek kódu pro zobrazení tlačítek zůstává stejný
+        # TADY BYLA CHYBA: Tento blok musí být odsazený o 4 mezery od 'else:'
+        st.write("### 🗂️ Globální galerie Masterů")
+        
+        if 'selected_master_id' not in st.session_state or st.session_state.selected_master_id is None:
+            st.session_state.selected_master_id = all_masters[0][0]
 
         num_masters = len(all_masters)
-        cols = st.columns(num_masters if num_masters < 8 else 8)
+        # Vytvoříme mřížku pro náhledy
+        cols = st.columns(min(num_masters, 8))
         
         for i, m in enumerate(all_masters):
             m_id, m_name, m_path = m[0], m[1], m[2]
