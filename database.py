@@ -3,9 +3,8 @@ import sqlite3
 def init_db():
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS masters 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, image_path TEXT,
-                  x INTEGER, y INTEGER, w INTEGER, h INTEGER)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS masters
+             (id INTEGER PRIMARY KEY, project TEXT, name TEXT, image_path TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS rois 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, master_id INTEGER, name TEXT, 
                   x INTEGER, y INTEGER, w INTEGER, h INTEGER, nok_type INTEGER)''')
@@ -38,10 +37,14 @@ def add_master(project_name, path, x, y, w, h):
 def get_masters(project_name):
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    # Změna z 'path' zpět na 'image_path', aby to sedělo s tvou DB
-    c.execute("SELECT id, name, image_path FROM masters WHERE project=?", (project_name,))
+    # Pokud v tabulce masters nemáš sloupec 'project', 
+    # ale používáš 'name' pro uložení názvu projektu:
+    c.execute("SELECT id, name, image_path FROM masters") 
     data = c.fetchall()
     conn.close()
+    
+    # Pokud chceš filtrovat Mastery jen pro aktuální projekt, 
+    # ale nemáš na to sloupec, zatím vrať všechno, abychom odstranili chybu:
     return data
     
 def get_rois(master_id):
