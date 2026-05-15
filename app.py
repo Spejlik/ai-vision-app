@@ -101,23 +101,28 @@ with tab2:
 
 # --- TAB 3: ZÓNY (Elvac Style Compact) ---
 with tab3:
-    st.subheader("📍 Konfigurace inspekcí")
     all_masters = database.get_masters(st.session_state.active_project)
     
-    if not all_masters:
-        st.warning("Vytvořte Master v záložce 🎯 MASTER")
-    else:
-        # Horizontální výběr Masteru
-        cols = st.columns(8)
+    if all_masters:
+        # INICIALIZACE: Pokud nic nevybráno, vyber první, ale jen jednou!
         if st.session_state.selected_master_id is None:
             st.session_state.selected_master_id = all_masters[0][0]
 
+        # GALERIE MINIATUR (Elvac Style)
+        st.write("### 🗂️ Galerie Masterů")
+        cols = st.columns(8)
         for i, m in enumerate(all_masters):
+            m_id, m_name, m_path = m[0], m[1], m[2]
             with cols[i % 8]:
-                is_act = (m[0] == st.session_state.selected_master_id)
-                if st.button(f"{m[1]}", key=f"sel_m_{m[0]}", type="primary" if is_act else "secondary"):
-                    st.session_state.selected_master_id = m[0]
-                    st.rerun()
+                # Náhled
+                if os.path.exists(m_path):
+                    st.image(m_path, use_container_width=True)
+                
+                # Tlačítko výběru
+                is_sel = (m_id == st.session_state.selected_master_id)
+                if st.button(f"{m_name}", key=f"sel_{m_id}", type="primary" if is_sel else "secondary", use_container_width=True):
+                    st.session_state.selected_master_id = m_id
+                    st.rerun() # DŮLEŽITÉ: okamžitě překreslí editor s novou fotkou
 
         st.divider()
 
