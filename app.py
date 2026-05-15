@@ -148,56 +148,49 @@ with tab3:
                     st.write("📝 **Detail zóny**")
                     zn = st.text_input("Název / Označení", value=curr_roi[2] if curr_roi else f"Zóna {len(all_rois)+1}")
                     
-                    r1, r2 = st.columns(2)
-                    zx = r1.number_input("X", 0, W, curr_roi[3] if curr_roi else 100)
-                    zy = r2.number_input("Y", 0, H, curr_roi[4] if curr_roi else 100)
-                    zw = r1.number_input("Šířka", 10, W, curr_roi[5] if curr_roi else 150)
-                    zh = r2.number_input("Výška", 10, H, curr_roi[6] if curr_roi else 150)
+                    # VELKÉ POSUVNÍKY (Slidery) pro dotykové ovládání
+                    # Label (popisek) je nad sliderem, aby byl vidět i pod prstem
+                    zx = st.slider("Pozice X (vlevo ↔ vpravo)", 0, W, curr_roi[3] if curr_roi else 100, key="slider_x")
+                    zy = st.slider("Pozice Y (nahoru ↕ dolů)", 0, H, curr_roi[4] if curr_roi else 100, key="slider_y")
+                    
+                    # Šířka a výška mohou být ve dvou sloupcích, aby nezabíraly tolik místa na výšku
+                    s1, s2 = st.columns(2)
+                    zw = s1.slider("Šířka", 10, W, curr_roi[5] if curr_roi else 150, key="slider_w")
+                    zh = s2.slider("Výška", 10, H, curr_roi[6] if curr_roi else 150, key="slider_h")
                     
                     nok_list = [f"NOK {i}" for i in range(1, 9)]
                     selected_nok = st.selectbox("Přiřazení chyby", nok_list, 
                                                 index=(curr_roi[7]-1) if curr_roi else 0)
                     nok_val = int(selected_nok.split()[1])
 
-                    b1, b2 = st.columns(2)
-                    if b1.button("💾 ULOŽIT", key="save_roi_btn", type="primary", use_container_width=True):
+                    # Velké tlačítko přes celou šířku
+                    if st.button("💾 ULOŽIT KONFIGURACI ZÓNY", key="save_roi_btn", type="primary", use_container_width=True):
                         if st.session_state.editing_id:
                             database.update_roi(st.session_state.editing_id, zn, zx, zy, zw, zh, nok_val)
                         else:
                             database.save_roi(m_id, zn, zx, zy, zw, zh, nok_val)
                         st.session_state.editing_id = None
                         st.rerun()
-                    
-                    if st.session_state.editing_id:
-                        if b2.button("🚫 ZRUŠIT", key="cancel_roi_btn", use_container_width=True):
-                            st.session_state.editing_id = None
-                            st.rerun()
-
-                st.divider()
-                st.write("📋 **Seznam inspekcí**")
-                for r in all_rois:
-                    with st.expander(f"{r[2]} (NOK {r[7]})"):
-                        e1, e2 = st.columns(2)
-                        if e1.button("✏️ Editovat", key=f"ed_roi_{r[0]}", use_container_width=True):
-                            st.session_state.editing_id = r[0]
-                            st.rerun()
-                        if e2.button("🗑️ Smazat", key=f"del_roi_{r[0]}", use_container_width=True):
-                            database.delete_roi(r[0])
-                            st.rerun()
 
             with col_viz:
-                # Simulace kreslení (zde doplň svůj draw.rectangle kód)
+                # KRESLENÍ ROI PŘES PIL
                 from PIL import ImageDraw
                 draw = ImageDraw.Draw(img_roi)
-                # ... kreslení ROI ...
+                
+                # 1. Vykreslení už uložených zón (zeleně)
+                for r in all_rois:
+                    if st.session_state.editing_id != r[0]:
+                        draw.rectangle([r[3], r[4], r[3]+r[5], r[4]+r[6]], outline="#00FF00", width=3)
+                        draw.text((r[3], r[4]-15), r[2], fill="#00FF00")
 
+                # 2. Vykreslení AKTUÁLNĚ NASTAVOVANÉ zóny (oranžově - to co měníš čísly)
+                # Tohle nahrazuje chybějící posuvník - vidíš to hned!
+                draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=5)
+                draw.text((zx, zy-25), "NÁHLED ZÓNY", fill="orange")
+
+                # Zobrazení výsledného obrázku
                 display_width = min(W, 700) 
-                st.image(
-                    img_roi, 
-                    width=display_width, 
-                    caption=f"Pracovní plocha: {m_name} ({W}x{H} px)"
-                )
-                # OSTRANĚN DUPLICITNÍ ŘÁDEK st.image(img_roi, use_container_width=True)
+                st.image(img_roi, width=display_width, caption=f"Pracovní plocha: {m_name}")
 
 # --- TAB 4: I/O ---
 with tab4:
