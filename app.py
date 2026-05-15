@@ -99,52 +99,45 @@ with tab2:
             
             st.image(preview_img, use_container_width=True, caption="Červený rámeček ukazuje budoucí ořez")
 
-# --- TAB 3: ZÓNY (PROPOJENÍ S DB A GALERIÍ) ---
+# --- TAB 3: ZÓNY (OPRAVENÝ COMPACT LAYOUT) ---
 with tab3:
-    st.subheader("📍 Konfigurace inspekcí")
-    
-    # Voláme tvou opravenou funkci z database.py
     all_masters = database.get_masters(st.session_state.active_project)
     
     if not all_masters:
-        st.warning("Vytvořte nejdříve Master snímek v záložce 🎯 MASTER")
+        st.warning("⚠️ Nejdříve vytvořte Master v záložce MASTER.")
     else:
-        # --- SEKCE MINIATUR (Přepínač Masterů) ---
         st.write("### 🗂️ Galerie Masterů")
         
-        # Pojistka: Pokud není nic vybráno, nastavíme první Master jako aktivní
-        if st.session_state.selected_master_id is None:
+        # Inicializace session state pro výběr, pokud neexistuje
+        if 'selected_master_id' not in st.session_state or st.session_state.selected_master_id is None:
             st.session_state.selected_master_id = all_masters[0][0]
 
-        # Zobrazení mřížky (8 sloupců jako v Elvacu)
-        cols = st.columns(8)
+        # VYTVOŘENÍ HORIZONTÁLNÍ GALERIE (vše v jedné řadě)
+        num_masters = len(all_masters)
+        # Vytvoříme sloupce (max 6-8, aby se to vešlo na obrazovku)
+        cols = st.columns(num_masters if num_masters < 8 else 8)
+        
         for i, m in enumerate(all_masters):
             m_id, m_name, m_path = m[0], m[1], m[2]
             with cols[i % 8]:
-                # Tlačítko s názvem pozice (P1, P2...)
+                # Malý náhled (aby to nebylo obří)
+                if os.path.exists(m_path):
+                    st.image(m_path, use_container_width=True)
+                
+                # Tlačítko pro výběr
                 is_active = (m_id == st.session_state.selected_master_id)
-                if st.button(f"{m_name}", key=f"sel_{m_id}", use_container_width=True, 
+                if st.button(f"🎯 {m_name}", key=f"sel_m_{m_id}", use_container_width=True, 
                              type="primary" if is_active else "secondary"):
                     st.session_state.selected_master_id = m_id
                     st.rerun()
 
         st.divider()
 
-        # --- EDITOR ZÓN ---
-        # Najdeme data pro aktuálně vybraný Master ze seznamu
+        # NAČTENÍ DAT PRO VYBRANÝ MASTER
         sel_m = next((m for m in all_masters if m[0] == st.session_state.selected_master_id), all_masters[0])
         m_id, m_name, m_path = sel_m[0], sel_m[1], sel_m[2]
         
-        if os.path.exists(m_path):
-            img_roi = Image.open(m_path).convert("RGB")
-            W, H = img_roi.size
-            all_rois = database.get_rois(m_id)
-            
-            # Rozložení: Ovládání vlevo | Fotka vpravo
-            col_ctrl, col_viz = st.columns([1, 1.5])
-            
-            # ROZLOŽENÍ: Ovládání vlevo (1) | Fotka vpravo (1.8)
-            col_ctrl, col_viz = st.columns([1, 1.8])
+        # Dál už pokračuje tvůj kód pro col_ctrl a col_viz (editor)...
             
             with col_ctrl:
                 st.markdown(f"### 🔧 Nastavení pro: {m_name}")
