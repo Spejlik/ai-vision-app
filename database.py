@@ -71,16 +71,16 @@ def get_all_masters():
 def save_roi(master_id, project_name, name, x, y, w, h, nok):
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    # Tady zapisujeme 8 hodnot (včetně projektu)
+    # Tady vkládáme 8 hodnot
     c.execute("INSERT INTO rois (master_id, project, name, x, y, w, h, nok_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
               (master_id, project_name, name, x, y, w, h, nok))
     conn.commit()
     conn.close()
 
-def get_rois(master_id, project_name):  # <--- Musí zde být oba parametry!
+def get_rois(master_id, project_name):  # <-- Tady musí být dvě slova v závorce!
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    # SQL dotaz musí mít dva otazníky pro Master i Projekt
+    # SQL dotaz vyžaduje dva parametry (?), aby mohl filtrovat Master a Projekt
     c.execute("SELECT * FROM rois WHERE master_id = ? AND project = ?", (master_id, project_name))
     data = c.fetchall()
     conn.close()
