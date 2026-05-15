@@ -37,14 +37,11 @@ def add_master(project_name, path, x, y, w, h):
 def get_masters(project_name):
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    # Pokud v tabulce masters nemáš sloupec 'project', 
-    # ale používáš 'name' pro uložení názvu projektu:
-    c.execute("SELECT id, name, image_path FROM masters") 
+    # Tento dotaz vytáhne VŠECHNY mastery, které jsi v projektu vytvořil.
+    # Sloupec 'project' slouží jako pojistka, aby se ti nemíchaly různé držáky/výrobky.
+    c.execute("SELECT id, name, image_path FROM masters WHERE project = ?", (project_name,))
     data = c.fetchall()
     conn.close()
-    
-    # Pokud chceš filtrovat Mastery jen pro aktuální projekt, 
-    # ale nemáš na to sloupec, zatím vrať všechno, abychom odstranili chybu:
     return data
     
 def get_rois(master_id):
