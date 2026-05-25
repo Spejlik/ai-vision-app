@@ -5,15 +5,15 @@ def init_db():
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS projects (id INTEGER PRIMARY KEY, name TEXT UNIQUE)''')
     
-    # TADY JE ZMĚNA: Přidán sloupec 'project' do tabulky masters
     c.execute('''CREATE TABLE IF NOT EXISTS masters (
-                    id INTEGER PRIMARY KEY, 
-                    project TEXT, 
-                    name TEXT, 
-                    image_path TEXT, 
+                    id INTEGER PRIMARY KEY, project TEXT, name TEXT, image_path TEXT, 
                     x INTEGER, y INTEGER, w INTEGER, h INTEGER)''')
                     
-    c.execute('''CREATE TABLE IF NOT EXISTS rois (id INTEGER PRIMARY KEY, master_id INTEGER, project TEXT, name TEXT, x INTEGER, y INTEGER, w INTEGER, h INTEGER, nok_type INTEGER)''')
+    # ZMĚNA ZDE: Přidán sloupec tolerance (výchozí hodnota bude 20)
+    c.execute('''CREATE TABLE IF NOT EXISTS rois (
+                    id INTEGER PRIMARY KEY, master_id INTEGER, project TEXT, name TEXT, 
+                    x INTEGER, y INTEGER, w INTEGER, h INTEGER, nok_type INTEGER, 
+                    tolerance INTEGER DEFAULT 20)''')
     conn.commit()
     conn.close()
 
@@ -56,11 +56,13 @@ def get_rois(master_id, project_name):
     conn.close()
     return data
 
-def save_roi(master_id, project_name, name, x, y, w, h, nok):
+def save_roi(master_id, project, name, x, y, w, h, nok_type, tolerance=20): # <-- Přidán parametr
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    c.execute("INSERT INTO rois (master_id, project, name, x, y, w, h, nok_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-              (master_id, project_name, name, x, y, w, h, nok))
+    c.execute("""
+        INSERT INTO rois (master_id, project, name, x, y, w, h, nok_type, tolerance) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (master_id, project, name, x, y, w, h, nok_type, tolerance))
     conn.commit()
     conn.close()
     
@@ -92,13 +94,13 @@ def delete_master(master_id):
     conn.commit()
     conn.close()
 
-def update_roi(roi_id, name, x, y, w, h, nok_type):
+def update_roi(roi_id, name, x, y, w, h, nok_type, tolerance): # <-- Přidán parametr
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
     c.execute("""
         UPDATE rois 
-        SET name = ?, x = ?, y = ?, w = ?, h = ?, nok_type = ? 
+        SET name = ?, x = ?, y = ?, w = ?, h = ?, nok_type = ?, tolerance = ? 
         WHERE id = ?
-    """, (name, x, y, w, h, nok_type, roi_id))
+    """, (name, x, y, w, h, nok_type, tolerance, roi_id))
     conn.commit()
-    conn.close()    
+    conn.close()
