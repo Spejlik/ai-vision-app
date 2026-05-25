@@ -166,23 +166,21 @@ with tab2:
                 # 1. Klasický ořez ze sliderů
                 cropped_img = img.crop((ax, ay, ax + aw, ay + ah))
                 
-                # 2. ALGORITMUS PRO ČTVERCOVÝ MAT (Square Padding)
-                # Zjistíme větší rozměr, aby to byl čtverec
+                # 2. Úprava na čtverec (Square Padding), aby mřížka držela tvar
                 max_side = max(aw, ah)
                 square_img = Image.new('RGB', (max_side, max_side), color=(50, 50, 50))
                 
-                # Vložíme ořezaný obdélník přesně na střed čtverce
                 offset_x = (max_side - aw) // 2
                 offset_y = (max_side - ah) // 2
                 square_img.paste(cropped_img, (offset_x, offset_y))
                 
-                # Volitelně: Zmenšíme na jednotný rozměr 500x500 pro super rychlé načítání
+                # Zmenšení na jednotný rozměr pro rychlé náhledy
                 square_img = square_img.resize((500, 500), Image.Resampling.LANCZOS)
                 square_img.save(filename)
                 
-                # Do DB uložíme master se čtvercovými daty
+                # TADY BYLA CHYBA: Musíme poslat aktivní projekt jako PRVNÍ parametr!
                 database.add_master(st.session_state.active_project, m_id_name, filename, ax, ay, aw, ah)
-                st.success(f"Master {m_id_name} uložen jako čtverec!")
+                st.success(f"Master {m_id_name} uložen pro projekt {st.session_state.active_project}!")
                 st.rerun()
 
     with col_img:
