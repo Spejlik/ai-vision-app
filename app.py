@@ -117,29 +117,43 @@ with tab1:
                         m_path = m[3]
                         r_id, rx, ry, rw, rh, r_nok = r[0], r[4], r[5], r[6], r[7], r[8]
                         
-                        # Získání celého snímku z kamery
+                        # Získání celého snímku
                         if os.path.exists(m_path):
                             live_full_frame = Image.open(m_path).convert("RGB")
                         else:
                             live_full_frame = Image.new('RGB', (1200, 800), color=(70, 109, 137))
                         
-                        # Fyzické vystřižení (Crop) pouze zadané ROI
-                        roi_crop = live_full_frame.crop((rx, ry, rx+rw, ry+rh))
-                        
-                        # Simulace hodnocení (85% OK, 15% NOK)
+                        # Simulace kontroly (vyhodnocení OK/NOK)
                         is_zone_ok = random.random() > 0.15
                         if not is_zone_ok:
                             current_outputs[r_nok] = True
                             
                         zone_color = "#00FF00" if is_zone_ok else "#FF0000"
                         
-                        # Nakreslení indikačního rámečku přes okraje výřezu
-                        draw = ImageDraw.Draw(roi_crop)
-                        line_w = max(2, int(rw * 0.04)) # Adaptivní tloušťka pro malý výřez
-                        draw.rectangle([0, 0, rw-1, rh-1], outline=zone_color, width=line_w)
+                        # --- NOVÁ LOGIKA: DEFORMACE NA ČTVEREC ---
+                        # 1. Nejprve fyzicky vystřihneme obdélník z originálu
+                        roi_crop = live_full_frame.crop((rx, ry, rx+rw, ry+rh))
                         
-                        # Odeslání do konkrétního okna v dashboardu
-                        roi_placeholders[r_id].image(roi_crop, use_container_width=True)
+                        # 2. Vynuceně roztáhneme/smrštíme na čtverec 500x500 (deformace)
+                        desired_square_size = 500
+                        roi_square = roi_crop.resize((desired_square_size, desired_square_size), Image.Resampling.LANCZOS)
+                        
+                        # 3. Kreslení orámování stavu až POTE, co jsme obrázek zdeformovali
+                        # Díky tomu orámování zůstane ostré a nedeformované.
+                        draw_sq = ImageDraw.Draw(roi_square)
+                        # Tloušťka čáry stabilní vzhledem k 500px čtverci
+                        sq_line_w = max(6, int(desired_square_size * 0.015)) 
+                        # Kreslíme orámování přesně na okraje nového čtverce
+                        draw_sq.rectangle([0, 0, desired_square_size-1, desired_square_size-1], outline=zone_color, width=sq_line_w)
+                        
+                        # --- ZOBRAZENÍ DEFORMOVANÉHO ČTVERCE ---
+                        # Odeslání deformovaného čtverce do konkrétního okna v dashboardu
+                        # Přidáme popisek, který upozorní na deformaci
+                        roi_placeholders[r_id].image(roi_square, use_container_width=True, caption=f"Detail (deformovaný)")
+                        
+                    # Aktualizace PLC kontrolek
+                    for idx in range(1, 9):
+                        # ... zbytek kódu v Tabu 1 (PLC kontrolky) pokračuje beze změn ...
                         
                     # Aktualizace PLC kontrolek
                     for idx in range(1, 9):
