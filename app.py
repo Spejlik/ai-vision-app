@@ -57,7 +57,7 @@ with st.sidebar:
         st.session_state.active_project = None
 
 # --- DEFINICE TABŮ ---
-tab1, tab2, tab3, tab4 = st.tabs(["🚀 BĚH", "🎯 MASTER", "🔍 ZÓNY", "🔌 I/O"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["🚀 BĚH", "🎯 MASTER", "🔍 ZÓNY", "🔌 I/O", "📜 HISTORIE"])
 
 # --- TAB 1: BĚH ---
 with tab1:
@@ -168,10 +168,26 @@ with tab1:
                         if final_deviation > r_tolerance:
                             is_zone_ok = False
                             current_outputs[r_nok] = True
+                            status_text = "NOK"
                         else:
                             is_zone_ok = True
+                            status_text = "OK"
                             
                         zone_color = "#00FF00" if is_zone_ok else "#FF4B4B"
+                        
+                        # --- NOVÝ BLOK: UKLÁDÁNÍ DO HISTORIE (ELVAC STYLE) ---
+                        # Vytvoříme složky pro historii, pokud neexistují
+                        history_dir = f"history/{status_text}/{r_name}"
+                        if not os.path.exists(history_dir):
+                            os.makedirs(history_dir)
+                            
+                        # Uložíme originální nedeformovaný výřez z testovací fotky
+                        history_filename = f"{history_dir}/crop_{int(time.time())}_{random.randint(100,999)}.png"
+                        Image.fromarray(live_roi_np).save(history_filename)
+                        
+                        # Zapíšeme metadata do SQLite
+                        database.save_to_history(active_p, r_name, history_filename, status_text)
+                        # -----------------------------------------------------
                         
                         # 4. Úprava na čtvercovou dlaždici a vykreslení orámování stavu
                         roi_img = Image.fromarray(live_roi_np)
@@ -427,3 +443,61 @@ with tab4:
     # Rychlý testovací status pro kontrolu spojení
     st.text_input("IP Adresa Moxa I/O modulu", value="192.168.1.200")
     st.button("🔄 Testovat připojení hardwaru", use_container_width=True)
+    
+# --- TAB 5: HISTORIE ---
+with tab5:
+    st.subheader("📜 Historie inspekčních nálezů")
+    active_p = st.session_state.active_project
+    
+    if active_p:
+        # Filtrační lišta
+        f_col1, f_col2 = st.columns(2)
+        with f_col1:
+            status_f = st.selectbox("Filtr stavu:", ["Vše", "OK", "NOK"])
+        with f_col2:
+            # Vytáhneme dostupné zóny z DB pro tento projekt pro dynamický filtr
+            all_masters_p = database.get_all_masters(active_p)
+            roi_names_list = ["Vše"]
+            for m in all_masters_p:
+                rois_p = database.get_rois(m[0], active_p)
+                for r in rois_p:
+                    if r[3] not in roi_names_list:
+                        roi_names_list.append(r[3])
+            roi_f = st.selectbox("Filtr zóny:", roi_names_list)
+            
+        # Načtení dat z DB
+        hist_data = database.get_history(active_p, status_f, roi_f)
+        
+        if not hist_data:
+            st.info("V historii zatím nejsou žádné záznamy splňující kritéria.")
+        else:
+            st.write(f"📊 Zobrazeno posledních {len(hist_data)} nalezených kusů:")
+            
+            # Vytvoříme mřížku pro historii (5 fotek na řádek)
+            H_COLUMNS = 5
+            h_rows = [hist_data[i:i + H_COLUMNS] for i in range(0, len(hist_data), H_COLUMNS)]
+            
+            for h_row in h_rows:
+                cols = st.columns(H_COLUMNS)
+                for idx, row in enumerate(h_row):
+                    # row: 0=id, 1=project, 2=roi_name, 3=image_path, 4=timestamp, 5=status
+                    h_path, h_time, h_status, h_roi = row[3], row[4], row[5], row[2]
+                    
+                    with cols[idx]:
+                        with st.container(border=True):
+                            # Barevný odznak stavu
+                            if h_status == "OK":
+                                st.markdown("<span style='color:#00D48A; font-weight:bold;'>✅ OK</span>", unsafe_allow_html=True)
+                            else:
+                                st.markdown("<span style='color:#FF4B4B; font-weight:bold;'>🚨 NOK</span>", unsafe_allow_html=True)
+                                
+                            st.write(f"**{h_roi}**")
+                            st.caption(f"🕒 {h_time.split(' ')[1]}") # ukáže jen čas
+                            
+                            if os.path.exists(h_path):
+                                # Tady vidí operátor původní nedeformovanou fotku
+                                st.image(h_path, use_container_width=True)
+                            else:
+                                st.error("Obrázek smazán")
+    else:
+        st.warning("⚠️ Vyberte projekt pro zobrazení historie.")    

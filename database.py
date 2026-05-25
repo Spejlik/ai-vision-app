@@ -9,11 +9,15 @@ def init_db():
                     id INTEGER PRIMARY KEY, project TEXT, name TEXT, image_path TEXT, 
                     x INTEGER, y INTEGER, w INTEGER, h INTEGER)''')
                     
-    # ZMĚNA ZDE: Přidán sloupec tolerance (výchozí hodnota bude 20)
     c.execute('''CREATE TABLE IF NOT EXISTS rois (
                     id INTEGER PRIMARY KEY, master_id INTEGER, project TEXT, name TEXT, 
                     x INTEGER, y INTEGER, w INTEGER, h INTEGER, nok_type INTEGER, 
                     tolerance INTEGER DEFAULT 20)''')
+                    
+    # NOVÁ TABULKA PRO HISTORII SNÍMKŮ
+    c.execute('''CREATE TABLE IF NOT EXISTS history (
+                    id INTEGER PRIMARY KEY, project TEXT, roi_name TEXT, 
+                    image_path TEXT, timestamp TEXT, status TEXT)''')
     conn.commit()
     conn.close()
 
@@ -104,3 +108,35 @@ def update_roi(roi_id, name, x, y, w, h, nok_type, tolerance): # <-- Přidán pa
     """, (name, x, y, w, h, nok_type, tolerance, roi_id))
     conn.commit()
     conn.close()
+    
+def save_to_history(project, roi_name, image_path, status):
+    import datetime
+    conn = sqlite3.connect('vision_system.db')
+    c = conn.cursor()
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    c.execute("""
+        INSERT INTO history (project, roi_name, image_path, timestamp, status) 
+        VALUES (?, ?, ?, ?, ?)
+    """, (project, roi_name, image_path, now, status))
+    conn.commit()
+    conn.close()
+
+def get_history(project, status_filter=None, roi_filter=None):
+    conn = sqlite3.connect('vision_system.db')
+    c = conn.cursor()
+    query = "SELECT * FROM history WHERE project = ?"
+    params = [project]
+    
+    if status_filter and status_filter != "Vše":
+        query += " AND status = ?"
+        params.append(status_filter)
+        
+    if roi_filter and roi_filter != "Vše":
+        query += " AND roi_name = ?"
+        params.append(roi_filter)
+        
+    query += " ORDER BY id DESC LIMIT 100" # omezíme na top 100 nejnovějších
+    c.execute(query, tuple(params))
+    data = c.fetchall()
+    conn.close()
+    return data    
