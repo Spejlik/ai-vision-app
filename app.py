@@ -109,46 +109,57 @@ with tab1:
 
                 if run_engine:
                     import random
+                    import glob
                     import numpy as np
                     
-                    # Procházíme a vyhodnocujeme každý VÝŘEZ zvlášť pomocí OpenCV
+                    # Procházíme nadefinované zóny v aplikaci
                     for m, r in all_active_rois:
                         m_path = m[3]
-                        # SQL struktura zóny r: r[0]=id, r[3]=název, r[4]=x, r[5]=y, r[6]=w, r[7]=h, r[8]=nok, r[9]=tolerance
-                        r_id, rx, ry, rw, rh, r_nok = r[0], r[4], r[5], r[6], r[7], r[8]
+                        # r[3] je název zóny (např. Zebro_P1), r[8] je NOK kód, r[9] je tolerance citlivosti
+                        r_id, r_name, r_nok = r[0], r[3], r[8]
                         r_tolerance = r[9] if len(r) > 9 else 20
                         
-                        # 1. Načtení originální Master šablony
+                        # 1. NAČTENÍ MASTER ŠABLONY (Reference pro porovnání)
                         if os.path.exists(m_path):
                             master_full = Image.open(m_path).convert("RGB")
                         else:
                             master_full = Image.new('RGB', (1200, 800), color=(70, 109, 137))
-                        
-                        # Vystřihneme čistý referenční vzor (Master)
-                        master_crop = master_full.crop((rx, ry, rx+rw, ry+rh))
-                        
-                        # 2. SIMULACE ŽIVÉHO SNÍMKU: Převedeme na numpy (OpenCV formát)
-                        live_roi_np = np.array(master_crop)
+                        master_crop = master_full.crop((r[4], r[5], r[4]+r[6], r[5]+r[7]))
                         master_roi_np = np.array(master_crop)
-                        
-                        # Simulujeme realitu linky: 15% šance, že se v zóně něco pokazí (změna jasu/stín/vada)
-                        is_piece_defective = random.random() > 0.85
-                        if is_piece_defective:
-                            # Uměle ztmavíme nebo poškodíme matrici obrazu pro simulaci zmetku
-                            live_roi_np = np.clip(live_roi_np.astype(int) - random.randint(40, 80), 0, 255).astype(np.uint8)
-                        else:
-                            # I u dobrého kusu simulujeme drobný průmyslový šum kamery (odchylka jasu +-2)
-                            live_roi_np = np.clip(live_roi_np.astype(int) + random.randint(-2, 2), 0, 255).astype(np.uint8)
 
-                        # 3. OPRAVDOVÝ OPENCV ENGINE: Výpočet kvadratické odchylky (MSE)
-                        # Spočítáme průměrný rozdíl mezi hodnotami pixelů šablony a živého obrazu
+                        # 2. ŽIVÝ AUTOMATICKÝ SBĚR REÁLNÝCH FOTEK Z DISKU
+                        # Vyhledáme všechny .jpg snímky ve složkách OK a NOK pro danou zónu
+                        ok_files = glob.glob(f"dataset/OK/{r_name}/*.jpg")
+                        nok_files = glob.glob(f"dataset/NOK/{r_name}/*.jpg")
+                        
+                        # Spojíme je do jednoho listu, ze kterého budeme náhodně losovat "živý kus" z linky
+                        all_test_files = ok_files + nok_files
+                        
+                        live_roi_np = None
+                        chosen_file_name = "Simulace (Chybí lokální soubory)"
+                        
+                        if all_test_files:
+                            # Losujeme jeden náhodný snímek z datasetu jako simulaci průjezdu kusu na lince
+                            selected_path = random.choice(all_test_files)
+                            chosen_file_name = os.path.basename(selected_path)
+                            
+                            # Načteme reálnou testovací fotku
+                            live_roi_img = Image.open(selected_path).convert("RGB")
+                            # Vynutíme stejný rozměr matice jako má Master pro korektní matematické porovnání
+                            live_roi_img = live_roi_img.resize((r[6], r[7]), Image.Resampling.LANCZOS)
+                            live_roi_np = np.array(live_roi_img)
+                        else:
+                            # Záložní varianta, pokud by skript nenašel složku dataset
+                            live_roi_np = np.array(master_crop)
+
+                        # 3. VÝPOČET REÁLNÉ MATEMATICKÉ ODCHYLKY (MSE)
                         err = np.sum((master_roi_np.astype("float") - live_roi_np.astype("float")) ** 2)
                         err /= float(master_roi_np.shape[0] * master_roi_np.shape[1] * master_roi_np.shape[2])
                         
-                        # Normalizujeme chybu do rozumné škály pro náš slider
-                        final_deviation = min(100, int(err / 50))
+                        # Škálování odchylky pro přehlednost na slideru
+                        final_deviation = min(100, int(err / 15))
                         
-                        # Vyhodnocení: Pokud odchylka překročí nastavenou toleranci -> KO
+                        # Vyhodnocení limitu
                         if final_deviation > r_tolerance:
                             is_zone_ok = False
                             current_outputs[r_nok] = True
@@ -157,19 +168,18 @@ with tab1:
                             
                         zone_color = "#00FF00" if is_zone_ok else "#FF4B4B"
                         
-                        # 4. Převod zpět na PIL a deformace na stabilní čtverec 500x500 pro dashboard
+                        # 4. Úprava na čtvercovou dlaždici a vykreslení orámování stavu
                         roi_img = Image.fromarray(live_roi_np)
                         desired_square_size = 500
                         roi_square = roi_img.resize((desired_square_size, desired_square_size), Image.Resampling.LANCZOS)
                         
-                        # Vykreslení grafiky stavu do čtverce
                         draw_sq = ImageDraw.Draw(roi_square)
                         sq_line_w = max(6, int(desired_square_size * 0.015)) 
                         draw_sq.rectangle([0, 0, desired_square_size-1, desired_square_size-1], outline=zone_color, width=sq_line_w)
                         
-                        # Zobrazení naměřené odchylky vs. limitu přímo na displeji
+                        # Zobrazení výsledku na Dashboardu
                         status_text = "OK" if is_zone_ok else "NOK!"
-                        caption_str = f"Odchylka: {final_deviation}% (Limit: {r_tolerance}%) | {status_text}"
+                        caption_str = f"Snímek: {chosen_file_name} | Odchylka: {final_deviation}% (Limit: {r_tolerance}%) | {status_text}"
                         roi_placeholders[r_id].image(roi_square, use_container_width=True, caption=caption_str)
                         
                     # Aktualizace PLC kontrolek
