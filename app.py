@@ -170,7 +170,7 @@ with tab1:
                         # Zobrazení naměřené odchylky vs. limitu přímo na displeji
                         status_text = "OK" if is_zone_ok else "NOK!"
                         caption_str = f"Odchylka: {final_deviation}% (Limit: {r_tolerance}%) | {status_text}"
-                        roi_placeholders[r_id].image(roi_square, use_container_width=True, caption=caption_str))
+                        roi_placeholders[r_id].image(roi_square, use_container_width=True, caption=caption_str)
                         
                     # Aktualizace PLC kontrolek
                     for idx in range(1, 9):
