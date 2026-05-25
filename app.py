@@ -95,8 +95,8 @@ with tab1:
             if run_engine:
                 import random
                 
-                # Použijeme cestu z prvního masteru pro simulaci kamery
-                m_path_sim = all_masters[0][2]
+                # Použijeme správný index pro image_path (m[3] je teď image_path)
+                m_path_sim = all_masters[0][3]
                 
                 if os.path.exists(m_path_sim):
                     live_frame = Image.open(m_path_sim).convert("RGB")
@@ -109,21 +109,18 @@ with tab1:
                 
                 # Procházíme zóny pro aktivní projekt
                 for m in all_masters:
-                    m_id = m[0]
+                    m_id = m[0] # id je na indexu 0
                     rois = database.get_rois(m_id, active_p)
                     
                     for r in rois:
                         rx, ry, rw, rh, r_nok = r[4], r[5], r[6], r[7], r[8]
                         
-                        # Simulace kontroly: 85% šance na OK, 15% na chybu
                         is_zone_ok = random.random() > 0.15
-                        
                         if not is_zone_ok:
                             current_outputs[r_nok] = True
                         
                         zone_color = "#00FF00" if is_zone_ok else "#FF0000"
                         
-                        # Vykreslení obdélníku zóny
                         live_draw.rectangle([rx, ry, rx+rw, ry+rh], outline=zone_color, width=line_w)
                         live_draw.text((rx, ry-15), f"{r[3]} (NOK{r_nok})", fill=zone_color)
                 
@@ -202,7 +199,8 @@ with tab3:
         # Galerie masterů
         m_cols = st.columns(8)
         for i, m in enumerate(all_masters):
-            m_id_loop, m_name_loop, m_path_loop = m[0], m[1], m[2]
+            # ZMĚNA INDEXŮ: m[0]=id, m[2]=název, m[3]=cesta k obrázku
+            m_id_loop, m_name_loop, m_path_loop = m[0], m[2], m[3]
             with m_cols[i % 8]:
                 if os.path.exists(m_path_loop):
                     st.image(m_path_loop, use_container_width=True)
@@ -214,9 +212,10 @@ with tab3:
 
         st.divider()
         
-        # Načtení aktivního masteru
+        # Načtení aktivního masteru ze seznamu
         sel_m = next((m for m in all_masters if m[0] == st.session_state.selected_master_id), all_masters[0])
-        m_id, m_name, m_path = sel_m[0], sel_m[1], sel_m[2]
+        # ZMĚNA INDEXŮ: m[0]=id, m[2]=název, m[3]=cesta
+        m_id, m_name, m_path = sel_m[0], sel_m[2], sel_m[3]
         
         if os.path.exists(m_path):
             img_roi = Image.open(m_path).convert("RGB")

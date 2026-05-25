@@ -39,11 +39,11 @@ def add_master(project_name, name, path, x, y, w, h): # <-- Přidán project_nam
     conn.commit()
     conn.close()
 
-def get_all_masters(project_name): # <-- Přidán project_name pro filtrování
+def get_all_masters(project_name):
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    # Filtrujeme Mastery pouze pro aktivní projekt
-    c.execute("SELECT id, name, image_path FROM masters WHERE project = ?", (project_name,))
+    # ZMĚNA: Taháme všechny sloupce (*), abychom měli ID, Projekt, Název, Cestu i Rozměry výřezu ax, ay, aw, ah
+    c.execute("SELECT * FROM masters WHERE project = ?", (project_name,))
     data = c.fetchall()
     conn.close()
     return data
