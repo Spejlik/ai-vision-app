@@ -145,3 +145,23 @@ def get_history(project_filter="Vše", status_filter="Vše", roi_filter="Vše"):
     data = c.fetchall()
     conn.close()
     return data    
+    
+def get_unique_projects_from_history():
+    conn = sqlite3.connect('vision_system.db')
+    c = conn.cursor()
+    c.execute("SELECT DISTINCT project FROM history ORDER BY project ASC")
+    rows = c.fetchall()
+    conn.close()
+    # Převedeme seznam ntic [('MQB',), ('A0',)] na čistý seznam řetězců ['MQB', 'A0']
+    return [r[0] for r in rows]
+
+def get_unique_rois_from_history(project_filter="Vše"):
+    conn = sqlite3.connect('vision_system.db')
+    c = conn.cursor()
+    if project_filter == "Vše":
+        c.execute("SELECT DISTINCT roi_name FROM history ORDER BY roi_name ASC")
+    else:
+        c.execute("SELECT DISTINCT roi_name FROM history WHERE project = ? ORDER BY roi_name ASC", (project_filter,))
+    rows = c.fetchall()
+    conn.close()
+    return [r[0] for r in rows]    

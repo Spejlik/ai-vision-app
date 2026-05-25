@@ -459,11 +459,11 @@ with tab4:
 with tab5:
     st.subheader("📜 Historie inspekčních nálezů (Archiv)")
     
-    # Načteme všechny existující projekty z DB pro filtr
-    all_db_projects = database.get_projects()
-    project_options = ["Vše"] + [p[1] for p in all_db_projects]
+    # 1. ZÍSKÁNÍ PROJEKTŮ: Vytáhneme unikátní textové názvy projektů přímo z historie
+    history_projects = database.get_unique_projects_from_history()
+    project_options = ["Vše"] + history_projects
     
-    # Určení výchozího indexu podle aktivního projektu v sidebaru
+    # Bezpečné určení výchozího indexu podle sidebaru
     default_p_idx = 0
     if st.session_state.active_project in project_options:
         default_p_idx = project_options.index(st.session_state.active_project)
@@ -478,29 +478,12 @@ with tab5:
         status_f = st.selectbox("Filtr stavu (Jakost):", ["Vše", "OK", "NOK"])
         
     with f_col3:
-        # Dynamické načtení zón podle vybraného projektu pro filtr ROI
-        roi_options = ["Vše"]
-        if proj_f != "Vše":
-            all_masters_p = database.get_all_masters(proj_f)
-            for m in all_masters_p:
-                rois_p = database.get_rois(m[0], proj_f)
-                for r in rois_p:
-                    if r[3] not in roi_options:
-                        roi_options.append(r[3])
-        else:
-            # Pokud jsou vybrány všechny projekty, vytáhneme úplně všechny zóny z DB, ať filtr ROI funguje
-            all_db_projects_list = [p[1] for p in all_db_projects]
-            for p_name in all_db_projects_list:
-                all_masters_p = database.get_all_masters(p_name)
-                for m in all_masters_p:
-                    rois_p = database.get_rois(m[0], p_name)
-                    for r in rois_p:
-                        if r[3] not in roi_options:
-                            roi_options.append(r[3])
-                            
+        # 2. DYNAMICKÉ ZÍSKÁNÍ ZÓN: Vytáhneme unikátní zóny z historie podle vybraného projektu
+        history_rois = database.get_unique_rois_from_history(proj_f)
+        roi_options = ["Vše"] + history_rois
         roi_f = st.selectbox("Filtr zóny (ROI):", roi_options)
         
-    # Načtení historických dat z databáze na základě zvolených filtrů (Předáváme proj_f, status_f, roi_f)
+    # Načtení historických dat z databáze na základě zvolených filtrů
     hist_data = database.get_history(proj_f, status_f, roi_f)
     
     if not hist_data:
@@ -518,24 +501,22 @@ with tab5:
                 # row: 0=id, 1=projekt, 2=roi_name, 3=image_path, 4=timestamp, 5=status
                 h_proj, h_roi, h_path, h_time, h_status = row[1], row[2], row[3], row[4], row[5]
                 
-                # Formátování času: z "2026-05-25 13:54:21" uděláme čisté "25.05. 13:54:21" pro operátora
+                # Formátování času: z "2026-05-25 14:01:36" uděláme čisté "25.05. 14:01:36"
                 try:
                     import datetime
                     dt_obj = datetime.datetime.strptime(h_time, "%Y-%m-%d %H:%M:%S")
                     formatted_time = dt_obj.strftime("%d.%m. %H:%M:%S")
                 except:
-                    formatted_time = h_time # fallback, pokud by formát nesouhlasil
+                    formatted_time = h_time
                 
                 with cols[idx]:
                     with st.container(border=True):
-                        # Vizuální rozlišení OK / NOK
                         if h_status == "OK":
                             st.markdown("<span style='color:#00D48A; font-weight:bold;'>✅ OK</span>", unsafe_allow_html=True)
                         else:
                             st.markdown("<span style='color:#FF4B4B; font-weight:bold;'>🚨 NOK</span>", unsafe_allow_html=True)
                             
                         st.write(f"**{h_roi}**")
-                        # OPRAVENÝ POPISEK: Čistý text projektu a čitelný formátovaný čas, který se neusekne
                         st.caption(f"📁 {h_proj}")
                         st.caption(f"🕒 {formatted_time}")
                         
