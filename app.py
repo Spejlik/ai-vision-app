@@ -478,7 +478,7 @@ with tab5:
         status_f = st.selectbox("Filtr stavu (Jakost):", ["Vše", "OK", "NOK"])
         
     with f_col3:
-        # Dynamické načtení zón podle vybraného projektu
+        # Dynamické načtení zón podle vybraného projektu pro filtr ROI
         roi_options = ["Vše"]
         if proj_f != "Vše":
             all_masters_p = database.get_all_masters(proj_f)
@@ -487,10 +487,20 @@ with tab5:
                 for r in rois_p:
                     if r[3] not in roi_options:
                         roi_options.append(r[3])
-        st.write("") # drobný spacing pro zarovnání
+        else:
+            # Pokud jsou vybrány všechny projekty, vytáhneme úplně všechny zóny z DB, ať filtr ROI funguje
+            all_db_projects_list = [p[1] for p in all_db_projects]
+            for p_name in all_db_projects_list:
+                all_masters_p = database.get_all_masters(p_name)
+                for m in all_masters_p:
+                    rois_p = database.get_rois(m[0], p_name)
+                    for r in rois_p:
+                        if r[3] not in roi_options:
+                            roi_options.append(r[3])
+                            
         roi_f = st.selectbox("Filtr zóny (ROI):", roi_options)
         
-    # Načtení historických dat z databáze na základě zvolených filtrů
+    # Načtení historických dat z databáze na základě zvolených filtrů (Předáváme proj_f, status_f, roi_f)
     hist_data = database.get_history(proj_f, status_f, roi_f)
     
     if not hist_data:
@@ -508,6 +518,14 @@ with tab5:
                 # row: 0=id, 1=projekt, 2=roi_name, 3=image_path, 4=timestamp, 5=status
                 h_proj, h_roi, h_path, h_time, h_status = row[1], row[2], row[3], row[4], row[5]
                 
+                # Formátování času: z "2026-05-25 13:54:21" uděláme čisté "25.05. 13:54:21" pro operátora
+                try:
+                    import datetime
+                    dt_obj = datetime.datetime.strptime(h_time, "%Y-%m-%d %H:%M:%S")
+                    formatted_time = dt_obj.strftime("%d.%m. %H:%M:%S")
+                except:
+                    formatted_time = h_time # fallback, pokud by formát nesouhlasil
+                
                 with cols[idx]:
                     with st.container(border=True):
                         # Vizuální rozlišení OK / NOK
@@ -517,7 +535,9 @@ with tab5:
                             st.markdown("<span style='color:#FF4B4B; font-weight:bold;'>🚨 NOK</span>", unsafe_allow_html=True)
                             
                         st.write(f"**{h_roi}**")
-                        st.caption(f"📁 {h_proj} | 🕒 {h_time.split(' ')[1]}")
+                        # OPRAVENÝ POPISEK: Čistý text projektu a čitelný formátovaný čas, který se neusekne
+                        st.caption(f"📁 {h_proj}")
+                        st.caption(f"🕒 {formatted_time}")
                         
                         if os.path.exists(h_path):
                             st.image(h_path, use_container_width=True)
