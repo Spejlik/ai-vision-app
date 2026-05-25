@@ -457,58 +457,69 @@ with tab4:
     
 # --- TAB 5: HISTORIE ---
 with tab5:
-    st.subheader("📜 Historie inspekčních nálezů")
-    active_p = st.session_state.active_project
+    st.subheader("📜 Historie inspekčních nálezů (Archiv)")
     
-    if active_p:
-        # Filtrační lišta
-        f_col1, f_col2 = st.columns(2)
-        with f_col1:
-            status_f = st.selectbox("Filtr stavu:", ["Vše", "OK", "NOK"])
-        with f_col2:
-            # Vytáhneme dostupné zóny z DB pro tento projekt pro dynamický filtr
-            all_masters_p = database.get_all_masters(active_p)
-            roi_names_list = ["Vše"]
-            for m in all_masters_p:
-                rois_p = database.get_rois(m[0], active_p)
-                for r in rois_p:
-                    if r[3] not in roi_names_list:
-                        roi_names_list.append(r[3])
-            roi_f = st.selectbox("Filtr zóny:", roi_names_list)
-            
-        # Načtení dat z DB
-        hist_data = database.get_history(active_p, status_f, roi_f)
+    # Načteme všechny existující projekty z DB pro filtr
+    all_db_projects = database.get_projects()
+    project_options = ["Vše"] + [p[1] for p in all_db_projects]
+    
+    # Určení výchozího indexu podle aktivního projektu v sidebaru
+    default_p_idx = 0
+    if st.session_state.active_project in project_options:
+        default_p_idx = project_options.index(st.session_state.active_project)
+    
+    # Třísloupcová filtrační lišta
+    f_col1, f_col2, f_col3 = st.columns(3)
+    
+    with f_col1:
+        proj_f = st.selectbox("Filtr projektu:", project_options, index=default_p_idx)
+    
+    with f_col2:
+        status_f = st.selectbox("Filtr stavu (Jakost):", ["Vše", "OK", "NOK"])
         
-        if not hist_data:
-            st.info("V historii zatím nejsou žádné záznamy splňující kritéria.")
-        else:
-            st.write(f"📊 Zobrazeno posledních {len(hist_data)} nalezených kusů:")
-            
-            # Vytvoříme mřížku pro historii (5 fotek na řádek)
-            H_COLUMNS = 5
-            h_rows = [hist_data[i:i + H_COLUMNS] for i in range(0, len(hist_data), H_COLUMNS)]
-            
-            for h_row in h_rows:
-                cols = st.columns(H_COLUMNS)
-                for idx, row in enumerate(h_row):
-                    # row: 0=id, 1=project, 2=roi_name, 3=image_path, 4=timestamp, 5=status
-                    h_path, h_time, h_status, h_roi = row[3], row[4], row[5], row[2]
-                    
-                    with cols[idx]:
-                        with st.container(border=True):
-                            # Barevný odznak stavu
-                            if h_status == "OK":
-                                st.markdown("<span style='color:#00D48A; font-weight:bold;'>✅ OK</span>", unsafe_allow_html=True)
-                            else:
-                                st.markdown("<span style='color:#FF4B4B; font-weight:bold;'>🚨 NOK</span>", unsafe_allow_html=True)
-                                
-                            st.write(f"**{h_roi}**")
-                            st.caption(f"🕒 {h_time.split(' ')[1]}") # ukáže jen čas
-                            
-                            if os.path.exists(h_path):
-                                # Tady vidí operátor původní nedeformovanou fotku
-                                st.image(h_path, use_container_width=True)
-                            else:
-                                st.error("Obrázek smazán")
+    with f_col3:
+        # Dynamické načtení zón podle vybraného projektu
+        roi_options = ["Vše"]
+        if proj_f != "Vše":
+            all_masters_p = database.get_all_masters(proj_f)
+            for m in all_masters_p:
+                rois_p = database.get_rois(m[0], proj_f)
+                for r in rois_p:
+                    if r[3] not in roi_options:
+                        roi_options.append(r[3])
+        st.write("") # drobný spacing pro zarovnání
+        roi_f = st.selectbox("Filtr zóny (ROI):", roi_options)
+        
+    # Načtení historických dat z databáze na základě zvolených filtrů
+    hist_data = database.get_history(proj_f, status_f, roi_f)
+    
+    if not hist_data:
+        st.info("V archivu zatím nejsou žádné záznamy odpovídající zvoleným filtrům.")
     else:
-        st.warning("⚠️ Vyberte projekt pro zobrazení historie.")    
+        st.write(f"📊 Nalezeno {len(hist_data)} snímků v archivu:")
+        
+        # Mřížka galerie: 5 nedeformovaných snímků na řádek
+        H_COLUMNS = 5
+        h_rows = [hist_data[i:i + H_COLUMNS] for i in range(0, len(hist_data), H_COLUMNS)]
+        
+        for h_row in h_rows:
+            cols = st.columns(H_COLUMNS)
+            for idx, row in enumerate(h_row):
+                # row: 0=id, 1=projekt, 2=roi_name, 3=image_path, 4=timestamp, 5=status
+                h_proj, h_roi, h_path, h_time, h_status = row[1], row[2], row[3], row[4], row[5]
+                
+                with cols[idx]:
+                    with st.container(border=True):
+                        # Vizuální rozlišení OK / NOK
+                        if h_status == "OK":
+                            st.markdown("<span style='color:#00D48A; font-weight:bold;'>✅ OK</span>", unsafe_allow_html=True)
+                        else:
+                            st.markdown("<span style='color:#FF4B4B; font-weight:bold;'>🚨 NOK</span>", unsafe_allow_html=True)
+                            
+                        st.write(f"**{h_roi}**")
+                        st.caption(f"📁 {h_proj} | 🕒 {h_time.split(' ')[1]}")
+                        
+                        if os.path.exists(h_path):
+                            st.image(h_path, use_container_width=True)
+                        else:
+                            st.error("Snímek nenalezen")    
