@@ -20,6 +20,15 @@ if 'active_project' not in st.session_state:
 if 'selected_master_id' not in st.session_state:
     st.session_state.selected_master_id = None
 
+# CSS pro profesionální vzhled
+st.markdown("""
+    <style>
+        .block-container { padding-top: 1rem; }
+        header { visibility: hidden; }
+        .stButton>button { border-radius: 5px; }
+    </style>
+""", unsafe_allow_html=True)
+
 # --- SIDEBAR: SPRÁVA PROJEKTŮ ---
 with st.sidebar:
     st.title("⚙️ Konfigurace")
@@ -75,7 +84,6 @@ with tab2:
                     os.makedirs("masters")
                 
                 filename = f"masters/master_{int(time.time())}.png"
-                # Ořez pomocí PIL
                 img = st.session_state.setup_image_buffer
                 cropped_img = img.crop((ax, ay, ax + aw, ay + ah))
                 cropped_img.save(filename)
@@ -93,12 +101,11 @@ with tab2:
         if st.session_state.setup_image_buffer is not None:
             preview_img = st.session_state.setup_image_buffer.copy()
             
-            # Výpočet tloušťky podle šířky zdrojového obrazu z kamery
+            # Adaptivní tloušťka pro náhled ořezu
             cam_w = preview_img.size[0]
             master_line_w = max(2, int(cam_w * 0.007))
             
             draw = ImageDraw.Draw(preview_img)
-            # Použijeme master_line_w
             draw.rectangle([ax, ay, ax+aw, ay+ah], outline="red", width=master_line_w)
             st.image(preview_img, use_container_width=True, caption="Červený rámeček ukazuje budoucí ořez")
 
@@ -130,7 +137,7 @@ with tab3:
 
         st.divider()
         
-        # Výběr dat pro aktuální master
+        # Načtení aktivního masteru
         sel_m = next((m for m in all_masters if m[0] == st.session_state.selected_master_id), all_masters[0])
         m_id, m_name, m_path = sel_m[0], sel_m[1], sel_m[2]
         
@@ -139,7 +146,9 @@ with tab3:
             W, H = img_roi.size
             all_rois = database.get_rois(m_id, active_p)
             
+            # Definice sloupců - sjednoceno na c_ctrl a c_viz
             c_ctrl, c_viz = st.columns([1, 1.8])
+            
             with c_ctrl:
                 st.markdown(f"### 🔧 Nastavení zón: {m_name}")
                 zn = st.text_input("Název zóny", value=f"Zóna {len(all_rois)+1}")
@@ -155,28 +164,21 @@ with tab3:
                     st.success("Zóna uložena!")
                     st.rerun()
 
-            with col_viz:
-                from PIL import ImageDraw
+            with c_viz:
                 draw = ImageDraw.Draw(img_roi)
                 
-                # DYNAMICKÁ TLOUŠŤKA (Cca 0.7% z celkové šířky obrázku, minimálně 2 pixely)
+                # Výpočet stabilní tloušťky čáry na obrazovce
                 line_w = max(2, int(W * 0.007))
                 
-                # 1. Vykreslení UŽ ULOŽENÝCH zón
+                # 1. Kreslení už uložených zón
                 for r in all_rois:
-                    x_r, y_r, w_r, h_r = r[4], r[5], r[6], r[7]
-                    name_r, nok_r = r[3], r[8]
-                    
-                    # Použijeme vypočítanou line_w
-                    draw.rectangle([x_r, y_r, x_r + w_r, y_r + h_r], outline="#00FF00", width=line_w)
-                    draw.text((x_r, y_r - 15), f"{name_r} (NOK{nok_r})", fill="#00FF00")
+                    rx, ry, rw, rh = r[4], r[5], r[6], r[7]
+                    draw.rectangle([rx, ry, rx+rw, ry+rh], outline="#00FF00", width=line_w)
+                    draw.text((rx, ry-15), f"{r[3]} (NOK{r[8]})", fill="#00FF00")
 
-                # 2. Vykreslení ORANŽOVÉHO NÁHLEDU
-                # Pro náhled dáme čáru o něco tlustší (o 2 pixely), aby se zvýraznila
-                draw.rectangle([zx, zy, zx + zw, zy + zh], outline="orange", width=line_w + 2)
-                draw.text((zx, zy - 25), "NÁHLED NOVÉ ZÓNY", fill="orange")
-
-                # Zobrazení výsledného obrázku
+                # 2. Kreslení oranžového náhledu z aktuálních sliderů
+                draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=line_w + 2)
+                
                 st.image(img_roi, use_container_width=True, caption=f"Pracovní plocha: {m_name}")
 
 # --- TAB 4: I/O ---
