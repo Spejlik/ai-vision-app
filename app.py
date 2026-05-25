@@ -162,12 +162,27 @@ with tab2:
                 
                 filename = f"masters/master_{int(time.time())}.png"
                 img = st.session_state.setup_image_buffer
-                cropped_img = img.crop((ax, ay, ax + aw, ay + ah))
-                cropped_img.save(filename)
                 
-                # ZMĚNA ZDE: Přidáváme aktivní projekt, aby se Master uložil k němu
+                # 1. Klasický ořez ze sliderů
+                cropped_img = img.crop((ax, ay, ax + aw, ay + ah))
+                
+                # 2. ALGORITMUS PRO ČTVERCOVÝ MAT (Square Padding)
+                # Zjistíme větší rozměr, aby to byl čtverec
+                max_side = max(aw, ah)
+                square_img = Image.new('RGB', (max_side, max_side), color=(50, 50, 50))
+                
+                # Vložíme ořezaný obdélník přesně na střed čtverce
+                offset_x = (max_side - aw) // 2
+                offset_y = (max_side - ah) // 2
+                square_img.paste(cropped_img, (offset_x, offset_y))
+                
+                # Volitelně: Zmenšíme na jednotný rozměr 500x500 pro super rychlé načítání
+                square_img = square_img.resize((500, 500), Image.Resampling.LANCZOS)
+                square_img.save(filename)
+                
+                # Do DB uložíme master se čtvercovými daty
                 database.add_master(st.session_state.active_project, m_id_name, filename, ax, ay, aw, ah)
-                st.success(f"Master {m_id_name} uložen pro projekt {st.session_state.active_project}!")
+                st.success(f"Master {m_id_name} uložen jako čtverec!")
                 st.rerun()
 
     with col_img:
@@ -198,19 +213,34 @@ with tab3:
         if 'selected_master_id' not in st.session_state:
             st.session_state.selected_master_id = all_masters[0][0]
 
-        # Galerie masterů
-        m_cols = st.columns(8)
-        for i, m in enumerate(all_masters):
-            # ZMĚNA INDEXŮ: m[0]=id, m[2]=název, m[3]=cesta k obrázku
-            m_id_loop, m_name_loop, m_path_loop = m[0], m[2], m[3]
-            with m_cols[i % 8]:
-                if os.path.exists(m_path_loop):
-                    st.image(m_path_loop, use_container_width=True)
+        # --- NOVÁ ČISTÁ MŘÍŽKA GALERIE ---
+        st.write("### 🖼️ Výběr pozice / kamery:")
+        
+        # Definujeme fixní počet sloupců v mřížce (např. 6)
+        COLUMNS_PER_ROW = 6
+        m_rows = [all_masters[i:i + COLUMNS_PER_ROW] for i in range(0, len(all_masters), COLUMNS_PER_ROW)]
+        
+        for row in m_rows:
+            cols = st.columns(COLUMNS_PER_ROW)
+            for idx, m in enumerate(row):
+                m_id_loop, m_name_loop, m_path_loop = m[0], m[2], m[3]
                 
-                if st.button(f"{m_name_loop}", key=f"btn_m_{m_id_loop}", use_container_width=True,
-                             type="primary" if (m_id_loop == st.session_state.selected_master_id) else "secondary"):
-                    st.session_state.selected_master_id = m_id_loop
-                    st.rerun()
+                with cols[idx]:
+                    if os.path.exists(m_path_loop):
+                        st.image(m_path_loop, use_container_width=True)
+                    
+                    # Kontrola, zda je tato pozice aktivní
+                    is_active = (m_id_loop == st.session_state.selected_master_id)
+                    
+                    # Vylepšené tlačítko s jasným popiskem, které se nepřekryje
+                    if st.button(
+                        f"📸 {m_name_loop}", 
+                        key=f"btn_m_{m_id_loop}", 
+                        use_container_width=True,
+                        type="primary" if is_active else "secondary"
+                    ):
+                        st.session_state.selected_master_id = m_id_loop
+                        st.rerun()
 
         st.divider()
         
