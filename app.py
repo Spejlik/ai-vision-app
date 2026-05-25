@@ -92,8 +92,14 @@ with tab2:
         
         if st.session_state.setup_image_buffer is not None:
             preview_img = st.session_state.setup_image_buffer.copy()
+            
+            # Výpočet tloušťky podle šířky zdrojového obrazu z kamery
+            cam_w = preview_img.size[0]
+            master_line_w = max(2, int(cam_w * 0.007))
+            
             draw = ImageDraw.Draw(preview_img)
-            draw.rectangle([ax, ay, ax+aw, ay+ah], outline="red", width=5)
+            # Použijeme master_line_w
+            draw.rectangle([ax, ay, ax+aw, ay+ah], outline="red", width=master_line_w)
             st.image(preview_img, use_container_width=True, caption="Červený rámeček ukazuje budoucí ořez")
 
 # --- TAB 3: ZÓNY ---
@@ -149,17 +155,29 @@ with tab3:
                     st.success("Zóna uložena!")
                     st.rerun()
 
-            with c_viz:
+            with col_viz:
+                from PIL import ImageDraw
                 draw = ImageDraw.Draw(img_roi)
-                # Kreslení uložených
+                
+                # DYNAMICKÁ TLOUŠŤKA (Cca 0.7% z celkové šířky obrázku, minimálně 2 pixely)
+                line_w = max(2, int(W * 0.007))
+                
+                # 1. Vykreslení UŽ ULOŽENÝCH zón
                 for r in all_rois:
-                    rx, ry, rw, rh = r[4], r[5], r[6], r[7]
-                    draw.rectangle([rx, ry, rx+rw, ry+rh], outline="#00FF00", width=3)
-                    draw.text((rx, ry-15), f"{r[3]} (NOK{r[8]})", fill="#00FF00")
+                    x_r, y_r, w_r, h_r = r[4], r[5], r[6], r[7]
+                    name_r, nok_r = r[3], r[8]
+                    
+                    # Použijeme vypočítanou line_w
+                    draw.rectangle([x_r, y_r, x_r + w_r, y_r + h_r], outline="#00FF00", width=line_w)
+                    draw.text((x_r, y_r - 15), f"{name_r} (NOK{nok_r})", fill="#00FF00")
 
-                # Kreslení náhledu
-                draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=5)
-                st.image(img_roi, use_container_width=True, caption=f"Editace: {m_name}")
+                # 2. Vykreslení ORANŽOVÉHO NÁHLEDU
+                # Pro náhled dáme čáru o něco tlustší (o 2 pixely), aby se zvýraznila
+                draw.rectangle([zx, zy, zx + zw, zy + zh], outline="orange", width=line_w + 2)
+                draw.text((zx, zy - 25), "NÁHLED NOVÉ ZÓNY", fill="orange")
+
+                # Zobrazení výsledného obrázku
+                st.image(img_roi, use_container_width=True, caption=f"Pracovní plocha: {m_name}")
 
 # --- TAB 4: I/O ---
 with tab4:
