@@ -179,6 +179,7 @@ with tab1:
                         else:
                             plc_indicators[idx].markdown(f"<div style='background-color:#00D48A; color:white; padding:10px; border-radius:5px; text-align:center; font-weight:bold; margin-bottom:5px;'>✅ OK {idx}</div>", unsafe_allow_html=True)
                 else:
+                    # Tento else patří k "if run_engine:" když je inspekce vypnutá
                     for idx in range(1, 9):
                         plc_indicators[idx].markdown(f"<div style='background-color:#E0E0E0; color:#666; padding:10px; border-radius:5px; text-align:center; margin-bottom:5px;'>⚫ Výstup {idx}</div>", unsafe_allow_html=True)
                     for m, r in all_active_rois:
@@ -412,4 +413,9 @@ with tab3:
 
 # --- TAB 4: I/O ---
 with tab4:
-    st.write("Diagnostika PLC rozhraní")
+    st.subheader("🔌 Nastavení komunikace (Modbus TCP / Moxa)")
+    st.write("Zde bude konfigurace IP adresy a registru pro odesílání NOK signálů do linky.")
+    
+    # Rychlý testovací status pro kontrolu spojení
+    st.text_input("IP Adresa Moxa I/O modulu", value="192.168.1.200")
+    st.button("🔄 Testovat připojení hardwaru", use_container_width=True)
