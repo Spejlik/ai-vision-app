@@ -109,41 +109,29 @@ def update_roi(roi_id, name, x, y, w, h, nok_type, tolerance): # <-- Přidán pa
     conn.commit()
     conn.close()
     
+def save_to_history(project, roi_name, image_path, status):
+    import datetime
+    conn = sqlite3.connect('vision_system.db')
+    c = conn.cursor()
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    c.execute("""
+        INSERT INTO history (project, roi_name, image_path, timestamp, status) 
+        VALUES (?, ?, ?, ?, ?)
+    """, (project, roi_name, image_path, now, status))
+    conn.commit()
+    conn.close()
+
 def get_history(project_filter="Vše", status_filter="Vše", roi_filter="Vše"):
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
     
-    # Základní dotaz bez pevné vazby na jeden projekt
     query = "SELECT * FROM history WHERE 1=1"
     params = []
     
-    # 1. Filtrování podle projektu
     if project_filter and project_filter != "Vše":
         query += " AND project = ?"
         params.append(project_filter)
         
-    # 2. Filtrování podle stavu (OK/NOK)
-    if status_filter and status_filter != "Vše":
-        query += " AND status = ?"
-        params.append(status_filter)
-        
-    # 3. Filtrování podle zóny
-    if roi_filter and roi_filter != "Vše":
-        query += " AND roi_name = ?"
-        params.append(roi_filter)
-        
-    query += " ORDER BY id DESC LIMIT 100" # Top 100 nejnovějších
-    c.execute(query, tuple(params))
-    data = c.fetchall()
-    conn.close()
-    return data
-
-def get_history(project, status_filter=None, roi_filter=None):
-    conn = sqlite3.connect('vision_system.db')
-    c = conn.cursor()
-    query = "SELECT * FROM history WHERE project = ?"
-    params = [project]
-    
     if status_filter and status_filter != "Vše":
         query += " AND status = ?"
         params.append(status_filter)
@@ -152,7 +140,7 @@ def get_history(project, status_filter=None, roi_filter=None):
         query += " AND roi_name = ?"
         params.append(roi_filter)
         
-    query += " ORDER BY id DESC LIMIT 100" # omezíme na top 100 nejnovějších
+    query += " ORDER BY id DESC LIMIT 100"
     c.execute(query, tuple(params))
     data = c.fetchall()
     conn.close()
