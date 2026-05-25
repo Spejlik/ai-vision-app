@@ -128,11 +128,18 @@ with tab1:
                         master_roi_np = np.array(master_crop)
 
                         # 2. ŽIVÝ AUTOMATICKÝ SBĚR REÁLNÝCH FOTEK Z DISKU
-                        # Vyhledáme všechny .jpg snímky ve složkách OK a NOK pro danou zónu
-                        ok_files = glob.glob(f"dataset/OK/{r_name}/*.jpg")
-                        nok_files = glob.glob(f"dataset/NOK/{r_name}/*.jpg")
+                        # Hlídáme přesný název zóny (r_name = Zebro_P1)
+                        all_extensions = ["*.jpg", "*.jpeg", "*.png", "*.JPG", "*.JPEG", "*.PNG"]
                         
-                        # Spojíme je do jednoho listu, ze kterého budeme náhodně losovat "živý kus" z linky
+                        ok_files = []
+                        nok_files = []
+                        
+                        # Fix cest: složka dataset musí být malými písmeny, u názvu zóny r_name se držíme přesného zadání
+                        for ext in all_extensions:
+                            ok_files.extend(glob.glob(f"dataset/OK/{r_name}/{ext}"))
+                            nok_files.extend(glob.glob(f"dataset/NOK/{r_name}/{ext}"))
+                        
+                        # Spojíme soubory dohromady
                         all_test_files = ok_files + nok_files
                         
                         live_roi_np = None
