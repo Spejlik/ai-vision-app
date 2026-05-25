@@ -70,12 +70,11 @@ with tab1:
         if not all_masters:
             st.warning("⚠️ Nemáte vytvořené žádné Mastery. Systém nemá z čeho inspekci spouštět.")
         else:
-            # 1. Nejprve posbíráme VŠECHNY zóny ze všech Masterů do jednoho seznamu
             all_active_rois = []
             for m in all_masters:
                 rois = database.get_rois(m[0], active_p)
                 for r in rois:
-                    all_active_rois.append((m, r)) # Ukládáme jako dvojici (Master, ROI)
+                    all_active_rois.append((m, r))
             
             if not all_active_rois:
                 st.warning("⚠️ Nemáte definované žádné zóny (ROI). Vytvořte je v Tabu 3.")
@@ -84,15 +83,14 @@ with tab1:
                 
                 with col_run_1:
                     st.markdown("### 🔍 Detailní náhledy inspekčních zón (ROI)")
-                    # Vytvoříme mřížku pro výřezy (3 zóny vedle sebe)
                     roi_placeholders = {}
-                    roi_cols = st.columns(3)
+                    # Zobrazíme max 4 čtvercové ROI vedle sebe
+                    roi_cols = st.columns(4)
                     
                     for i, (m, r) in enumerate(all_active_rois):
                         m_name, r_id, r_name = m[2], r[0], r[3]
-                        with roi_cols[i % 3]:
+                        with roi_cols[i % 4]:
                             with st.container(border=True):
-                                # Hlavička okna s názvem zóny a ze které kamery pochází
                                 st.markdown(f"**{r_name}** <br><span style='font-size:0.8em; color:gray;'>📷 {m_name}</span>", unsafe_allow_html=True)
                                 roi_placeholders[r_id] = st.empty()
                 
@@ -112,48 +110,36 @@ with tab1:
                 if run_engine:
                     import random
                     
-                    # Procházíme a vyhodnocujeme každý VÝŘEZ zvlášť
+                    # Vyhodnocení výřezů a vynucení čtvercového formátu
                     for m, r in all_active_rois:
                         m_path = m[3]
                         r_id, rx, ry, rw, rh, r_nok = r[0], r[4], r[5], r[6], r[7], r[8]
                         
-                        # Získání celého snímku
                         if os.path.exists(m_path):
                             live_full_frame = Image.open(m_path).convert("RGB")
                         else:
                             live_full_frame = Image.new('RGB', (1200, 800), color=(70, 109, 137))
                         
-                        # Simulace kontroly (vyhodnocení OK/NOK)
+                        # 1. Vystřižení obdélníku
+                        roi_crop = live_full_frame.crop((rx, ry, rx+rw, ry+rh))
+                        
+                        # 2. Deformace na dokonalý čtverec 500x500
+                        desired_square_size = 500
+                        roi_square = roi_crop.resize((desired_square_size, desired_square_size), Image.Resampling.LANCZOS)
+                        
+                        # Simulace OK/NOK
                         is_zone_ok = random.random() > 0.15
                         if not is_zone_ok:
                             current_outputs[r_nok] = True
                             
                         zone_color = "#00FF00" if is_zone_ok else "#FF0000"
                         
-                        # --- NOVÁ LOGIKA: DEFORMACE NA ČTVEREC ---
-                        # 1. Nejprve fyzicky vystřihneme obdélník z originálu
-                        roi_crop = live_full_frame.crop((rx, ry, rx+rw, ry+rh))
-                        
-                        # 2. Vynuceně roztáhneme/smrštíme na čtverec 500x500 (deformace)
-                        desired_square_size = 500
-                        roi_square = roi_crop.resize((desired_square_size, desired_square_size), Image.Resampling.LANCZOS)
-                        
-                        # 3. Kreslení orámování stavu až POTE, co jsme obrázek zdeformovali
-                        # Díky tomu orámování zůstane ostré a nedeformované.
+                        # 3. Vykreslení ostrého rámečku na deformovaný čtverec
                         draw_sq = ImageDraw.Draw(roi_square)
-                        # Tloušťka čáry stabilní vzhledem k 500px čtverci
                         sq_line_w = max(6, int(desired_square_size * 0.015)) 
-                        # Kreslíme orámování přesně na okraje nového čtverce
                         draw_sq.rectangle([0, 0, desired_square_size-1, desired_square_size-1], outline=zone_color, width=sq_line_w)
                         
-                        # --- ZOBRAZENÍ DEFORMOVANÉHO ČTVERCE ---
-                        # Odeslání deformovaného čtverce do konkrétního okna v dashboardu
-                        # Přidáme popisek, který upozorní na deformaci
-                        roi_placeholders[r_id].image(roi_square, use_container_width=True, caption=f"Detail (deformovaný)")
-                        
-                    # Aktualizace PLC kontrolek
-                    for idx in range(1, 9):
-                        # ... zbytek kódu v Tabu 1 (PLC kontrolky) pokračuje beze změn ...
+                        roi_placeholders[r_id].image(roi_square, use_container_width=True)
                         
                     # Aktualizace PLC kontrolek
                     for idx in range(1, 9):
@@ -165,7 +151,7 @@ with tab1:
                     for idx in range(1, 9):
                         plc_indicators[idx].markdown(f"<div style='background-color:#E0E0E0; color:#666; padding:10px; border-radius:5px; text-align:center; margin-bottom:5px;'>⚫ Výstup {idx}</div>", unsafe_allow_html=True)
                     for m, r in all_active_rois:
-                        roi_placeholders[r[0]].info("Čeká na inspekci...")
+                        roi_placeholders[r[0]].info("Čeká...")
     else:
         st.warning("⚠️ Nejdříve vyberte nebo vytvořte projekt v levém panelu.")
 # --- TAB 2: MASTER ---
