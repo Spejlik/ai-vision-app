@@ -115,11 +115,11 @@ with tab1:
                     # Procházíme nadefinované zóny v aplikaci
                     for m, r in all_active_rois:
                         m_path = m[3]
-                        # r[3] je název zóny (např. Zebro_P1), r[8] je NOK kód, r[9] je tolerance citlivosti
+                        # r[0]=id, r[3]=název zóny, r[8]=NOK typ, r[9]=tolerance
                         r_id, r_name, r_nok = r[0], r[3], r[8]
                         r_tolerance = r[9] if len(r) > 9 else 20
                         
-                        # 1. NAČTENÍ MASTER ŠABLONY (Reference pro porovnání)
+                        # 1. NAČTENÍ MASTER ŠABLONY (Reference)
                         if os.path.exists(m_path):
                             master_full = Image.open(m_path).convert("RGB")
                         else:
@@ -127,44 +127,52 @@ with tab1:
                         master_crop = master_full.crop((r[4], r[5], r[4]+r[6], r[5]+r[7]))
                         master_roi_np = np.array(master_crop)
 
-                        # 2. ŽIVÝ AUTOMATICKÝ SBĚR REÁLNÝCH FOTEK Z DISKU
+                        # 2. CHYTRÉ VYHLEDÁVÁNÍ TESTOVACÍCH FOTEK
+                        # Zkusíme nejprve hledat ve složce podle jména zóny, pokud tam nic není, 
+                        # podíváme se do složky projektu (např. dataset/OK/MQB/) nebo do jakékoli podsložky v datasetu
                         all_extensions = ["*.jpg", "*.jpeg", "*.png", "*.JPG", "*.JPEG", "*.PNG"]
-                        
                         ok_files = []
                         nok_files = []
                         
-                        for ext in all_extensions:
-                            ok_files.extend(glob.glob(f"dataset/OK/{r_name}/{ext}"))
-                            nok_files.extend(glob.glob(f"dataset/NOK/{r_name}/{ext}"))
+                        # Seznam cest, kde postupně zkusíme hledat vzorky fotek
+                        search_paths = [
+                            f"dataset/OK/{r_name}",
+                            f"dataset/OK/{active_p}",
+                            f"dataset/OK/Zebro_P1",
+                            f"dataset/OK"
+                        ]
+                        
+                        for path in search_paths:
+                            if ok_files: break # Pokud jsme už fotky našli, nehledáme dál
+                            for ext in all_extensions:
+                                ok_files.extend(glob.glob(f"{path}/{ext}"))
+                                
+                        for path in search_paths:
+                            if nok_files: break
+                            for ext in all_extensions:
+                                nok_files.extend(glob.glob(f"{path.replace('OK', 'NOK')}/{ext}"))
                         
                         all_test_files = ok_files + nok_files
                         
-                                                
-                        live_roi_np = None
-                        chosen_file_name = "Simulace (Chybí lokální soubory)"
-                        
                         if all_test_files:
-                            # Losujeme jeden náhodný snímek z datasetu jako simulaci průjezdu kusu na lince
                             selected_path = random.choice(all_test_files)
                             chosen_file_name = os.path.basename(selected_path)
-                            
-                            # Načteme reálnou testovací fotku
                             live_roi_img = Image.open(selected_path).convert("RGB")
-                            # Vynutíme stejný rozměr matice jako má Master pro korektní matematické porovnání
                             live_roi_img = live_roi_img.resize((r[6], r[7]), Image.Resampling.LANCZOS)
                             live_roi_np = np.array(live_roi_img)
                         else:
-                            # Záložní varianta, pokud by skript nenašel složku dataset
+                            # Bezpečný zálohový fallback, aby se kód nikdy nezasekl a VŽDY ukládal
+                            chosen_file_name = "Generovany_snimek.png"
                             live_roi_np = np.array(master_crop)
+                            # Pokud nejsou soubory, nasimulujeme občasnou vadu, ať vidíme ukládání do OK i NOK
+                            if random.random() > 0.5:
+                                live_roi_np = np.clip(live_roi_np.astype(int) - 50, 0, 255).astype(np.uint8)
 
-                        # 3. VÝPOČET REÁLNÉ MATEMATICKÉ ODCHYLKY (MSE)
+                        # 3. VÝPOČET OPENCV ODCHYLKY
                         err = np.sum((master_roi_np.astype("float") - live_roi_np.astype("float")) ** 2)
                         err /= float(master_roi_np.shape[0] * master_roi_np.shape[1] * master_roi_np.shape[2])
-                        
-                        # Škálování odchylky pro přehlednost na slideru
                         final_deviation = min(100, int(err / 15))
                         
-                        # Vyhodnocení limitu
                         if final_deviation > r_tolerance:
                             is_zone_ok = False
                             current_outputs[r_nok] = True
@@ -175,27 +183,26 @@ with tab1:
                             
                         zone_color = "#00FF00" if is_zone_ok else "#FF4B4B"
                         
-                        # --- DYNAMICKÁ DETEKCE DISKU A STRUKTURY PROJEKTŮ ---
-                        # Kód zkontroluje přítomnost disku D:\, jinak bere C:\
+                        # --- UKLÁDÁNÍ DO SLOŽEK PODLE TVÉHO SCREENSHOTU ---
                         base_drive = "D:/" if os.path.exists("D:/") else "C:/"
                         
-                        # Vytvoření cesty: Drive:/Vision_System/Archiv_Snímku/<Projekt>/<Zóna>/<Stav>
-                        history_dir = os.path.join(base_drive, "Vision_System", "Archiv_Snímku", active_p, r_name, status_text)
+                        # Cesta přesně jako na obrázku: Drive:/Image/<Stav>/<Projekt>
+                        history_dir = os.path.join(base_drive, "Image", status_text, active_p)
                         
                         if not os.path.exists(history_dir):
                             os.makedirs(history_dir)
                             
-                        # Unikátní název souboru s časovým razítkem (např. crop_1716634123_456.png)
-                        history_filename = os.path.join(history_dir, f"crop_{int(time.time())}_{random.randint(100,999)}.png")
+                        # Vytvoření názvu souboru (např. Zóna 1_1716634123.png)
+                        history_filename = os.path.join(history_dir, f"{r_name}_{int(time.time())}_{random.randint(100,999)}.png")
                         
-                        # Uložení originálního nedeformovaného výřezu na disk C: nebo D:
+                        # Uložení originálního nedeformovaného snímku na disk
                         Image.fromarray(live_roi_np).save(history_filename)
                         
-                        # Zápis cesty do SQLite databáze pro záložku HISTORIE
+                        # Uložení cesty do lokální DB pro záložku HISTORIE
                         database.save_to_history(active_p, r_name, history_filename, status_text)
-                        # -----------------------------------------------------
+                        # -----------------------------------------------------------------
                         
-                        # 4. Úprava na čtvercovou dlaždici a vykreslení orámování stavu
+                        # 4. Úprava na čtvercovou dlaždici pro live dashboard
                         roi_img = Image.fromarray(live_roi_np)
                         desired_square_size = 500
                         roi_square = roi_img.resize((desired_square_size, desired_square_size), Image.Resampling.LANCZOS)
@@ -204,8 +211,6 @@ with tab1:
                         sq_line_w = max(6, int(desired_square_size * 0.015)) 
                         draw_sq.rectangle([0, 0, desired_square_size-1, desired_square_size-1], outline=zone_color, width=sq_line_w)
                         
-                        # Zobrazení výsledku na Dashboardu
-                        status_text = "OK" if is_zone_ok else "NOK!"
                         caption_str = f"Snímek: {chosen_file_name} | Odchylka: {final_deviation}% (Limit: {r_tolerance}%) | {status_text}"
                         roi_placeholders[r_id].image(roi_square, use_container_width=True, caption=caption_str)
                         
