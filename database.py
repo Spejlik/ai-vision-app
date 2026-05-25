@@ -4,7 +4,15 @@ def init_db():
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS projects (id INTEGER PRIMARY KEY, name TEXT UNIQUE)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS masters (id INTEGER PRIMARY KEY, name TEXT, image_path TEXT, x INTEGER, y INTEGER, w INTEGER, h INTEGER)''')
+    
+    # TADY JE ZMĚNA: Přidán sloupec 'project' do tabulky masters
+    c.execute('''CREATE TABLE IF NOT EXISTS masters (
+                    id INTEGER PRIMARY KEY, 
+                    project TEXT, 
+                    name TEXT, 
+                    image_path TEXT, 
+                    x INTEGER, y INTEGER, w INTEGER, h INTEGER)''')
+                    
     c.execute('''CREATE TABLE IF NOT EXISTS rois (id INTEGER PRIMARY KEY, master_id INTEGER, project TEXT, name TEXT, x INTEGER, y INTEGER, w INTEGER, h INTEGER, nok_type INTEGER)''')
     conn.commit()
     conn.close()
@@ -22,18 +30,23 @@ def get_projects():
     c.execute("SELECT name FROM projects")
     return [row[0] for row in c.fetchall()]
 
-def add_master(name, path, x, y, w, h):
+def add_master(project_name, name, path, x, y, w, h): # <-- Přidán project_name
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    c.execute("INSERT INTO masters (name, image_path, x, y, w, h) VALUES (?, ?, ?, ?, ?, ?)", (name, path, x, y, w, h))
+    # Zapisujeme název projektu do nového sloupce
+    c.execute("INSERT INTO masters (project, name, image_path, x, y, w, h) VALUES (?, ?, ?, ?, ?, ?, ?)", 
+              (project_name, name, path, x, y, w, h))
     conn.commit()
     conn.close()
 
-def get_all_masters():
+def get_all_masters(project_name): # <-- Přidán project_name pro filtrování
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    c.execute("SELECT id, name, image_path FROM masters")
-    return c.fetchall()
+    # Filtrujeme Mastery pouze pro aktivní projekt
+    c.execute("SELECT id, name, image_path FROM masters WHERE project = ?", (project_name,))
+    data = c.fetchall()
+    conn.close()
+    return data
 
 def get_rois(master_id, project_name):
     conn = sqlite3.connect('vision_system.db')

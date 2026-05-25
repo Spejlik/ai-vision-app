@@ -166,11 +166,10 @@ with tab2:
                 cropped_img = img.crop((ax, ay, ax + aw, ay + ah))
                 cropped_img.save(filename)
                 
-                database.add_master(m_id_name, filename, ax, ay, aw, ah)
-                st.success(f"Master {m_id_name} uložen!")
+                # ZMĚNA ZDE: Přidáváme aktivní projekt, aby se Master uložil k němu
+                database.add_master(st.session_state.active_project, m_id_name, filename, ax, ay, aw, ah)
+                st.success(f"Master {m_id_name} uložen pro projekt {st.session_state.active_project}!")
                 st.rerun()
-            else:
-                st.error("Zadejte název a zachyťte snímek!")
 
     with col_img:
         if st.button("📸 Zachytit testovací snímek"):
@@ -192,7 +191,7 @@ with tab3:
     active_p = st.session_state.active_project
     st.info(f"🏗️ Aktuálně nastavujete zóny pro projekt: **{active_p}**")
     
-    all_masters = database.get_all_masters()
+    all_masters = database.get_all_masters(all_masters = database.get_all_masters(active_p))
     
     if not all_masters:
         st.warning("⚠️ Knihovna Masterů je prázdná.")
