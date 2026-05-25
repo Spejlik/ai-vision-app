@@ -63,3 +63,31 @@ def save_roi(master_id, project_name, name, x, y, w, h, nok):
               (master_id, project_name, name, x, y, w, h, nok))
     conn.commit()
     conn.close()
+    
+def delete_roi(roi_id):
+    conn = sqlite3.connect('vision_system.db')
+    c = conn.cursor()
+    c.execute("DELETE FROM rois WHERE id = ?", (roi_id,))
+    conn.commit()
+    conn.close()
+
+def delete_master(master_id):
+    conn = sqlite3.connect('vision_system.db')
+    c = conn.cursor()
+    
+    # 1. Nejdřív zjistíme cestu k souboru, abychom ho smazali i z disku
+    c.execute("SELECT image_path FROM masters WHERE id = ?", (master_id,))
+    row = c.fetchone()
+    if row and os.path.exists(row[0]):
+        try:
+            os.remove(row[0]) # Smaže fyzický .png soubor ze složky masters/
+        except:
+            pass
+            
+    # 2. Smažeme master z tabulky masters
+    c.execute("DELETE FROM masters WHERE id = ?", (master_id,))
+    # 3. Smažeme i všechny zóny, které k tomuto masteru patřily (úklid)
+    c.execute("DELETE FROM rois WHERE master_id = ?", (master_id,))
+    
+    conn.commit()
+    conn.close()    

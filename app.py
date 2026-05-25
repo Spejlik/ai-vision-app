@@ -241,6 +241,16 @@ with tab3:
                     database.save_roi(m_id, active_p, zn, zx, zy, zw, zh, nok_val)
                     st.success("Zóna uložena!")
                     st.rerun()
+                
+                # --- NOVÝ BLOK: SEZNAM ZÓN S MOŽNOSTÍ SMAZÁNÍ ---
+                if all_rois:
+                    st.write("---")
+                if st.button("🚨 SMAZAT TENTO MASTER", key="del_master_btn", use_container_width=True):
+                    database.delete_master(m_id)
+                    # Resetujeme vybrané ID v session state, aby aplikace nespadla
+                    st.session_state.selected_master_id = None
+                    st.warning("Master i jeho zóny byly smazány.")
+                    st.rerun()
 
             with c_viz:
                 draw = ImageDraw.Draw(img_roi)
