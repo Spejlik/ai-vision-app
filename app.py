@@ -342,7 +342,6 @@ with tab3:
                     col_save_1, col_save_2 = st.columns(2)
                     with col_save_1:
                         if st.button("🔄 AKTUALIZOVAT", type="primary", use_container_width=True):
-                            # Posíláme ztol do update_roi
                             database.update_roi(st.session_state.editing_roi_id, zn, zx, zy, zw, zh, nok_val, ztol)
                             st.session_state.editing_roi_id = None
                             st.success("Zóna aktualizována!")
@@ -353,13 +352,7 @@ with tab3:
                             st.rerun()
                 else:
                     if st.button("💾 ULOŽIT NOVOU ZÓNU", type="primary", use_container_width=True):
-                        # Posíláme ztol do save_roi
                         database.save_roi(m_id, active_p, zn, zx, zy, zw, zh, nok_val, ztol)
-                        st.success("Zóna uložena!")
-                        st.rerun()
-                else:
-                    if st.button("💾 ULOŽIT NOVOU ZÓNU", type="primary", use_container_width=True):
-                        database.save_roi(m_id, active_p, zn, zx, zy, zw, zh, nok_val)
                         st.success("Zóna uložena!")
                         st.rerun()
                 
