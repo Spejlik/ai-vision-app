@@ -65,7 +65,9 @@ with tab1:
     
     if st.session_state.active_project:
         active_p = st.session_state.active_project
-        all_masters = database.get_all_masters()
+        
+        # TADY JE OPRAVA: Přidán argument active_p do závorky
+        all_masters = database.get_all_masters(active_p)
         
         if not all_masters:
             st.warning("⚠️ Nemáte vytvořené žádné Mastery. Systém nemá z čeho inspekci spouštět.")
