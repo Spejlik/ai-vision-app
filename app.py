@@ -65,79 +65,93 @@ with tab1:
     
     if st.session_state.active_project:
         active_p = st.session_state.active_project
-        
-        # TADY JE OPRAVA: Přidán argument active_p do závorky
         all_masters = database.get_all_masters(active_p)
         
         if not all_masters:
             st.warning("⚠️ Nemáte vytvořené žádné Mastery. Systém nemá z čeho inspekci spouštět.")
         else:
-            col_run_1, col_run_2 = st.columns([2.5, 1])
+            # 1. Nejprve posbíráme VŠECHNY zóny ze všech Masterů do jednoho seznamu
+            all_active_rois = []
+            for m in all_masters:
+                rois = database.get_rois(m[0], active_p)
+                for r in rois:
+                    all_active_rois.append((m, r)) # Ukládáme jako dvojici (Master, ROI)
             
-            with col_run_1:
-                live_placeholder = st.empty()
+            if not all_active_rois:
+                st.warning("⚠️ Nemáte definované žádné zóny (ROI). Vytvořte je v Tabu 3.")
+            else:
+                col_run_1, col_run_2 = st.columns([2.5, 1])
                 
-            with col_run_2:
-                st.markdown("### 📊 Výstupy PLC (NOK 1-8)")
-                st.write("Indikátory digitálních výstupů do linky:")
+                with col_run_1:
+                    st.markdown("### 🔍 Detailní náhledy inspekčních zón (ROI)")
+                    # Vytvoříme mřížku pro výřezy (3 zóny vedle sebe)
+                    roi_placeholders = {}
+                    roi_cols = st.columns(3)
+                    
+                    for i, (m, r) in enumerate(all_active_rois):
+                        m_name, r_id, r_name = m[2], r[0], r[3]
+                        with roi_cols[i % 3]:
+                            with st.container(border=True):
+                                # Hlavička okna s názvem zóny a ze které kamery pochází
+                                st.markdown(f"**{r_name}** <br><span style='font-size:0.8em; color:gray;'>📷 {m_name}</span>", unsafe_allow_html=True)
+                                roi_placeholders[r_id] = st.empty()
                 
-                io_col1, io_col2 = st.columns(2)
-                plc_indicators = {}
+                with col_run_2:
+                    st.markdown("### 📊 Výstupy PLC (NOK 1-8)")
+                    io_col1, io_col2 = st.columns(2)
+                    plc_indicators = {}
+                    for idx in range(1, 9):
+                        target_col = io_col1 if idx <= 4 else io_col2
+                        with target_col:
+                            plc_indicators[idx] = st.empty()
                 
-                for idx in range(1, 9):
-                    target_col = io_col1 if idx <= 4 else io_col2
-                    with target_col:
-                        plc_indicators[idx] = st.empty()
-            
-            st.divider()
-            
-            run_engine = st.toggle("▶️ SPUSTIT ŽIVOU INSPEKCI", key="run_engine_toggle")
-            current_outputs = {i: False for i in range(1, 9)}
+                st.divider()
+                run_engine = st.toggle("▶️ SPUSTIT ŽIVOU INSPEKCI", key="run_engine_toggle")
+                current_outputs = {i: False for i in range(1, 9)}
 
-            if run_engine:
-                import random
-                
-                # Použijeme správný index pro image_path (m[3] je teď image_path)
-                m_path_sim = all_masters[0][3]
-                
-                if os.path.exists(m_path_sim):
-                    live_frame = Image.open(m_path_sim).convert("RGB")
-                else:
-                    live_frame = Image.new('RGB', (1200, 800), color=(70, 109, 137))
+                if run_engine:
+                    import random
                     
-                live_draw = ImageDraw.Draw(live_frame)
-                W_live = live_frame.size[0]
-                line_w = max(2, int(W_live * 0.007))
-                
-                # Procházíme zóny pro aktivní projekt
-                for m in all_masters:
-                    m_id = m[0] # id je na indexu 0
-                    rois = database.get_rois(m_id, active_p)
-                    
-                    for r in rois:
-                        rx, ry, rw, rh, r_nok = r[4], r[5], r[6], r[7], r[8]
+                    # Procházíme a vyhodnocujeme každý VÝŘEZ zvlášť
+                    for m, r in all_active_rois:
+                        m_path = m[3]
+                        r_id, rx, ry, rw, rh, r_nok = r[0], r[4], r[5], r[6], r[7], r[8]
                         
+                        # Získání celého snímku z kamery
+                        if os.path.exists(m_path):
+                            live_full_frame = Image.open(m_path).convert("RGB")
+                        else:
+                            live_full_frame = Image.new('RGB', (1200, 800), color=(70, 109, 137))
+                        
+                        # Fyzické vystřižení (Crop) pouze zadané ROI
+                        roi_crop = live_full_frame.crop((rx, ry, rx+rw, ry+rh))
+                        
+                        # Simulace hodnocení (85% OK, 15% NOK)
                         is_zone_ok = random.random() > 0.15
                         if not is_zone_ok:
                             current_outputs[r_nok] = True
-                        
+                            
                         zone_color = "#00FF00" if is_zone_ok else "#FF0000"
                         
-                        live_draw.rectangle([rx, ry, rx+rw, ry+rh], outline=zone_color, width=line_w)
-                        live_draw.text((rx, ry-15), f"{r[3]} (NOK{r_nok})", fill=zone_color)
-                
-                live_placeholder.image(live_frame, use_container_width=True, caption="Živý stream (Simulace z Master snímku)")
-                
-                # Vykreslení barevných kontrolek
-                for idx in range(1, 9):
-                    if current_outputs.get(idx, False):
-                        plc_indicators[idx].markdown(f"<div style='background-color:#FF4B4B; color:white; padding:10px; border-radius:5px; text-align:center; font-weight:bold; margin-bottom:5px;'>🚨 NOK {idx}</div>", unsafe_allow_html=True)
-                    else:
-                        plc_indicators[idx].markdown(f"<div style='background-color:#00D48A; color:white; padding:10px; border-radius:5px; text-align:center; font-weight:bold; margin-bottom:5px;'>✅ OK {idx}</div>", unsafe_allow_html=True)
-            else:
-                for idx in range(1, 9):
-                    plc_indicators[idx].markdown(f"<div style='background-color:#E0E0E0; color:#666; padding:10px; border-radius:5px; text-align:center; margin-bottom:5px;'>⚫ Výstup {idx}</div>", unsafe_allow_html=True)
-                live_placeholder.info("Inspekce je zastavena. Zapněte ji přepínačem níže.")
+                        # Nakreslení indikačního rámečku přes okraje výřezu
+                        draw = ImageDraw.Draw(roi_crop)
+                        line_w = max(2, int(rw * 0.04)) # Adaptivní tloušťka pro malý výřez
+                        draw.rectangle([0, 0, rw-1, rh-1], outline=zone_color, width=line_w)
+                        
+                        # Odeslání do konkrétního okna v dashboardu
+                        roi_placeholders[r_id].image(roi_crop, use_container_width=True)
+                        
+                    # Aktualizace PLC kontrolek
+                    for idx in range(1, 9):
+                        if current_outputs.get(idx, False):
+                            plc_indicators[idx].markdown(f"<div style='background-color:#FF4B4B; color:white; padding:10px; border-radius:5px; text-align:center; font-weight:bold; margin-bottom:5px;'>🚨 NOK {idx}</div>", unsafe_allow_html=True)
+                        else:
+                            plc_indicators[idx].markdown(f"<div style='background-color:#00D48A; color:white; padding:10px; border-radius:5px; text-align:center; font-weight:bold; margin-bottom:5px;'>✅ OK {idx}</div>", unsafe_allow_html=True)
+                else:
+                    for idx in range(1, 9):
+                        plc_indicators[idx].markdown(f"<div style='background-color:#E0E0E0; color:#666; padding:10px; border-radius:5px; text-align:center; margin-bottom:5px;'>⚫ Výstup {idx}</div>", unsafe_allow_html=True)
+                    for m, r in all_active_rois:
+                        roi_placeholders[r[0]].info("Čeká na inspekci...")
     else:
         st.warning("⚠️ Nejdříve vyberte nebo vytvořte projekt v levém panelu.")
 # --- TAB 2: MASTER ---
