@@ -90,4 +90,15 @@ def delete_master(master_id):
     c.execute("DELETE FROM rois WHERE master_id = ?", (master_id,))
     
     conn.commit()
+    conn.close()
+
+def update_roi(roi_id, name, x, y, w, h, nok_type):
+    conn = sqlite3.connect('vision_system.db')
+    c = conn.cursor()
+    c.execute("""
+        UPDATE rois 
+        SET name = ?, x = ?, y = ?, w = ?, h = ?, nok_type = ? 
+        WHERE id = ?
+    """, (name, x, y, w, h, nok_type, roi_id))
+    conn.commit()
     conn.close()    

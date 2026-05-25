@@ -202,37 +202,38 @@ with tab2:
 
 # --- TAB 3: ZÓNY ---
 with tab3:
+    if 'editing_roi_id' not in st.session_state:
+        st.session_state.editing_roi_id = None
+
     active_p = st.session_state.active_project
     st.info(f"🏗️ Aktuálně nastavujete zóny pro projekt: **{active_p}**")
     
     all_masters = database.get_all_masters(active_p)
     
     if not all_masters:
-        st.warning("⚠️ Knihovna Masterů je prázdná.")
+        st.warning("⚠️ Knihovna Masterů je pro tento projekt prázdná. Nejdříve vytvořte Master v Tabu 2.")
     else:
-        if 'selected_master_id' not in st.session_state:
+        if 'selected_master_id' not in st.session_state or st.session_state.selected_master_id is None:
             st.session_state.selected_master_id = all_masters[0][0]
 
-        # --- NOVÁ ČISTÁ MŘÍŽKA GALERIE ---
+        # --- DOKONALÁ ČTVERCOVÁ MŘÍŽKA GALERIE ---
         st.write("### 🖼️ Výběr pozice / kamery:")
         
-        # Definujeme fixní počet sloupců v mřížce (např. 6)
         COLUMNS_PER_ROW = 6
         m_rows = [all_masters[i:i + COLUMNS_PER_ROW] for i in range(0, len(all_masters), COLUMNS_PER_ROW)]
         
         for row in m_rows:
             cols = st.columns(COLUMNS_PER_ROW)
             for idx, m in enumerate(row):
+                # SQL SELECT * vrací: m[0]=id, m[1]=project, m[2]=name, m[3]=image_path
                 m_id_loop, m_name_loop, m_path_loop = m[0], m[2], m[3]
                 
                 with cols[idx]:
                     if os.path.exists(m_path_loop):
                         st.image(m_path_loop, use_container_width=True)
                     
-                    # Kontrola, zda je tato pozice aktivní
                     is_active = (m_id_loop == st.session_state.selected_master_id)
                     
-                    # Vylepšené tlačítko s jasným popiskem, které se nepřekryje
                     if st.button(
                         f"📸 {m_name_loop}", 
                         key=f"btn_m_{m_id_loop}", 
@@ -240,62 +241,116 @@ with tab3:
                         type="primary" if is_active else "secondary"
                     ):
                         st.session_state.selected_master_id = m_id_loop
+                        st.session_state.editing_roi_id = None # zrušit případnou editaci při přepnutí kamery
                         st.rerun()
 
         st.divider()
         
         # Načtení aktivního masteru ze seznamu
-        sel_m = next((m for m in all_masters if m[0] == st.session_state.selected_master_id), all_masters[0])
-        # ZMĚNA INDEXŮ: m[0]=id, m[2]=název, m[3]=cesta
-        m_id, m_name, m_path = sel_m[0], sel_m[2], sel_m[3]
+        sel_m = next((m for m in all_masters if m[0] == st.session_state.selected_master_id), None)
         
-        if os.path.exists(m_path):
+        if sel_m is None and all_masters:
+            st.session_state.selected_master_id = all_masters[0][0]
+            sel_m = all_masters[0]
+
+        if sel_m and os.path.exists(sel_m[3]):
+            m_id, m_name, m_path = sel_m[0], sel_m[2], sel_m[3]
+            
             img_roi = Image.open(m_path).convert("RGB")
             W, H = img_roi.size
             all_rois = database.get_rois(m_id, active_p)
             
-            # Definice sloupců - sjednoceno na c_ctrl a c_viz
+            # Rozvržení: Ovládání vlevo, obraz vpravo
             c_ctrl, c_viz = st.columns([1, 1.8])
             
             with c_ctrl:
                 st.markdown(f"### 🔧 Nastavení zón: {m_name}")
-                zn = st.text_input("Název zóny", value=f"Zóna {len(all_rois)+1}")
-                nok_val = st.selectbox("Přiřazení chyby (NOK 1-8)", range(1, 9), index=0)
                 
-                zx = st.slider("X", 0, W, 50, key="sx")
-                zy = st.slider("Y", 0, H, 50, key="sy")
-                zw = st.slider("Šířka", 10, W, 100, key="sw")
-                zh = st.slider("Výška", 10, H, 100, key="sh")
+                # Načtení dat pokud jsme v režimu editace
+                current_roi = None
+                if st.session_state.editing_roi_id:
+                    current_roi = next((r for r in all_rois if r[0] == st.session_state.editing_roi_id), None)
                 
-                if st.button("💾 ULOŽIT ZÓNU", type="primary", use_container_width=True):
-                    database.save_roi(m_id, active_p, zn, zx, zy, zw, zh, nok_val)
-                    st.success("Zóna uložena!")
-                    st.rerun()
+                # Výchozí hodnoty pro formulář
+                default_name = current_roi[3] if current_roi else f"Zóna {len(all_rois)+1}"
+                default_nok = current_roi[8] if current_roi else 1
+                default_x = current_roi[4] if current_roi else 50
+                default_y = current_roi[5] if current_roi else 50
+                default_w = current_roi[6] if current_roi else 100
+                default_h = current_roi[7] if current_roi else 100
                 
-                # --- NOVÝ BLOK: SEZNAM ZÓN S MOŽNOSTÍ SMAZÁNÍ ---
+                zn = st.text_input("Název zóny", value=default_name)
+                nok_val = st.selectbox("Přiřazení chyby (NOK 1-8)", range(1, 9), index=default_nok - 1)
+                
+                zx = st.slider("X", 0, W, default_x, key="sx")
+                zy = st.slider("Y", 0, H, default_y, key="sy")
+                zw = st.slider("Šířka", 10, W, default_w, key="sw")
+                zh = st.slider("Výška", 10, H, default_h, key="sh")
+                
+                # Tlačítka pro uložení / update
+                if st.session_state.editing_roi_id:
+                    col_save_1, col_save_2 = st.columns(2)
+                    with col_save_1:
+                        if st.button("🔄 AKTUALIZOVAT", type="primary", use_container_width=True):
+                            database.update_roi(st.session_state.editing_roi_id, zn, zx, zy, zw, zh, nok_val)
+                            st.session_state.editing_roi_id = None
+                            st.success("Zóna aktualizována!")
+                            st.rerun()
+                    with col_save_2:
+                        if st.button("❌ ZRUŠIT", use_container_width=True):
+                            st.session_state.editing_roi_id = None
+                            st.rerun()
+                else:
+                    if st.button("💾 ULOŽIT NOVOU ZÓNU", type="primary", use_container_width=True):
+                        database.save_roi(m_id, active_p, zn, zx, zy, zw, zh, nok_val)
+                        st.success("Zóna uložena!")
+                        st.rerun()
+                
+                # --- SPRÁVA ZÓN (EDITACE / MAZÁNÍ) ---
                 if all_rois:
                     st.write("---")
+                    st.write("📋 **Uložené zóny (Správa):**")
+                    for r in all_rois:
+                        r_id, r_name, r_nok = r[0], r[3], r[8]
+                        
+                        del_col1, del_col2, del_col3 = st.columns([2.5, 0.8, 0.8])
+                        with del_col1:
+                            st.write(f"• {r_name} (NOK{r_nok})")
+                        with del_col2:
+                            if st.button("📝", key=f"edit_roi_{r_id}", help=f"Editovat {r_name}"):
+                                st.session_state.editing_roi_id = r_id
+                                st.rerun()
+                        with del_col3:
+                            if st.button("🗑️", key=f"del_roi_{r_id}", help=f"Smazat {r_name}"):
+                                database.delete_roi(r_id)
+                                if st.session_state.editing_roi_id == r_id:
+                                    st.session_state.editing_roi_id = None
+                                st.rerun()
+
+                # --- SMAZÁNÍ CELÉHO MASTERU ---
+                st.write("---")
                 if st.button("🚨 SMAZAT TENTO MASTER", key="del_master_btn", use_container_width=True):
                     database.delete_master(m_id)
-                    # Resetujeme vybrané ID v session state, aby aplikace nespadla
                     st.session_state.selected_master_id = None
-                    st.warning("Master i jeho zóny byly smazány.")
+                    st.session_state.editing_roi_id = None
+                    st.warning("Master i jeho zóny smazány.")
                     st.rerun()
 
             with c_viz:
                 draw = ImageDraw.Draw(img_roi)
-                
-                # Výpočet stabilní tloušťky čáry na obrazovce
                 line_w = max(2, int(W * 0.007))
                 
-                # 1. Kreslení už uložených zón
+                # 1. Kreslení uložených zón
                 for r in all_rois:
                     rx, ry, rw, rh = r[4], r[5], r[6], r[7]
-                    draw.rectangle([rx, ry, rx+rw, ry+rh], outline="#00FF00", width=line_w)
-                    draw.text((rx, ry-15), f"{r[3]} (NOK{r[8]})", fill="#00FF00")
+                    # Pokud zónu zrovna editujeme, nevykreslíme ji zeleně (překrývala by oranžový náhled)
+                    if r[0] != st.session_state.editing_roi_id:
+                        draw.rectangle([rx, ry, rx+rw, ry+rh], outline="#00FF00", width=line_w)
+                        draw.text((rx, ry-15), f"{r[3]} (NOK{r[8]})", fill="#00FF00")
 
                 # 2. Kreslení oranžového náhledu z aktuálních sliderů
                 draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=line_w + 2)
+                draw.text((zx, zy-25), "NÁHLED / EDITACE ZÓNY", fill="orange")
                 
                 st.image(img_roi, use_container_width=True, caption=f"Pracovní plocha: {m_name}")
 
