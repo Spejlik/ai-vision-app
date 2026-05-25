@@ -61,8 +61,101 @@ tab1, tab2, tab3, tab4 = st.tabs(["🚀 BĚH", "🎯 MASTER", "🔍 ZÓNY", "�
 
 # --- TAB 1: BĚH ---
 with tab1:
-    st.info(f"Systém připraven. Aktivní projekt: {st.session_state.active_project}")
+    st.subheader(f"🚀 Live Inspekce - Projekt: {st.session_state.active_project}")
+    
+    if st.session_state.active_project:
+        active_p = st.session_state.active_project
+        all_masters = database.get_all_masters()
+        
+        if not all_masters:
+            st.warning("⚠️ Nemáte vytvořené žádné Mastery. Systém nemá z čeho inspekci spouštět.")
+        else:
+            # Rozdělení obrazovky: Vlevo živý obraz, vpravo stav PLC
+            col_run_1, col_run_2 = st.columns([2.5, 1])
+            
+            with col_run_1:
+                # Místo, kam budeme tlačit živé snímky
+                live_placeholder = st.empty()
+                
+            with col_run_2:
+                st.markdown("### 📊 Výstupy PLC (NOK 1-8)")
+                st.write("Indikátory digitálních výstupů do linky:")
+                
+                # Vytvoříme mřížku pro 8 kontrolek (2 sloupce po 4 kontrolkách)
+                io_col1, io_col2 = st.columns(2)
+                plc_indicators = {}
+                
+                for idx in range(1, 9):
+                    target_col = io_col1 if idx <= 4 else io_col2
+                    with target_col:
+                        # Vytvoříme stabilní box, který budeme barvit
+                        plc_indicators[idx] = st.empty()
+            
+            st.divider()
+            
+            # Ovládací prvek pro zapnutí smyčky
+            run_engine = st.toggle("▶️ SPUSTIT ŽIVOU INSPEKCI", key="run_engine_toggle")
 
+            # Výchozí stav výstupů (všechny NOK jsou OK -> zelené)
+            current_outputs = {i: False for i in range(1, 8)}
+
+            if run_engine:
+                # Dočasně simulujeme běh – Streamlit potřebuje pro opravdový real-time cyklus loop
+                # Tento kód udělá jeden průchod, pro trvalé blikání později přidáme st.fragment
+                
+                # A. Simulace velkého živého obrazu z kamery (1200x800)
+                # Přidáme tam trochu náhodného šumu (měnící se barvu pozadí), abychom viděli, že to žije
+                import random
+                bg_r = random.randint(70, 76)
+                live_frame = Image.new('RGB', (1200, 800), color=(bg_r, 109, 137))
+                live_draw = ImageDraw.Draw(live_frame)
+                
+                # B. Procházení všech Masterů a zón aktivního projektu
+                for m in all_masters:
+                    m_id, m_name, m_path = m[0], m[1], m[2]
+                    
+                    # Načteme zóny pro tento konkrétní projekt a master
+                    rois = database.get_rois(m_id, active_p)
+                    
+                    # Zjistíme velikost (předpokládáme fixní rozměr pro náhled, dokud nemáme reálný ořez)
+                    # Vykreslíme zóny přímo do obrazu
+                    for r in rois:
+                        rx, ry, rw, rh, r_nok = r[4], r[5], r[6], r[7], r[8]
+                        
+                        # --- SIMULACE EVALUACE (Zda je zóna v pořádku) ---
+                        # Simulujeme náhodnou chybu (95% šance na OK, 5% na NOK)
+                        is_zone_ok = random.random() > 0.05
+                        
+                        if not is_zone_ok:
+                            current_outputs[r_nok] = True # Aktivujeme příslušný NOK výstup
+                        
+                        # Barva rámečku: Zelená = OK, Červená = CHYBA (NOK)
+                        zone_color = "#00FF00" if is_ok else "#FF0000"
+                        
+                        # Kreslení rámečku zóny do živého obrazu
+                        live_draw.rectangle([rx, ry, rx+rw, ry+rh], outline=zone_color, width=4)
+                        live_draw.text((rx, ry-15), f"{r[3]} (NOK{r_nok})", fill=zone_color)
+                
+                # C. Aktualizace vizuálního obrazu v placeholderu
+                live_placeholder.image(live_frame, use_container_width=True, caption="Živý stream z kamery s vyhodnocením")
+                
+                # D. Vykreslení PLC kontrolek vpravo
+                for idx in range(1, 9):
+                    if current_outputs.get(idx, False):
+                        # Pokud je aktivní NOK, svítí červeně
+                        plc_indicators[idx].markdown(f"<div style='background-color:#FF4B4B; color:white; padding:10px; border-radius:5px; text-align:center; font-weight:bold; margin-bottom:5px;'>🚨 NOK {idx}</div>", unsafe_allow_html=True)
+                    else:
+                        # Pokud je zóna čistá, svítí zeleně
+                        plc_indicators[idx].markdown(f"<div style='background-color:#00D48A; color:white; padding:10px; border-radius:5px; text-align:center; font-weight:bold; margin-bottom:5px;'>✅ OK {idx}</div>", unsafe_allow_html=True)
+            
+            else:
+                # Když je inspekce vypnutá, kontrolky jsou šedé
+                for idx in range(1, 9):
+                    plc_indicators[idx].markdown(f"<div style='background-color:#E0E0E0; color:#666; padding:10px; border-radius:5px; text-align:center; margin-bottom:5px;'>⚫ Výstup {idx}</div>", unsafe_allow_html=True)
+                live_placeholder.info("Inspekce je zastavena. Zapněte ji přepínačem níže.")
+                
+    else:
+        st.warning("⚠️ Nejdříve vyberte nebo vytvořte projekt v levém panelu.")
 # --- TAB 2: MASTER ---
 with tab2:
     st.subheader("📸 Nastavení Master snímků")
