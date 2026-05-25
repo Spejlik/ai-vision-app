@@ -70,105 +70,75 @@ with tab1:
         if not all_masters:
             st.warning("⚠️ Nemáte vytvořené žádné Mastery. Systém nemá z čeho inspekci spouštět.")
         else:
-            # Rozdělení obrazovky: Vlevo živý obraz, vpravo stav PLC
             col_run_1, col_run_2 = st.columns([2.5, 1])
             
             with col_run_1:
-                # Místo, kam budeme tlačit živé snímky
                 live_placeholder = st.empty()
                 
             with col_run_2:
                 st.markdown("### 📊 Výstupy PLC (NOK 1-8)")
                 st.write("Indikátory digitálních výstupů do linky:")
                 
-                # Vytvoříme mřížku pro 8 kontrolek (2 sloupce po 4 kontrolkách)
                 io_col1, io_col2 = st.columns(2)
                 plc_indicators = {}
                 
                 for idx in range(1, 9):
                     target_col = io_col1 if idx <= 4 else io_col2
                     with target_col:
-                        # Vytvoříme stabilní box, který budeme barvit
                         plc_indicators[idx] = st.empty()
             
             st.divider()
             
-            # --- SIMULACE EVALUACE (Zda je zóna v pořádku) ---
-                        # Simulujeme náhodnou chybu (95% šance na OK, 5% na NOK)
-                        is_zone_ok = random.random() > 0.05
-                        
-                        if not is_zone_ok:
-                            current_outputs[r_nok] = True # Aktivujeme příslušný NOK výstup
-                        
-                        # TADY JE OPRAVA: Změněno z is_ok na is_zone_ok
-                        zone_color = "#00FF00" if is_zone_ok else "#FF0000"
-
-            # Výchozí stav výstupů (všechny NOK jsou OK -> zelené)
-            current_outputs = {i: False for i in range(1, 8)}
+            run_engine = st.toggle("▶️ SPUSTIT ŽIVOU INSPEKCI", key="run_engine_toggle")
+            current_outputs = {i: False for i in range(1, 9)}
 
             if run_engine:
                 import random
                 
-                # NAČTENÍ PRVNÍHO DOSTUPNÉHO MASTERU JAKO ŽIVÉHO OBRAZU
-                # Pokud existuje uložený master, použijeme ho jako podklad z "kamery"
-                if os.path.exists(m_path):
-                    live_frame = Image.open(m_path).convert("RGB")
+                # Použijeme cestu z prvního masteru pro simulaci kamery
+                m_path_sim = all_masters[0][2]
+                
+                if os.path.exists(m_path_sim):
+                    live_frame = Image.open(m_path_sim).convert("RGB")
                 else:
                     live_frame = Image.new('RGB', (1200, 800), color=(70, 109, 137))
                     
                 live_draw = ImageDraw.Draw(live_frame)
+                W_live = live_frame.size[0]
+                line_w = max(2, int(W_live * 0.007))
                 
-                # B. Procházení všech Masterů a zón aktivního projektu
+                # Procházíme zóny pro aktivní projekt
                 for m in all_masters:
-                    m_id, m_name, m_path = m[0], m[1], m[2]
+                    m_id = m[0]
                     rois = database.get_rois(m_id, active_p)
                     
                     for r in rois:
                         rx, ry, rw, rh, r_nok = r[4], r[5], r[6], r[7], r[8]
                         
-                        # Simulace kontroly: 90% šance, že zóna projde jako OK
-                        is_zone_ok = random.random() > 0.10
+                        # Simulace kontroly: 85% šance na OK, 15% na chybu
+                        is_zone_ok = random.random() > 0.15
                         
                         if not is_zone_ok:
                             current_outputs[r_nok] = True
                         
                         zone_color = "#00FF00" if is_zone_ok else "#FF0000"
                         
-                        # Kreslení adaptivního rámečku podle velikosti obrazu
-                        W_live = live_frame.size[0]
-                        line_w = max(2, int(W_live * 0.007))
-                        
+                        # Vykreslení obdélníku zóny
                         live_draw.rectangle([rx, ry, rx+rw, ry+rh], outline=zone_color, width=line_w)
                         live_draw.text((rx, ry-15), f"{r[3]} (NOK{r_nok})", fill=zone_color)
                 
-                # C. Aktualizace vizuálního obrazu v placeholderu
-                live_placeholder.image(live_frame, use_container_width=True, caption="Simulovaný živý stream (z Master snímku)")
+                live_placeholder.image(live_frame, use_container_width=True, caption="Živý stream (Simulace z Master snímku)")
                 
-                # D. Vykreslení PLC kontrolek vpravo
+                # Vykreslení barevných kontrolek
                 for idx in range(1, 9):
                     if current_outputs.get(idx, False):
                         plc_indicators[idx].markdown(f"<div style='background-color:#FF4B4B; color:white; padding:10px; border-radius:5px; text-align:center; font-weight:bold; margin-bottom:5px;'>🚨 NOK {idx}</div>", unsafe_allow_html=True)
                     else:
                         plc_indicators[idx].markdown(f"<div style='background-color:#00D48A; color:white; padding:10px; border-radius:5px; text-align:center; font-weight:bold; margin-bottom:5px;'>✅ OK {idx}</div>", unsafe_allow_html=True)
-                
-                # C. Aktualizace vizuálního obrazu v placeholderu
-                live_placeholder.image(live_frame, use_container_width=True, caption="Živý stream z kamery s vyhodnocením")
-                
-                # D. Vykreslení PLC kontrolek vpravo
-                for idx in range(1, 9):
-                    if current_outputs.get(idx, False):
-                        # Pokud je aktivní NOK, svítí červeně
-                        plc_indicators[idx].markdown(f"<div style='background-color:#FF4B4B; color:white; padding:10px; border-radius:5px; text-align:center; font-weight:bold; margin-bottom:5px;'>🚨 NOK {idx}</div>", unsafe_allow_html=True)
-                    else:
-                        # Pokud je zóna čistá, svítí zeleně
-                        plc_indicators[idx].markdown(f"<div style='background-color:#00D48A; color:white; padding:10px; border-radius:5px; text-align:center; font-weight:bold; margin-bottom:5px;'>✅ OK {idx}</div>", unsafe_allow_html=True)
-            
             else:
-                # Když je inspekce vypnutá, kontrolky jsou šedé
                 for idx in range(1, 9):
                     plc_indicators[idx].markdown(f"<div style='background-color:#E0E0E0; color:#666; padding:10px; border-radius:5px; text-align:center; margin-bottom:5px;'>⚫ Výstup {idx}</div>", unsafe_allow_html=True)
                 live_placeholder.info("Inspekce je zastavena. Zapněte ji přepínačem níže.")
-                
     else:
         st.warning("⚠️ Nejdříve vyberte nebo vytvořte projekt v levém panelu.")
 # --- TAB 2: MASTER ---
