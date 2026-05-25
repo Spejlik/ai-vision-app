@@ -190,7 +190,7 @@ with tab3:
     active_p = st.session_state.active_project
     st.info(f"🏗️ Aktuálně nastavujete zóny pro projekt: **{active_p}**")
     
-    all_masters = database.get_all_masters(all_masters = database.get_all_masters(active_p))
+    all_masters = database.get_all_masters(active_p)
     
     if not all_masters:
         st.warning("⚠️ Knihovna Masterů je prázdná.")
