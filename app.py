@@ -214,7 +214,7 @@ with tab3:
         if 'selected_master_id' not in st.session_state or st.session_state.selected_master_id is None:
             st.session_state.selected_master_id = all_masters[0][0]
 
-        # --- DOKONALÁ ČTVERCOVÁ MŘÍŽKA GALERIE ---
+        # --- DOKONALÁ ČTVERCOVÁ MŘÍŽKA GALERIE (S RÁMEČKY) ---
         st.write("### 🖼️ Výběr pozice / kamery:")
         
         COLUMNS_PER_ROW = 6
@@ -223,24 +223,25 @@ with tab3:
         for row in m_rows:
             cols = st.columns(COLUMNS_PER_ROW)
             for idx, m in enumerate(row):
-                # SQL SELECT * vrací: m[0]=id, m[1]=project, m[2]=name, m[3]=image_path
                 m_id_loop, m_name_loop, m_path_loop = m[0], m[2], m[3]
                 
                 with cols[idx]:
-                    if os.path.exists(m_path_loop):
-                        st.image(m_path_loop, use_container_width=True)
-                    
-                    is_active = (m_id_loop == st.session_state.selected_master_id)
-                    
-                    if st.button(
-                        f"📸 {m_name_loop}", 
-                        key=f"btn_m_{m_id_loop}", 
-                        use_container_width=True,
-                        type="primary" if is_active else "secondary"
-                    ):
-                        st.session_state.selected_master_id = m_id_loop
-                        st.session_state.editing_roi_id = None # zrušit případnou editaci při přepnutí kamery
-                        st.rerun()
+                    # Použijeme kontejner s rámečkem, aby se obrázky a tlačítka neslily dohromady
+                    with st.container(border=True):
+                        if os.path.exists(m_path_loop):
+                            st.image(m_path_loop, use_container_width=True)
+                        
+                        is_active = (m_id_loop == st.session_state.selected_master_id)
+                        
+                        if st.button(
+                            f"📸 {m_name_loop}", 
+                            key=f"btn_m_{m_id_loop}", 
+                            use_container_width=True,
+                            type="primary" if is_active else "secondary"
+                        ):
+                            st.session_state.selected_master_id = m_id_loop
+                            st.session_state.editing_roi_id = None
+                            st.rerun()
 
         st.divider()
         
