@@ -139,19 +139,7 @@ with tab1:
                         
                         all_test_files = ok_files + nok_files
                         
-                        # --- DOČASNÝ DIAGNOSTICKÝ BLOK ---
-                        # Vypíše nám do aplikace přesné informace, ať víme, kde je chyba
-                        import os
-                        abs_path_ok = os.path.abspath(f"dataset/OK/{r_name}")
-                        abs_path_nok = os.path.abspath(f"dataset/NOK/{r_name}")
-                        
-                        st.sidebar.warning("🔍 DEBUG CESTY:")
-                        st.sidebar.text(f"Zóna hledá: {r_name}")
-                        st.sidebar.text(f"OK složka: {abs_path_ok}")
-                        st.sidebar.text(f"Nalezeno OK: {len(ok_files)} ks")
-                        st.sidebar.text(f"Nalezeno NOK: {len(nok_files)} ks")
-                        # ---------------------------------
-                        
+                                                
                         live_roi_np = None
                         chosen_file_name = "Simulace (Chybí lokální soubory)"
                         
