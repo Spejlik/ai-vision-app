@@ -175,17 +175,23 @@ with tab1:
                             
                         zone_color = "#00FF00" if is_zone_ok else "#FF4B4B"
                         
-                        # --- NOVÝ BLOK: UKLÁDÁNÍ DO HISTORIE (ELVAC STYLE) ---
-                        # Vytvoříme složky pro historii, pokud neexistují
-                        history_dir = f"history/{status_text}/{r_name}"
+                        # --- DYNAMICKÁ DETEKCE DISKU A STRUKTURY PROJEKTŮ ---
+                        # Kód zkontroluje přítomnost disku D:\, jinak bere C:\
+                        base_drive = "D:/" if os.path.exists("D:/") else "C:/"
+                        
+                        # Vytvoření cesty: Drive:/Vision_System/Archiv_Snímku/<Projekt>/<Zóna>/<Stav>
+                        history_dir = os.path.join(base_drive, "Vision_System", "Archiv_Snímku", active_p, r_name, status_text)
+                        
                         if not os.path.exists(history_dir):
                             os.makedirs(history_dir)
                             
-                        # Uložíme originální nedeformovaný výřez z testovací fotky
-                        history_filename = f"{history_dir}/crop_{int(time.time())}_{random.randint(100,999)}.png"
+                        # Unikátní název souboru s časovým razítkem (např. crop_1716634123_456.png)
+                        history_filename = os.path.join(history_dir, f"crop_{int(time.time())}_{random.randint(100,999)}.png")
+                        
+                        # Uložení originálního nedeformovaného výřezu na disk C: nebo D:
                         Image.fromarray(live_roi_np).save(history_filename)
                         
-                        # Zapíšeme metadata do SQLite
+                        # Zápis cesty do SQLite databáze pro záložku HISTORIE
                         database.save_to_history(active_p, r_name, history_filename, status_text)
                         # -----------------------------------------------------
                         
