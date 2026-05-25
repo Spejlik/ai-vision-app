@@ -128,19 +128,29 @@ with tab1:
                         master_roi_np = np.array(master_crop)
 
                         # 2. ŽIVÝ AUTOMATICKÝ SBĚR REÁLNÝCH FOTEK Z DISKU
-                        # Hlídáme přesný název zóny (r_name = Zebro_P1)
                         all_extensions = ["*.jpg", "*.jpeg", "*.png", "*.JPG", "*.JPEG", "*.PNG"]
                         
                         ok_files = []
                         nok_files = []
                         
-                        # Fix cest: složka dataset musí být malými písmeny, u názvu zóny r_name se držíme přesného zadání
                         for ext in all_extensions:
                             ok_files.extend(glob.glob(f"dataset/OK/{r_name}/{ext}"))
                             nok_files.extend(glob.glob(f"dataset/NOK/{r_name}/{ext}"))
                         
-                        # Spojíme soubory dohromady
                         all_test_files = ok_files + nok_files
+                        
+                        # --- DOČASNÝ DIAGNOSTICKÝ BLOK ---
+                        # Vypíše nám do aplikace přesné informace, ať víme, kde je chyba
+                        import os
+                        abs_path_ok = os.path.abspath(f"dataset/OK/{r_name}")
+                        abs_path_nok = os.path.abspath(f"dataset/NOK/{r_name}")
+                        
+                        st.sidebar.warning("🔍 DEBUG CESTY:")
+                        st.sidebar.text(f"Zóna hledá: {r_name}")
+                        st.sidebar.text(f"OK složka: {abs_path_ok}")
+                        st.sidebar.text(f"Nalezeno OK: {len(ok_files)} ks")
+                        st.sidebar.text(f"Nalezeno NOK: {len(nok_files)} ks")
+                        # ---------------------------------
                         
                         live_roi_np = None
                         chosen_file_name = "Simulace (Chybí lokální soubory)"
