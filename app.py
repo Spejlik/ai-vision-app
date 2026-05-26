@@ -125,33 +125,30 @@ with tab1:
                         master_crop = master_full.crop((r[4], r[5], r[4]+r[6], r[5]+r[7]))
                         master_roi_np = np.array(master_crop)
 
-                        # UNIVERZÁLNÍ VYHLEDÁVÁNÍ PODLE AKTIVNÍHO PROJEKTU
-                        ok_dir = os.path.join("C:/Image", "OK", active_p)
-                        nok_dir = os.path.join("C:/Image", "NOK", active_p)
+                        # --- OSTRÉ NAČTENÍ Z REÁLNÉ KAMERY LISU ---
+                        import camera_manager
                         
-                        ok_files = []
-                        nok_files = []
+                        # Zde zadáš buď index USB (0, 1, 2) nebo RTSP adresu tvé IP kamery
+                        # Do budoucna to propojíme s políčkem v záložce I/O
+                        CAMERA_SOURCE = 0 
                         
-                        if os.path.exists(ok_dir):
-                            for ext in ["*.jpg", "*.JPG", "*.png", "*.PNG", "*.jpeg", "*.JPEG"]:
-                                ok_files.extend(glob.glob(os.path.join(ok_dir, ext)))
-                        if os.path.exists(nok_dir):
-                            for ext in ["*.jpg", "*.JPG", "*.png", "*.PNG", "*.jpeg", "*.JPEG"]:
-                                nok_files.extend(glob.glob(os.path.join(nok_dir, ext)))
-                                
-                        all_test_files = ok_files + nok_files
+                        live_full_img = camera_manager.capture_live_frame(CAMERA_SOURCE)
                         
-                        if all_test_files:
-                            import random as rand_mod
-                            selected_path = rand_mod.choice(all_test_files)
-                            chosen_file_name = os.path.basename(selected_path)
-                            live_roi_img = Image.open(selected_path).convert("RGB")
-                            live_roi_img = live_roi_img.resize((r[6], r[7]), Image.Resampling.LANCZOS)
-                            live_roi_np = np.array(live_roi_img)
+                        if live_full_img is not None:
+                            # Kamera úspěšně dodala snímek -> provedeme přesný ořez zóny
+                            chosen_file_name = f"Live_Kamera_{int(time.time())}.jpg"
+                            live_crop = live_full_img.crop((r[4], r[5], r[4]+r[6], r[5]+r[7]))
+                            live_roi_img = live_crop.resize((500, 500), Image.Resampling.LANCZOS)
+                            live_roi_np = np.array(live_crop.resize((r[6], r[7]), Image.Resampling.LANCZOS))
+                            
+                            # Automaticky uložíme surový snímek do historie pro průběžný sběr dat
+                            hist_path = camera_manager.save_live_to_unsorted(active_p, CAMERA_SOURCE, live_crop)
+                            database.save_to_history(active_p, r_name, hist_path, "Neroztříděno")
                         else:
-                            chosen_file_name = "Fallback_z_Masteru.png"
-                            live_roi_img = master_crop.copy()
-                            live_roi_np = np.array(live_roi_img)
+                            # Nouzový fallback pokud kamera vypadne (např. utržený kabel)
+                            chosen_file_name = "⚠️ CHYBA_KAMERY_FALLBACK.png"
+                            live_roi_img = master_crop.resize((500, 500), Image.Resampling.LANCZOS)
+                            live_roi_np = np.array(master_crop)
 
                         # INTEGRACE UNIVERZÁLNÍHO NEURONOVÉHO MODELU PROJEKTU
                         # Nejprve zkusíme specifický model zóny, pokud neexistuje, vezmeme univerzální síť projektu
