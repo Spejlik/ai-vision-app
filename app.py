@@ -554,7 +554,7 @@ with tab5:
                             with b_ok:
                                 if st.button("🟢 ok", key=f"ok_h_{row[0]}", use_container_width=True):
                                     src_path = row[3]
-                                    dest_dir = os.path.join(BASE_IMAGE_DIR, "OK", active_p)
+                                    dest_dir = os.path.join("C:/Image", "OK", active_p)
                                     if not os.path.exists(dest_dir): os.makedirs(dest_dir)
                                     import shutil
                                     shutil.copy(src_path, os.path.join(dest_dir, os.path.basename(src_path)))
@@ -565,7 +565,7 @@ with tab5:
                             with b_nok:
                                 if st.button("🔴 nok", key=f"nok_h_{row[0]}", use_container_width=True):
                                     src_path = row[3]
-                                    dest_dir = os.path.join(BASE_IMAGE_DIR, "NOK", active_p)
+                                    dest_dir = os.path.join("C:/Image", "NOK", active_p)
                                     if not os.path.exists(dest_dir): os.makedirs(dest_dir)
                                     import shutil
                                     shutil.copy(src_path, os.path.join(dest_dir, os.path.basename(src_path)))
