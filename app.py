@@ -184,24 +184,31 @@ with tab1:
                             
                         zone_color = "#00FF00" if is_zone_ok else "#FF4B4B"
                         
-                        # --- UKLÁDÁNÍ DO SLOŽEK PODLE TVÉHO SCREENSHOTU ---
+                        # --- UPRAVENÉ UKLÁDÁNÍ: VŠECHNO JDE DO "UNSORTED" PRO RUČNÍ OZNAČENÍ ---
                         base_drive = "D:/" if os.path.exists("D:/") else "C:/"
                         
-                        # Cesta přesně jako na obrázku: Drive:/Image/<Stav>/<Projekt>
-                        history_dir = os.path.join(base_drive, "Image", status_text, active_p)
+                        # Všechny živé snímky padají do dočasné složky Unsorted
+                        history_dir = os.path.join(base_drive, "Image", "Unsorted", active_p)
+                        if not os.path.exists(history_dir):
+                            os.makedirs(history_dir)
                         
                         if not os.path.exists(history_dir):
                             os.makedirs(history_dir)
                             
                         # Vytvoření názvu souboru (např. Zóna 1_1716634123.png)
                         history_filename = os.path.join(history_dir, f"{r_name}_{int(time.time())}_{random.randint(100,999)}.png")
+                        Image.fromarray(live_roi_np).save(history_filename)
                         
                         # Uložení originálního nedeformovaného snímku na disk
                         Image.fromarray(live_roi_np).save(history_filename)
                         
-                        # Uložení cesty do lokální DB pro záložku HISTORIE
-                        database.save_to_history(active_p, r_name, history_filename, status_text)
-                        # -----------------------------------------------------------------
+                        # Výchozí stav v DB bude "Neroztříděno" (undefined)
+                        database.save_to_history(active_p, r_name, history_filename, "Neroztříděno")
+                        # ---------------------------------------------------------------------
+                        
+                        # Původní vizuální vyhodnocení na obrazovce v mřížce necháme podle MSE
+                        status_text = "NOK" if final_deviation > r_tolerance else "OK"
+                        zone_color = "#FF4B4B" if status_text == "NOK" else "#00FF00"
                         
                         # 4. Úprava na čtvercovou dlaždici pro live dashboard
                         roi_img = Image.fromarray(live_roi_np)
@@ -480,70 +487,79 @@ with tab4:
     
 # --- TAB 5: HISTORIE ---
 with tab5:
-    st.subheader("📜 Historie inspekčních nálezů (Archiv)")
+    st.subheader("📋 Lis 1300/18A - Správa snímků a anotace pro NN")
+    st.write("Proklikáním snímků určíte jejich reálnou jakost. Snímky se následně uloží do datasetu pro učení neuronové sítě.")
     
-    # 1. ZÍSKÁNÍ PROJEKTŮ: Vytáhneme unikátní textové názvy projektů přímo z historie
+    # Načtení projektů z historie
     history_projects = database.get_unique_projects_from_history()
     project_options = ["Vše"] + history_projects
     
-    # Bezpečné určení výchozího indexu podle sidebaru
     default_p_idx = 0
     if st.session_state.active_project in project_options:
         default_p_idx = project_options.index(st.session_state.active_project)
-    
-    # Třísloupcová filtrační lišta
-    f_col1, f_col2, f_col3 = st.columns(3)
-    
-    with f_col1:
-        proj_f = st.selectbox("Filtr projektu:", project_options, index=default_p_idx)
-    
-    with f_col2:
-        status_f = st.selectbox("Filtr stavu (Jakost):", ["Vše", "OK", "NOK"])
         
+    # Filtrační lišta podle vzoru Elvac
+    f_col1, f_col2, f_col3 = st.columns(3)
+    with f_col1:
+        proj_f = st.selectbox("Aktivní projekt (Lis):", project_options, index=default_p_idx)
+    with f_col2:
+        # Výchozí filtr je nastaven na "Neroztříděno" (odpovídá stavu undefined)
+        status_f = st.selectbox("Stav hodnocení zóny:", ["Neroztříděno", "OK", "NOK", "Vše"])
     with f_col3:
-        # 2. DYNAMICKÉ ZÍSKÁNÍ ZÓN: Vytáhneme unikátní zóny z historie podle vybraného projektu
         history_rois = database.get_unique_rois_from_history(proj_f)
         roi_options = ["Vše"] + history_rois
-        roi_f = st.selectbox("Filtr zóny (ROI):", roi_options)
+        roi_f = st.selectbox("Neuronová siť (Zóna):", roi_options)
         
-    # Načtení historických dat z databáze na základě zvolených filtrů
+    # Načtení dat z DB
     hist_data = database.get_history(proj_f, status_f, roi_f)
     
     if not hist_data:
-        st.info("V archivu zatím nejsou žádné záznamy odpovídající zvoleným filtrům.")
+        st.info("ℹ️ Žádné snímky nevyžadují zařazení (všechny stavy jsou definovány).")
     else:
-        st.write(f"📊 Nalezeno {len(hist_data)} snímků v archivu:")
+        st.write(f"🔍 Počet snímků k revizi: **{len(hist_data)}**")
         
-        # Mřížka galerie: 5 nedeformovaných snímků na řádek
-        H_COLUMNS = 5
+        # Mřížka pro anotační karty (3 karty na řádek)
+        H_COLUMNS = 3
         h_rows = [hist_data[i:i + H_COLUMNS] for i in range(0, len(hist_data), H_COLUMNS)]
         
         for h_row in h_rows:
             cols = st.columns(H_COLUMNS)
             for idx, row in enumerate(h_row):
-                # row: 0=id, 1=projekt, 2=roi_name, 3=image_path, 4=timestamp, 5=status
-                h_proj, h_roi, h_path, h_time, h_status = row[1], row[2], row[3], row[4], row[5]
+                r_id, h_proj, h_roi, h_path, h_time, h_status = row[0], row[1], row[2], row[3], row[4], row[5]
                 
-                # Formátování času: z "2026-05-25 14:01:36" uděláme čisté "25.05. 14:01:36"
                 try:
                     import datetime
                     dt_obj = datetime.datetime.strptime(h_time, "%Y-%m-%d %H:%M:%S")
                     formatted_time = dt_obj.strftime("%d.%m. %H:%M:%S")
                 except:
                     formatted_time = h_time
-                
+                    
                 with cols[idx]:
                     with st.container(border=True):
-                        if h_status == "OK":
-                            st.markdown("<span style='color:#00D48A; font-weight:bold;'>✅ OK</span>", unsafe_allow_html=True)
+                        # Zobrazení stavu (undefined vs ok/nok)
+                        if h_status == "Neroztříděno":
+                            st.markdown("<span style='background-color:#555; color:#fff; padding:3px 8px; border-radius:3px; font-size:12px; font-weight:bold;'>⚪ undefined</span>", unsafe_allow_html=True)
+                        elif h_status == "OK":
+                            st.markdown("<span style='background-color:#00D48A; color:#fff; padding:3px 8px; border-radius:3px; font-size:12px; font-weight:bold;'>✅ ok</span>", unsafe_allow_html=True)
                         else:
-                            st.markdown("<span style='color:#FF4B4B; font-weight:bold;'>🚨 NOK</span>", unsafe_allow_html=True)
-                            
-                        st.write(f"**{h_roi}**")
-                        st.caption(f"📁 {h_proj}")
-                        st.caption(f"🕒 {formatted_time}")
+                            st.markdown("<span style='background-color:#FF4B4B; color:#fff; padding:3px 8px; border-radius:3px; font-size:12px; font-weight:bold;'>🚨 nok</span>", unsafe_allow_html=True)
+                        
+                        st.markdown(f"**Síť / Zóna:** `{h_roi}`")
+                        st.caption(f"🕒 Čas: {formatted_time} | Projekt: {h_proj}")
                         
                         if os.path.exists(h_path):
                             st.image(h_path, use_container_width=True)
+                            
+                            # Tlačítka pro uložení do příslušného datasetu NN
+                            st.markdown("<p style='margin-bottom:2px; font-size:13px; color:#aaa;'>Uložit do datasetu NN:</p>", unsafe_allow_html=True)
+                            btn_ok, btn_nok = st.columns(2)
+                            with btn_ok:
+                                if st.button("🟢 ok", key=f"ok_{r_id}", use_container_width=True):
+                                    database.update_image_status(r_id, "OK")
+                                    st.rerun()
+                            with btn_nok:
+                                if st.button("🔴 nok", key=f"nok_{r_id}", use_container_width=True):
+                                    database.update_image_status(r_id, "NOK")
+                                    st.rerun()
                         else:
-                            st.error("Snímek nenalezen")    
+                            st.error("Soubor snímku nebyl na disku nalezen.")    

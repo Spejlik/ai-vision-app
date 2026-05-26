@@ -164,4 +164,37 @@ def get_unique_rois_from_history(project_filter="Vše"):
         c.execute("SELECT DISTINCT roi_name FROM history WHERE project = ? ORDER BY roi_name ASC", (project_filter,))
     rows = c.fetchall()
     conn.close()
-    return [r[0] for r in rows]    
+    return [r[0] for r in rows]
+
+def update_image_status(record_id, new_status):
+    import os
+    import shutil
+    conn = sqlite3.connect('vision_system.db')
+    c = conn.cursor()
+    
+    # 1. Načteme současnou cestu k souboru, projekt a zónu
+    c.execute("SELECT image_path, project, roi_name FROM history WHERE id = ?", (record_id,))
+    row = c.fetchone()
+    
+    if row:
+        old_path = row[0]
+        project = row[1]
+        
+        if os.path.exists(old_path):
+            # Určíme novou složku (C:/Image/OK/Projekt/ nebo C:/Image/NOK/Projekt/)
+            base_drive = "D:/" if os.path.exists("D:/") else "C:/"
+            new_dir = os.path.join(base_drive, "Image", new_status, project)
+            
+            if not os.path.exists(new_dir):
+                os.makedirs(new_dir)
+                
+            new_path = os.path.join(new_dir, os.path.basename(old_path))
+            
+            # Fyzicky přesuneme soubor na disku
+            shutil.move(old_path, new_path)
+            
+            # 2. Aktualizujeme cestu a stav v databázi
+            c.execute("UPDATE history SET image_path = ?, status = ? WHERE id = ?", (new_path, new_status, record_id))
+            conn.commit()
+            
+    conn.close()    
