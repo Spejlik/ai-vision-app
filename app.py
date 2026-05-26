@@ -397,7 +397,8 @@ with tab3:
                 else:
                     st.info(f"📊 **Množství dat:** Pro učení projektu `{active_p}` je k dispozici **{count_ok}x OK** a **{count_nok}x NOK** reálných vzorků.")
                 
-                if st.button(f"🚀 SPUSTIT UČENÍ PRO PROJEKT: {active_p}", use_container_width=True, disabled=(count_ok < 4 or count_nok < 4)):
+                # Odstraněno blokování tlačítka, teď půjde spustit vždy
+                if st.button(f"🚀 SPUSTIT UČENÍ PRO PROJEKT: {active_p}", use_container_width=True):
                     with st.spinner("Učení neuronové sítě běží..."):
                         progress_bar = st.progress(0.0)
                         status_text = st.empty()
