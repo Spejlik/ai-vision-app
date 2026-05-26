@@ -519,7 +519,7 @@ with tab5:
                                 # 2. Zápis do DB a smazání z Unsorted, ať to v historii nezavází
                                 database.update_image_status(row[0], "OK")
                                 try: os.remove(src_path)
-                                catch: pass
+                                except: pass
                                 st.rerun()
                                 
                         with btn_nok:
