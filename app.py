@@ -503,13 +503,40 @@ with tab5:
                     if os.path.exists(row[3]):
                         st.image(row[3], use_container_width=True)
                         b_ok, b_nok = st.columns(2)
-                        with b_ok:
+                        st.markdown("<p style='margin-bottom:2px; font-size:13px; color:#aaa;'>Uložit do datasetu NN:</p>", unsafe_allow_html=True)
+                        btn_ok, btn_nok = st.columns(2)
+                        with btn_ok:
                             if st.button("🟢 ok", key=f"ok_h_{row[0]}", use_container_width=True):
+                                # 1. Fyzické zkopírování souboru do složky datasetu pro učení sítě
+                                src_path = row[3]
+                                if os.path.exists(src_path):
+                                    dest_dir = "dataset/OK/Zebro_P1"
+                                    if not os.path.exists(dest_dir):
+                                        os.makedirs(dest_dir)
+                                    import shutil
+                                    shutil.copy(src_path, os.path.join(dest_dir, os.path.basename(src_path)))
+                                
+                                # 2. Zápis do DB a smazání z Unsorted, ať to v historii nezavází
                                 database.update_image_status(row[0], "OK")
+                                try: os.remove(src_path)
+                                catch: pass
                                 st.rerun()
-                        with b_nok:
+                                
+                        with btn_nok:
                             if st.button("🔴 nok", key=f"nok_h_{row[0]}", use_container_width=True):
+                                # 1. Fyzické zkopírování souboru do složky datasetu pro učení sítě
+                                src_path = row[3]
+                                if os.path.exists(src_path):
+                                    dest_dir = "dataset/NOK/Zebro_P1"
+                                    if not os.path.exists(dest_dir):
+                                        os.makedirs(dest_dir)
+                                    import shutil
+                                    shutil.copy(src_path, os.path.join(dest_dir, os.path.basename(src_path)))
+                                
+                                # 2. Zápis do DB a smazání z Unsorted
                                 database.update_image_status(row[0], "NOK")
+                                try: os.remove(src_path)
+                                catch: pass
                                 st.rerun()
                     else:
                         st.error("Soubor snímku nebyl na disku nalezen.")
