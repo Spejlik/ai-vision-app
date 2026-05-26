@@ -130,25 +130,23 @@ with tab1:
                         ok_files = []
                         nok_files = []
                         
-                        # 2. CHYTRÉ VYHLEDÁVÁNÍ TESTOVACÍCH FOTEK (FLEXIBILNÍ A BEZPEČNÉ)
+                        # 2. CHYTRÉ VYHLEDÁVÁNÍ TESTOVACÍCH FOTEK (Zpátky na tvůj původní dataset)
                         all_extensions = ["*.jpg", "*.jpeg", "*.png", "*.JPG", "*.JPEG", "*.PNG"]
                         ok_files = []
                         nok_files = []
                         
-                        # Postupný seznam cest: nejdřív detailní zóna, pak hlavní složka projektu, pak obecný dataset
+                        # Přidáváme Zebro_P1 na první místo, aby to hned našlo tvoje fotky
                         search_paths = [
+                            f"dataset/OK/Zebro_P1",
                             f"dataset/OK/{r_name}",
-                            f"dataset/OK/{active_p}",
                             f"dataset/OK"
                         ]
                         
-                        # Vyhledání OK souborů
                         for path in search_paths:
                             if ok_files: break
                             for ext in all_extensions:
                                 ok_files.extend(glob.glob(f"{path}/{ext}"))
                                 
-                        # Vyhledání NOK souborů
                         for path in search_paths:
                             if nok_files: break
                             for ext in all_extensions:
