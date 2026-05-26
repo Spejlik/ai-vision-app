@@ -492,75 +492,86 @@ with tab4:
 # --- TAB 5: HISTORIE ---
 with tab5:
     st.subheader("📋 Správa snímků a anotace pro NN")
-    st.write("Proklikáním snímků určíte reálnou jakost. Snímky se následně uloží do datasetu pro učení neuronové sítě.")
+    active_p = st.session_state.active_project
     
-    # Načtení unikátních projektů a zón z historie pro filtry
-    history_projects = database.get_unique_projects_from_history() if hasattr(database, 'get_unique_projects_from_history') else []
-    project_options = ["Vše"] + history_projects
-    
-    default_p_idx = 0
-    if st.session_state.active_project in project_options:
-        default_p_idx = project_options.index(st.session_state.active_project)
-        
-    f_col1, f_col2, f_col3 = st.columns(3)
-    with f_col1:
-        proj_f = st.selectbox("Aktivní projekt (Lis):", project_options, index=default_p_idx)
-    with f_col2:
-        status_f = st.selectbox("Stav hodnocení zóny:", ["Neroztříděno", "OK", "NOK", "Vše"])
-    with f_col3:
-        history_rois = database.get_unique_rois_from_history(proj_f) if hasattr(database, 'get_unique_rois_from_history') else []
-        roi_options = ["Vše"] + history_rois
-        roi_f = st.selectbox("Neuronová síť (Zóna):", roi_options)
-        
-    # Načtení dat na základě filtrů
-    hist_data = database.get_history(proj_f, status_f, roi_f)
-    
-    if not hist_data:
-        st.info("ℹ️ Žádné snímky neodpovídají vybranému filtru nebo jsou již roztříděny.")
+    if not active_p:
+        st.warning("⚠️ Nejdříve vyberte nebo vytvořte projekt v levém panelu.")
     else:
-        st.write(f"🔍 Počet snímků k zařazení: **{len(hist_data)}**")
-        h_cols = st.columns(3)
-        for idx, row in enumerate(hist_data[:12]): # Zobrazíme maximálně 12 snímků na stránku pro plynulost
-            with h_cols[idx % 3]:
-                with st.container(border=True):
-                    st.write(f"**Zóna:** `{row[2]}`")
-                    if os.path.exists(row[3]):
-                        st.image(row[3], use_container_width=True)
-                        b_ok, b_nok = st.columns(2)
-                        st.markdown("<p style='margin-bottom:2px; font-size:13px; color:#aaa;'>Uložit do datasetu NN:</p>", unsafe_allow_html=True)
-                        btn_ok, btn_nok = st.columns(2)
-                        with btn_ok:
-                            if st.button("🟢 ok", key=f"ok_h_{row[0]}", use_container_width=True):
-                                # 1. Fyzické zkopírování souboru do složky datasetu pro učení sítě
-                                src_path = row[3]
-                                if os.path.exists(src_path):
-                                    dest_dir = "dataset/OK/Zebro_P1"
-                                    if not os.path.exists(dest_dir):
-                                        os.makedirs(dest_dir)
+        # --- NOVÁ SEKCE: IMPORT FOTEK ZE SOUBORU ---
+        with st.expander("📥 Hromadný import testovacích fotek ze souborů (Příprava offline)", expanded=False):
+            st.write("Vyberte jednu nebo více fotek z disku/flashky. Systém je vloží do historie pro roztřídění.")
+            uploaded_hist_files = st.file_uploader(
+                "Vybrat fotky pro import:", 
+                type=["jpg", "jpeg", "png", "JPG", "JPEG", "PNG"], 
+                accept_multiple_files=True,
+                key="hist_uploader"
+            )
+            
+            if uploaded_hist_files:
+                if st.button("🚀 IMPORTOVAT DO HISTORIE", use_container_width=True):
+                    unsorted_dir = os.path.join(BASE_IMAGE_DIR, "Unsorted", active_p)
+                    if not os.path.exists(unsorted_dir):
+                        os.makedirs(unsorted_dir)
+                    
+                    imported_count = 0
+                    import random as rand_mod
+                    
+                    for f in uploaded_hist_files:
+                        # Vytvoření unikátního názvu souboru, abychom nepřepsali stávající
+                        base_name = os.path.splitext(f.name)[0]
+                        ext = os.path.splitext(f.name)[1]
+                        new_filename = os.path.join(unsorted_dir, f"{base_name}_import_{int(time.time())}_{rand_mod.randint(100,999)}{ext}")
+                        
+                        # Uložení na disk C:
+                        img = Image.open(f).convert("RGB")
+                        img.save(new_filename)
+                        
+                        # Zápis do databáze
+                        database.save_to_history(active_p, "Importováno", new_filename, "Neroztříděno")
+                        imported_count += 1
+                        
+                    st.success(f"🎉 Úspěšně importováno {imported_count} snímků do historie! Stránka se obnovuje...")
+                    time.sleep(1)
+                    st.rerun()
+        
+        st.divider()
+        
+        # --- KLASICKÉ ZOBRAZENÍ A TŘÍDĚNÍ ---
+        hist_data = database.get_history(active_p, "Neroztříděno", "Vše")
+        
+        if not hist_data:
+            st.info("ℹ️ Žádné nové nasnímané ani importované vzorky k roztřídění.")
+        else:
+            st.write(f"🔍 Počet snímků v historii k zařazení: **{len(hist_data)}**")
+            h_cols = st.columns(3)
+            for idx, row in enumerate(hist_data[:12]):
+                with h_cols[idx % 3]:
+                    with st.container(border=True):
+                        st.write(f"**Zdroj:** `{os.path.basename(row[3])}`")
+                        if os.path.exists(row[3]):
+                            st.image(row[3], use_container_width=True)
+                            b_ok, b_nok = st.columns(2)
+                            with b_ok:
+                                if st.button("🟢 ok", key=f"ok_h_{row[0]}", use_container_width=True):
+                                    src_path = row[3]
+                                    dest_dir = os.path.join(BASE_IMAGE_DIR, "OK", active_p)
+                                    if not os.path.exists(dest_dir): os.makedirs(dest_dir)
                                     import shutil
                                     shutil.copy(src_path, os.path.join(dest_dir, os.path.basename(src_path)))
-                                
-                                # 2. Zápis do DB a smazání z Unsorted, ať to v historii nezavází
-                                database.update_image_status(row[0], "OK")
-                                try: os.remove(src_path)
-                                except: pass
-                                st.rerun()
-                                
-                        with btn_nok:
-                            if st.button("🔴 nok", key=f"nok_h_{row[0]}", use_container_width=True):
-                                # 1. Fyzické zkopírování souboru do složky datasetu pro učení sítě
-                                src_path = row[3]
-                                if os.path.exists(src_path):
-                                    dest_dir = "dataset/NOK/Zebro_P1"
-                                    if not os.path.exists(dest_dir):
-                                        os.makedirs(dest_dir)
+                                    database.update_image_status(row[0], "OK")
+                                    try: os.remove(src_path)
+                                    except: pass
+                                    st.rerun()
+                            with b_nok:
+                                if st.button("🔴 nok", key=f"nok_h_{row[0]}", use_container_width=True):
+                                    src_path = row[3]
+                                    dest_dir = os.path.join(BASE_IMAGE_DIR, "NOK", active_p)
+                                    if not os.path.exists(dest_dir): os.makedirs(dest_dir)
                                     import shutil
                                     shutil.copy(src_path, os.path.join(dest_dir, os.path.basename(src_path)))
-                                
-                                # 2. Zápis do DB a smazání z Unsorted
-                                database.update_image_status(row[0], "NOK")
-                                try: os.remove(src_path)
-                                except: pass
-                                st.rerun()
-                    else:
-                        st.error("Soubor snímku nebyl na disku nalezen.")
+                                    database.update_image_status(row[0], "NOK")
+                                    try: os.remove(src_path)
+                                    except: pass
+                                    st.rerun()
+                        else: 
+                            st.error("Snímek smazán nebo přesunut.")
