@@ -4,6 +4,7 @@ import database
 import camera_manager
 import os
 import time
+import ai_engine
 from PIL import Image, ImageDraw
 
 # 1. GLOBÁLNÍ KONFIGURACE
@@ -445,6 +446,28 @@ with tab3:
                 draw.text((zx, zy-25), "NÁHLED / EDITACE ZÓNY", fill="orange")
                 
                 st.image(img_roi, use_container_width=True, caption=f"Pracovní plocha: {m_name}")
+                # --- NOVÁ SEKCE: TRÉNOVÁNÍ AI NEURONOVÉ SÍTĚ ---
+                st.divider()
+                st.markdown("### 🧠 Řízení umělé inteligence (AI)")
+                st.write("Pokud máte v archivu nasbírané dostatečné množství OK a NOK snímků, můžete jedním kliknutím přetrénovat neuronovou síť MobileNetV3 přímo pro tento projekt.")
+                
+                if st.button("🚀 SPUSTIT UČENÍ NEURONOVÉ SÍTĚ PROJEKTU", type="secondary", use_container_width=True):
+                    with st.spinner("AI Engine se inicializuje..."):
+                        # Vytvoříme vizuální progress bar přímo ve Streamlitu
+                        progress_bar = st.progress(0.0)
+                        status_text = st.empty()
+                        
+                        def update_progress(pct, msg):
+                            progress_bar.progress(pct)
+                            status_text.text(msg)
+                            
+                        # Spustíme trénování z ai_engine.py
+                        success, result_msg = ai_engine.train_ai_model(active_p, update_progress)
+                        
+                        if success:
+                            st.success(f"🎉 Výborně! AI model byl úspěšně natrénován a uložen: {result_msg}")
+                        else:
+                            st.error(f"❌ Trénování selhalo: {result_msg}")
 
 # --- TAB 4: I/O ---
 with tab4:
