@@ -167,16 +167,19 @@ with tab1:
                         # SPRÁVNÝ VÝŘEZ TESTOVACÍ FOTKY (Ořízneme testovací snímek podle souřadnic zóny z Tabu 3)
                         # r[4]=X, r[5]=Y, r[6]=Šířka, r[7]=Výška
                         try:
-                            # Načteme reálnou testovací fotku z lisu
+                            # Načteme reálnou testovací fotku z lisu (V PLNSÉM ROZLIŠENÍ)
                             live_full_img = Image.open(selected_path).convert("RGB")
+                            
                             # Fyzicky z ní vyřízneme zónu, aby se neporovnával detail s celkem!
                             live_crop = live_full_img.crop((r[4], r[5], r[4]+r[6], r[5]+r[7]))
-                            live_roi_img = live_crop.resize((r[6], r[7]), Image.Resampling.LANCZOS)
-                            live_roi_np = np.array(live_roi_img)
+                            
+                            # Uložíme si ořez pro porovnání
+                            live_roi_img = live_crop.resize((desired_square_size, desired_square_size), Image.Resampling.LANCZOS)
+                            live_roi_np = np.array(live_crop.resize((r[6], r[7]), Image.Resampling.LANCZOS))
                         except Exception:
-                            # Fallback pokud by neseděly rozměry
-                            live_roi_img = master_crop.copy()
-                            live_roi_np = np.array(live_roi_img)
+                            # Fallback pokud by neseděly rozměry (např. zóna je mimo obraz)
+                            live_roi_img = master_crop.resize((desired_square_size, desired_square_size), Image.Resampling.LANCZOS)
+                            live_roi_np = np.array(master_crop)
 
                         if active_model:
                             # Spustíme vyhodnocení AI na OŘÍZNUTÉM detailu zóny
