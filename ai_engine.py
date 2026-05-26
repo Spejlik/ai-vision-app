@@ -16,35 +16,57 @@ def get_model():
     model.classifier[3] = nn.Linear(num_features, 2)
     return model
 
-# --- 2. TRÉNOVACÍ PROCES (UČENÍ) ---
-# --- UPRAVENÝ HISTORICKÝ DATASET PRO KONKRÉTNÍ ZÓNU ---
-        class CustomProjectDataset(torch.utils.data.Dataset):
-            def __init__(self, ok_path, nok_path, transform, roi_name):
-                self.samples = []
-                self.transform = transform
+# --- 2. TRÉNOVACÍ DATASET (Vlastní třída pro načítání zón) ---
+class CustomProjectDataset(torch.utils.data.Dataset):
+    def __init__(self, ok_path, nok_path, transform, roi_name):
+        self.samples = []
+        self.transform = transform
+        
+        # Načteme OK snímky, ale pouze ty, které v názvu obsahují naši zónu (např. GumaRoh_1716...)
+        if os.path.exists(ok_path):
+            for f in os.listdir(ok_path):
+                if f.startswith(f"{roi_name}_") and f.endswith(('.png', '.jpg', '.jpeg')):
+                    self.samples.append((os.path.join(ok_path, f), 1))
+                    
+        # Načteme NOK snímky pro konkrétní zónu
+        if os.path.exists(nok_path):
+            for f in os.listdir(nok_path):
+                if f.startswith(f"{roi_name}_") and f.endswith(('.png', '.jpg', '.jpeg')):
+                    self.samples.append((os.path.join(nok_path, f), 0))
                 
-                # Načteme OK snímky, ale pouze ty, které v názvu obsahují naši zónu (např. GumaRoh_1716...)
-                if os.path.exists(ok_path):
-                    for f in os.listdir(ok_path):
-                        if f.startswith(f"{roi_name}_") and f.endswith(('.png', '.jpg', '.jpeg')):
-                            self.samples.append((os.path.join(ok_path, f), 1))
-                            
-                # Načteme NOK snímky pro konkrétní zónu
-                if os.path.exists(nok_path):
-                    for f in os.listdir(nok_path):
-                        if f.startswith(f"{roi_name}_") and f.endswith(('.png', '.jpg', '.jpeg')):
-                            self.samples.append((os.path.join(nok_path, f), 0))
-                        
-            def __len__(self):
-                return len(self.samples)
-                
-            def __getitem__(self, idx):
-                img_path, label = self.samples[idx]
-                img = Image.open(img_path).convert("RGB")
-                if self.transform:
-                    img = self.transform(img)
-                return img, label
+    def __len__(self):
+        return len(self.samples)
+        
+    def __getitem__(self, idx):
+        img_path, label = self.samples[idx]
+        img = Image.open(img_path).convert("RGB")
+        if self.transform:
+            img = self.transform(img)
+        return img, label
 
+# --- 3. TRÉNOVACÍ PROCES (UČENÍ COPIE) ---
+def train_ai_model(project_name, roi_name, progress_bar_callback=None):
+    """
+    Vezme schválené fotky z C:/Image/OK a NOK pro konkrétní projekt a zónu,
+    natrénuje dedikovanou neuronovou síť a uloží ji na disk.
+    """
+    base_drive = "D:/" if os.path.exists("D:/") else "C:/"
+    root_dir = os.path.join(base_drive, "Image")
+    
+    ok_dir = os.path.join(root_dir, "OK", project_name)
+    nok_dir = os.path.join(root_dir, "NOK", project_name)
+    
+    if not os.path.exists(ok_dir) or not os.path.exists(nok_dir):
+        return False, "Chybí složky OK nebo NOK s daty pro tento projekt. Nejdříve schvalte snímky v Historii."
+        
+    # Příprava transformací pro MobileNet (224x224)
+    data_transforms = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ])
+    
+    try:
         # Inicializace datasetu s filtrem na konkrétní zónu (roi_name)
         dataset = CustomProjectDataset(ok_dir, nok_dir, data_transforms, roi_name)
         if len(dataset) < 4:
@@ -60,7 +82,7 @@ def get_model():
         epochs = 5
         for epoch in range(epochs):
             running_loss = 0.0
-            for inputs, labels in dataloader: # ZDE JE OPRAVENÝ PŘEKLEP
+            for inputs, labels in dataloader:
                 optimizer.zero_grad()
                 outputs = model(inputs)
                 loss = criterion(outputs, labels)
@@ -79,17 +101,18 @@ def get_model():
         model_path = os.path.join(model_dir, f"model_ai_{project_name}_{roi_name}.pth")
         torch.save(model.state_dict(), model_path)
         return True, model_path
+        
+    except Exception as e:
+        return False, str(e)
 
-# --- 3. INFERENCE (OSTRE VYHODNOCENÍ NA LINCE) ---
+# --- 4. INFERENCE (OSTRE VYHODNOCENÍ NA LINCE) ---
 def predict_with_ai(model_path, pil_image):
     """
-    Vezme živý výřez z kamery, prožene ho natrénovanou AI sítí
-    --- Vrací: True (pokud je díl OK), False (pokud je díl NOK) a procentuální jistotu
+    Vezme živý výřez z kamery, prožene ho natrénovanou AI sítí konkrétní zóny
     """
     if not os.path.exists(model_path):
-        return True, 1.0 # Pokud model není natrénovaný, propustíme jako OK
+        return True, 1.0
         
-    # Transformace živého obrazu na formát sítě
     eval_transforms = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
@@ -98,7 +121,6 @@ def predict_with_ai(model_path, pil_image):
     
     img_t = eval_transforms(pil_image).unsqueeze(0)
     
-    # Načtení modelu
     model = get_model()
     model.load_state_dict(torch.load(model_path))
     model.eval()
@@ -106,7 +128,6 @@ def predict_with_ai(model_path, pil_image):
     with torch.no_grad():
         outputs = model(img_t)
         probabilities = torch.nn.functional.softmax(outputs[0], dim=0)
-        # Třída 0 = NOK, Třída 1 = OK
         confidence_nok = probabilities[0].item()
         confidence_ok = probabilities[1].item()
         

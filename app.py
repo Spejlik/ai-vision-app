@@ -80,6 +80,10 @@ with tab1:
             if not all_active_rois:
                 st.warning("⚠️ Nemáte definované žádné zóny (ROI). Vytvořte je v Tabu 3.")
             else:
+                # --- PEVNÉ UKLÁDÁNÍ OVLÁDÁNÍ NAHORU ---
+                run_engine = st.toggle("▶️ SPUSTIT ŽIVOU INSPEKCI", key="run_engine_toggle")
+                st.divider()
+                
                 col_run_1, col_run_2 = st.columns([2.5, 1])
                 
                 with col_run_1:
@@ -103,8 +107,6 @@ with tab1:
                         with target_col:
                             plc_indicators[idx] = st.empty()
                 
-                st.divider()
-                run_engine = st.toggle("▶️ SPUSTIT ŽIVOU INSPEKCI", key="run_engine_toggle")
                 current_outputs = {i: False for i in range(1, 9)}
 
                 if run_engine:
@@ -155,24 +157,39 @@ with tab1:
                             live_roi_np = np.array(live_roi_img)
                         else:
                             chosen_file_name = "Generovany_snimek.png"
-                            live_roi_np = np.array(master_crop)
+                            live_roi_img = master_crop.copy()
+                            live_roi_np = np.array(live_roi_img)
                             if random.random() > 0.5:
                                 live_roi_np = np.clip(live_roi_np.astype(int) - 50, 0, 255).astype(np.uint8)
+                                live_roi_img = Image.fromarray(live_roi_np)
 
-                        err = np.sum((master_roi_np.astype("float") - live_roi_np.astype("float")) ** 2)
-                        err /= float(master_roi_np.shape[0] * master_roi_np.shape[1] * master_roi_np.shape[2])
-                        final_deviation = min(100, int(err / 15))
+                        # --- INTEGRACE ŽIVÉHO AI VYHODNOCENÍ ---
+                        model_path = f"models/model_ai_{active_p}_{r_name}.pth"
                         
-                        if final_deviation > r_tolerance:
-                            is_zone_ok = False
-                            current_outputs[r_nok] = True
-                            status_text = "NOK"
+                        if os.path.exists(model_path):
+                            is_zone_ok, ai_confidence = ai_engine.predict_with_ai(model_path, live_roi_img)
+                            jistota_procenta = int(ai_confidence * 100)
+                            status_text = "OK" if is_zone_ok else "NOK"
+                            caption_str = f"Snímek: {chosen_file_name} | 🧠 AI Jistota: {jistota_procenta}% | Stav: {status_text}"
                         else:
-                            is_zone_ok = True
-                            status_text = "OK"
+                            err = np.sum((master_roi_np.astype("float") - live_roi_np.astype("float")) ** 2)
+                            err /= float(master_roi_np.shape[0] * master_roi_np.shape[1] * master_roi_np.shape[2])
+                            final_deviation = min(100, int(err / 15))
+                            
+                            if final_deviation > r_tolerance:
+                                is_zone_ok = False
+                                status_text = "NOK"
+                            else:
+                                is_zone_ok = True
+                                status_text = "OK"
+                            caption_str = f"Snímek: {chosen_file_name} | ⚠️ Bez AI (Odchylka: {final_deviation}%, Limit: {r_tolerance}%) | {status_text}"
+                        
+                        if not is_zone_ok:
+                            current_outputs[r_nok] = True
                             
                         zone_color = "#00FF00" if is_zone_ok else "#FF4B4B"
                         
+                        # --- AUTOMATICKÉ UKLÁDÁNÍ DO SLOŽKY UNSORTED PRO RUČNÍ KOREKCI ---
                         base_drive = "D:/" if os.path.exists("D:/") else "C:/"
                         history_dir = os.path.join(base_drive, "Image", "Unsorted", active_p)
                         if not os.path.exists(history_dir):
@@ -180,11 +197,8 @@ with tab1:
                             
                         history_filename = os.path.join(history_dir, f"{r_name}_{int(time.time())}_{random.randint(100,999)}.png")
                         Image.fromarray(live_roi_np).save(history_filename)
-                        
                         database.save_to_history(active_p, r_name, history_filename, "Neroztříděno")
-                        
-                        status_text = "NOK" if final_deviation > r_tolerance else "OK"
-                        zone_color = "#FF4B4B" if status_text == "NOK" else "#00FF00"
+                        # ---------------------------------------------------------------------
                         
                         roi_img = Image.fromarray(live_roi_np)
                         desired_square_size = 500
@@ -194,7 +208,6 @@ with tab1:
                         sq_line_w = max(6, int(desired_square_size * 0.015)) 
                         draw_sq.rectangle([0, 0, desired_square_size-1, desired_square_size-1], outline=zone_color, width=sq_line_w)
                         
-                        caption_str = f"Snímek: {chosen_file_name} | Odchylka: {final_deviation}% (Limit: {r_tolerance}%) | {status_text}"
                         roi_placeholders[r_id].image(roi_square, use_container_width=True, caption=caption_str)
                         
                     for idx in range(1, 9):
@@ -408,12 +421,11 @@ with tab3:
                 
                 st.image(img_roi, use_container_width=True, caption=f"Pracovní plocha: {m_name}")
                 
-                # --- NOVÁ UPRAVENÁ SEKCE: TRÉNOVÁNÍ STRUKTUROVANÉ PODLE SÍTÍ/ZÓN (ELVAC STYLE) ---
+                # --- STRUKTUROVANÉ AI TRÉNOVÁNÍ PODLE SÍTÍ (ZÓN) ---
                 st.divider()
                 st.markdown("### 🧠 Řízení neuronových sítí (AI)")
                 st.write("Vyberte konkrétní síť/zónu, kterou chcete přetrénovat na základě schválených snímků z archivu.")
                 
-                # Vytáhneme unikátní zóny z databáze pro tento projekt
                 active_rois_list = []
                 for m_temp in all_masters:
                     rois_p = database.get_rois(m_temp[0], active_p)
@@ -424,7 +436,26 @@ with tab3:
                 if active_rois_list:
                     selected_net_to_train = st.selectbox("Vyberte neuronovou síť k přetrénování:", active_rois_list, key="ai_net_select")
                     
-                    if st.button(f"🚀 SPUSTIT UČENÍ SÍTÊ: {selected_net_to_train}", type="secondary", use_container_width=True):
+                    # --- UPRAVENÁ KONTROLA POČTU FOTEK PŘED SPUŠTĚNÍM UČENÍ ---
+                    base_drive = "D:/" if os.path.exists("D:/") else "C:/"
+                    ok_dir_check = os.path.join(base_drive, "Image", "OK", active_p)
+                    nok_dir_check = os.path.join(base_drive, "Image", "NOK", active_p)
+                    
+                    count_ok = 0
+                    count_nok = 0
+                    
+                    if os.path.exists(ok_dir_check):
+                        count_ok = len([f for f in os.listdir(ok_dir_check) if f.startswith(f"{selected_net_to_train}_")])
+                    if os.path.exists(nok_dir_check):
+                        count_nok = len([f for f in os.listdir(nok_dir_check) if f.startswith(f"{selected_net_to_train}_")])
+                    
+                    # Vizuální informační rámeček o stavu datasetu pro technologa
+                    if count_ok < 4 or count_nok < 4:
+                        st.warning(f"⚠️ **Nedostatečné množství dat:** Pro síť `{selected_net_to_train}` máte schváleno pouze **{count_ok}x OK** a **{count_nok}x NOK** snímků. (Pro spuštění učení je vyžadováno minimálně 4x OK a 4x NOK).")
+                    else:
+                        st.info(f"📊 **Připravený dataset:** Pro učení je k dispozici **{count_ok}x OK** a **{count_nok}x NOK** reálných průmyslových vzorků.")
+                    
+                    if st.button(f"🚀 SPUSTIT UČENÍ SÍTĚ: {selected_net_to_train}", type="secondary", use_container_width=True, disabled=(count_ok < 4 or count_nok < 4)):
                         with st.spinner(f"Inicializace učení sítě {selected_net_to_train}..."):
                             progress_bar = st.progress(0.0)
                             status_text = st.empty()
@@ -433,11 +464,11 @@ with tab3:
                                 progress_bar.progress(pct)
                                 status_text.text(msg)
                                 
-                            # Posíláme jak projekt, tak vybranou zónu do ai_engine.py
                             success, result_msg = ai_engine.train_ai_model(active_p, selected_net_to_train, update_progress)
                             
                             if success:
                                 st.success(f"🎉 Síť '{selected_net_to_train}' byla úspěšně naučena! Soubor: {result_msg}")
+                                st.rerun()
                             else:
                                 st.error(f"❌ Trénování selhalo: {result_msg}")
                 else:
@@ -454,7 +485,7 @@ with tab4:
 # --- TAB 5: HISTORIE ---
 with tab5:
     st.subheader("📋 Lis 1300/18A - Správa snímků a anotace pro NN")
-    st.write("Proklikáním snímků určíte their reálnou jakost. Snímky se následně uloží do datasetu pro učení neuronové sítě.")
+    st.write("Proklikáním snímků určíte reálnou jakost. Snímky se následně uloží do datasetu pro učení neuronové sítě.")
     
     history_projects = database.get_unique_projects_from_history()
     project_options = ["Vše"] + history_projects
