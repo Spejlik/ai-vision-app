@@ -283,7 +283,25 @@ with tab2:
                 # Bezpečný fallback, pokud by složka byla prázdná
                 st.session_state.setup_image_buffer = Image.new('RGB', (1200, 800), color=(73, 109, 137))
                 st.warning("Složka 'dataset/OK/Zebro_P1' neobsahuje žádné fotky. Načtena nouzová modrá plocha.")
-
+        
+        # --- ZDE BYLA CHYBA: ROBUSTNÍ VYKRESLENÍ SNÍMKU NA OBRAZOVKU ---
+        if st.session_state.setup_image_buffer is not None:
+            preview_img = st.session_state.setup_image_buffer.copy()
+            img_w, img_h = preview_img.size
+            
+            # Bezpečnostní korekce: Pokud jsou slidery nastavené mimo rozměr malé fotky, omezíme je pro náhled
+            safe_ax = min(ax, img_w - 10)
+            safe_ay = min(ay, img_h - 10)
+            safe_aw = min(aw, img_w - safe_ax)
+            safe_ah = min(ah, img_h - safe_ay)
+            
+            master_line_w = max(2, int(img_w * 0.01))
+            
+            draw = ImageDraw.Draw(preview_img)
+            draw.rectangle([safe_ax, safe_ay, safe_ax + safe_aw, safe_ay + safe_ah], outline="red", width=master_line_w)
+            
+            # Ostré zobrazení upravené fotky s rozměry na obrazovku
+            st.image(preview_img, use_container_width=True, caption=f"Zdrojový snímek lisu (Rozlišení: {img_w}x{img_h} px)")
 # --- TAB 3: ZÓNY ---
 with tab3:
     if 'editing_roi_id' not in st.session_state:
