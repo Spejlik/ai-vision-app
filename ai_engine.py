@@ -88,7 +88,7 @@ def train_ai_model(project_name, progress_bar_callback=None):
         epochs = 5
         for epoch in range(epochs):
             running_loss = 0.0
-            for inputs, labels in datloader:
+            for inputs, labels in dataloader:
                 optimizer.zero_grad()
                 outputs = model(inputs)
                 loss = criterion(outputs, labels)
