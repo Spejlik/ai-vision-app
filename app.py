@@ -468,13 +468,35 @@ with tab4:
 # --- TAB 5: HISTORIE ---
 with tab5:
     st.subheader("📋 Správa snímků a anotace pro NN")
-    hist_data = database.get_history(active_p, "Neroztříděno", "Vše")
+    st.write("Proklikáním snímků určíte reálnou jakost. Snímky se následně uloží do datasetu pro učení neuronové sítě.")
+    
+    # Načtení unikátních projektů a zón z historie pro filtry
+    history_projects = database.get_unique_projects_from_history() if hasattr(database, 'get_unique_projects_from_history') else []
+    project_options = ["Vše"] + history_projects
+    
+    default_p_idx = 0
+    if st.session_state.active_project in project_options:
+        default_p_idx = project_options.index(st.session_state.active_project)
+        
+    f_col1, f_col2, f_col3 = st.columns(3)
+    with f_col1:
+        proj_f = st.selectbox("Aktivní projekt (Lis):", project_options, index=default_p_idx)
+    with f_col2:
+        status_f = st.selectbox("Stav hodnocení zóny:", ["Neroztříděno", "OK", "NOK", "Vše"])
+    with f_col3:
+        history_rois = database.get_unique_rois_from_history(proj_f) if hasattr(database, 'get_unique_rois_from_history') else []
+        roi_options = ["Vše"] + history_rois
+        roi_f = st.selectbox("Neuronová síť (Zóna):", roi_options)
+        
+    # Načtení dat na základě filtrů
+    hist_data = database.get_history(proj_f, status_f, roi_f)
+    
     if not hist_data:
-        st.info("ℹ️ Všechny nasnímané vzorky jsou úspěšně roztříděny.")
+        st.info("ℹ️ Žádné snímky neodpovídají vybranému filtru nebo jsou již roztříděny.")
     else:
         st.write(f"🔍 Počet snímků k zařazení: **{len(hist_data)}**")
         h_cols = st.columns(3)
-        for idx, row in enumerate(hist_data[:12]):
+        for idx, row in enumerate(hist_data[:12]): # Zobrazíme maximálně 12 snímků na stránku pro plynulost
             with h_cols[idx % 3]:
                 with st.container(border=True):
                     st.write(f"**Zóna:** `{row[2]}`")
@@ -489,3 +511,5 @@ with tab5:
                             if st.button("🔴 nok", key=f"nok_h_{row[0]}", use_container_width=True):
                                 database.update_image_status(row[0], "NOK")
                                 st.rerun()
+                    else:
+                        st.error("Soubor snímku nebyl na disku nalezen.")

@@ -1,4 +1,5 @@
 import sqlite3
+import os
 
 def init_db():
     conn = sqlite3.connect('vision_system.db')
