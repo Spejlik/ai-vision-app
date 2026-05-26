@@ -568,16 +568,29 @@ with tab5:
                         else: 
                             st.error("Snímek smazán nebo přesunut.")
             
-            # OVLÁDÁNÍ STRÁNEK
+            # --- ROZŠÍŘENÉ OVLÁDÁNÍ STRÁNEK (RYCHLÉ SKOKY ZAČÁTEK/KONEC) ---
             st.write("")
-            p_col1, p_col2, p_col3 = st.columns([1, 2, 1])
+            p_col1, p_col2, p_col3, p_col4, p_col5 = st.columns([1, 1.5, 2, 1.5, 1])
+            
             with p_col1:
-                if st.button("⬅️ Předchozí stránka", use_container_width=True, disabled=(st.session_state.history_page == 1)):
+                if st.button("« První", use_container_width=True, disabled=(st.session_state.history_page == 1)):
+                    st.session_state.history_page = 1
+                    st.rerun()
+                    
+            with p_col2:
+                if st.button("⬅️ Předchozí", use_container_width=True, disabled=(st.session_state.history_page == 1)):
                     st.session_state.history_page -= 1
                     st.rerun()
-            with p_col2:
-                st.markdown(f"<p style='text-align:center; padding-top:5px; font-weight:bold;'>Stránka {st.session_state.history_page} z {total_pages}</p>", unsafe_allow_html=True)
+                    
             with p_col3:
-                if st.button("Další stránka ➡️", use_container_width=True, disabled=(st.session_state.history_page == total_pages)):
+                st.markdown(f"<p style='text-align:center; padding-top:5px; font-weight:bold; font-size:15px;'>Stránka {st.session_state.history_page} z {total_pages}</p>", unsafe_allow_html=True)
+                
+            with p_col4:
+                if st.button("Další ➡️", use_container_width=True, disabled=(st.session_state.history_page == total_pages)):
                     st.session_state.history_page += 1
+                    st.rerun()
+                    
+            with p_col5:
+                if st.button("Poslední »", use_container_width=True, disabled=(st.session_state.history_page == total_pages)):
+                    st.session_state.history_page = total_pages
                     st.rerun()
