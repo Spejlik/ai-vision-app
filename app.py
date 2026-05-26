@@ -178,7 +178,8 @@ with tab1:
                             live_roi_np = np.array(live_crop.resize((r[6], r[7]), Image.Resampling.LANCZOS))
                         except Exception:
                             # Fallback pokud by neseděly rozměry (např. zóna je mimo obraz)
-                            live_roi_img = master_crop.resize((desired_square_size, desired_square_size), Image.Resampling.LANCZOS)
+                            # Změněno: Používáme natvrdo rozměr 500 místo nedefinované proměnné
+                            live_roi_img = master_crop.resize((500, 500), Image.Resampling.LANCZOS)
                             live_roi_np = np.array(master_crop)
 
                         if active_model:
