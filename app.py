@@ -241,84 +241,107 @@ with tab1:
 # --- TAB 2: MASTER ---
 with tab2:
     st.subheader("📸 Nastavení Master Snímků lisu")
-    col_ctrl, col_img = st.columns([1, 2])
-    
-    with col_ctrl:
-        st.write("### ✂️ Definice výřezu")
-        m_id_name = st.text_input("Název Masteru (např. Kamera 1)")
+    if not st.session_state.active_project:
+        st.warning("⚠️ Vyberte aktivní projekt v levém panelu.")
+    else:
+        active_p = st.session_state.active_project
+        col_ctrl, col_img = st.columns([1, 2])
         
-        ax = st.slider("X začátek", 0, 2000, 0)
-        ay = st.slider("Y začátek", 0, 2000, 0)
-        aw = st.slider("Šířka výřezu", 10, 2000, 500)
-        ah = st.slider("Výška výřezu", 10, 2000, 500)
+        with col_ctrl:
+            st.markdown("### 🔌 Zdroj obrázku")
+            # Volba zdroje podkladu
+            source_type = st.radio(
+                "Vyberte, jak chcete nahrát podkladový snímek:",
+                ["📷 Simulovat z kamery lisu (Složka OK)", "📁 Nahrát soubor z disku (Příprava dopředu)"]
+            )
+            
+            st.divider()
+            st.write("### ✂️ Definice výřezu")
+            m_id_name = st.text_input("Název Masteru (např. Pozice 1)")
+            
+            ax = st.slider("X začátek", 0, 2000, 0)
+            ay = st.slider("Y začátek", 0, 2000, 0)
+            aw = st.slider("Šířka výřezu", 10, 2000, 500)
+            ah = st.slider("Výška výřezu", 10, 2000, 500)
 
-        if st.button("💾 ULOŽIT MASTER", type="primary", use_container_width=True):
-            if m_id_name and st.session_state.setup_image_buffer:
-                if not os.path.exists("masters"):
-                    os.makedirs("masters")
-                
-                filename = f"masters/master_{int(time.time())}.png"
-                img = st.session_state.setup_image_buffer
-                
-                cropped_img = img.crop((ax, ay, ax + aw, ay + ah))
-                max_side = max(aw, ah)
-                square_img = Image.new('RGB', (max_side, max_side), color=(50, 50, 50))
-                offset_x = (max_side - aw) // 2
-                offset_y = (max_side - ah) // 2
-                square_img.paste(cropped_img, (offset_x, offset_y))
-                
-                square_img = square_img.resize((500, 500), Image.Resampling.LANCZOS)
-                square_img.save(filename)
-                
-                database.add_master(st.session_state.active_project, m_id_name, filename, ax, ay, aw, ah)
-                st.success(f"Master {m_id_name} byl úspěšně uložen!")
-                st.rerun()
+            if st.button("💾 ULOŽIT MASTER", type="primary", use_container_width=True):
+                if m_id_name and st.session_state.setup_image_buffer:
+                    if not os.path.exists("masters"):
+                        os.makedirs("masters")
+                    
+                    filename = f"masters/master_{active_p}_{int(time.time())}.png"
+                    img = st.session_state.setup_image_buffer
+                    
+                    # Výřez a formátování do čtverce 500x500
+                    cropped_img = img.crop((ax, ay, ax + aw, ay + ah))
+                    max_side = max(aw, ah)
+                    square_img = Image.new('RGB', (max_side, max_side), color=(50, 50, 50))
+                    square_img.paste(cropped_img, ((max_side - aw) // 2, (max_side - ah) // 2))
+                    
+                    square_img = square_img.resize((500, 500), Image.Resampling.LANCZOS)
+                    square_img.save(filename)
+                    
+                    database.add_master(active_p, m_id_name, filename, ax, ay, aw, ah)
+                    st.success(f"Master {m_id_name} byl úspěšně uložen pro offline přípravu!")
+                    st.rerun()
+                else:
+                    st.error("❌ Pro uložení musíte zadat název a mít načtený/nahraný obrázek!")
 
-    with col_img:
-        if st.button("📸 Zachytit testovací snímek"):
-            test_images = glob.glob("dataset/OK/Zebro_P1/*.jpg") + glob.glob("dataset/OK/Zebro_P1/*.png")
-            if test_images:
-                st.session_state.setup_image_buffer = Image.open(test_images[0]).convert("RGB")
-                st.success("Reálný snímek z lisu úspěšně načten do konfigurace!")
+        with col_img:
+            # Podle zvoleného rádia zobrazíme správné ovládání
+            if "Simulovat z kamery" in source_type:
+                if st.button("📸 Zachytit testovací snímek z kamery lisu", use_container_width=True):
+                    target_dir = os.path.join(BASE_IMAGE_DIR, "OK", active_p)
+                    test_images = []
+                    if os.path.exists(target_dir):
+                        for ext in ["*.jpg", "*.JPG", "*.png", "*.PNG"]:
+                            test_images.extend(glob.glob(os.path.join(target_dir, ext)))
+                    
+                    if test_images:
+                        st.session_state.setup_image_buffer = Image.open(test_images[0]).convert("RGB")
+                        st.success("Reálný snímek z lisu úspěšně načten!")
+                    else:
+                        st.session_state.setup_image_buffer = Image.new('RGB', (640, 480), color=(73, 109, 137))
+                        st.warning(f"Složka '{target_dir}' je prázdná. Použita nouzová modrá plocha.")
             else:
-                st.session_state.setup_image_buffer = Image.new('RGB', (1200, 800), color=(73, 109, 137))
-                st.warning("Použita nouzová modrá plocha, složka s fotkami nenalezena.")
-        
-        if st.session_state.setup_image_buffer is not None:
-            preview_img = st.session_state.setup_image_buffer.copy()
-            img_w, img_h = preview_img.size
-            
-            safe_ax = min(ax, img_w - 10)
-            safe_ay = min(ay, img_h - 10)
-            safe_aw = min(aw, img_w - safe_ax)
-            safe_ah = min(ah, img_h - safe_ay)
-            
-            master_line_w = max(2, int(img_w * 0.01))
-            draw = ImageDraw.Draw(preview_img)
-            draw.rectangle([safe_ax, safe_ay, safe_ax + safe_aw, safe_ay + safe_ah], outline="red", width=master_line_w)
-            
-            st.image(preview_img, use_container_width=True, caption=f"Zdrojový snímek lisu ({img_w}x{img_h} px)")
+                # Klasický průmyslový File Uploader pro nahrání z PC (.jpg, .png)
+                uploaded_file = st.file_uploader("Vyberte obrázek formy z disku počítače:", type=["jpg", "jpeg", "png", "JPG", "JPEG", "PNG"])
+                if uploaded_file is not None:
+                    st.session_state.setup_image_buffer = Image.open(uploaded_file).convert("RGB")
+                    st.success("Externí soubor úspěšně nahrán do paměti aplikace!")
 
-    # TABULKA PRO NEPRŮSTŘELNÉ MAZÁNÍ MASTERŮ
-    if st.session_state.active_project:
+            # Vykreslení náhledu s červeným řezacím rámečkem
+            if st.session_state.setup_image_buffer is not None:
+                preview_img = st.session_state.setup_image_buffer.copy()
+                img_w, img_h = preview_img.size
+                
+                safe_ax = min(ax, img_w - 10)
+                safe_ay = min(ay, img_h - 10)
+                safe_aw = min(aw, img_w - safe_ax)
+                safe_ah = min(ah, img_h - safe_ay)
+                
+                master_line_w = max(2, int(img_w * 0.01))
+                draw = ImageDraw.Draw(preview_img)
+                draw.rectangle([safe_ax, safe_ay, safe_ax + safe_aw, safe_ay + safe_ah], outline="red", width=master_line_w)
+                st.image(preview_img, use_container_width=True, caption=f"Aktuální podklad ({img_w}x{img_h} px)")
+
+        # Přehled existujících masterů
         st.write("---")
         st.write("📋 **Aktuální Master snímky v tomto projektu:**")
-        m_list = database.get_all_masters(st.session_state.active_project)
+        m_list = database.get_all_masters(active_p)
         if m_list:
             for m_row in m_list:
                 m_id, _, m_name, m_path, _, _, _, _ = m_row
                 del_c1, del_c2 = st.columns([3, 1])
-                with del_c1:
-                    st.write(f"• **{m_name}** (`{m_path}`)")
+                with del_c1: st.write(f"• **{m_name}** (`{m_path}`)")
                 with del_c2:
                     if st.button("🗑️ Smazat Master", key=f"del_m_{m_id}", use_container_width=True):
                         if m_path and os.path.exists(m_path):
                             try: os.remove(m_path)
                             except: pass
                         database.delete_master(m_id)
-                        if "setup_image_buffer" in st.session_state:
-                            st.session_state.setup_image_buffer = None
-                        st.success("Master kompletně odstraněn!")
+                        st.session_state.setup_image_buffer = None
+                        st.success("Master smazán!")
                         st.rerun()
 
 # --- TAB 3: ZÓNY ---
