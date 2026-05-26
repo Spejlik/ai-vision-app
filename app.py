@@ -153,15 +153,39 @@ with tab1:
                             live_roi_img = master_crop.copy()
                             live_roi_np = np.array(live_roi_img)
 
-                        # AI VYHODNOCENÍ
+                        # INTEGRACE UNIVERZÁLNÍHO NEURONOVÉHO MODELU PROJEKTU
+                        # Nejprve zkusíme specifický model zóny, pokud neexistuje, vezmeme univerzální síť projektu
                         model_path = f"models/model_ai_{active_p}_{r_name}.pth"
+                        universal_model_path = f"models/model_ai_{active_p}_Univerzalni_Sit.pth"
                         
+                        active_model = None
                         if os.path.exists(model_path):
-                            is_zone_ok, ai_confidence = ai_engine.predict_with_ai(model_path, live_roi_img)
+                            active_model = model_path
+                        elif os.path.exists(universal_model_path):
+                            active_model = universal_model_path
+
+                        # SPRÁVNÝ VÝŘEZ TESTOVACÍ FOTKY (Ořízneme testovací snímek podle souřadnic zóny z Tabu 3)
+                        # r[4]=X, r[5]=Y, r[6]=Šířka, r[7]=Výška
+                        try:
+                            # Načteme reálnou testovací fotku z lisu
+                            live_full_img = Image.open(selected_path).convert("RGB")
+                            # Fyzicky z ní vyřízneme zónu, aby se neporovnával detail s celkem!
+                            live_crop = live_full_img.crop((r[4], r[5], r[4]+r[6], r[5]+r[7]))
+                            live_roi_img = live_crop.resize((r[6], r[7]), Image.Resampling.LANCZOS)
+                            live_roi_np = np.array(live_roi_img)
+                        except Exception:
+                            # Fallback pokud by neseděly rozměry
+                            live_roi_img = master_crop.copy()
+                            live_roi_np = np.array(live_roi_img)
+
+                        if active_model:
+                            # Spustíme vyhodnocení AI na OŘÍZNUTÉM detailu zóny
+                            is_zone_ok, ai_confidence = ai_engine.predict_with_ai(active_model, live_roi_img)
                             jistota_procenta = int(ai_confidence * 100)
                             status_text = "OK" if is_zone_ok else "NOK"
                             caption_str = f"{chosen_file_name} | 🧠 AI Jistota: {jistota_procenta}% | Stav: {status_text}"
                         else:
+                            # Nouzové matematické porovnání pixelů (teď už na správně oříznutém kusu)
                             err = np.sum((master_roi_np.astype("float") - live_roi_np.astype("float")) ** 2)
                             err /= float(master_roi_np.shape[0] * master_roi_np.shape[1] * master_roi_np.shape[2])
                             final_deviation = min(100, int(err / 15))
