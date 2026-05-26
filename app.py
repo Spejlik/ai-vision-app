@@ -218,16 +218,29 @@ with tab1:
                         
                         roi_placeholders[r_id].image(roi_square, use_container_width=True, caption=caption_str)
                         
+                    # --- INTELIGENTNÍ AKTUALIZACE PLC KONTROLEK (ELVAC STYLE) ---
+                    # Nejdříve zjistíme, které NOK výstupy jsou v tomto projektu reálně použité
+                    aktivni_plc_vystupy = set(r[1][8] for r in all_active_rois) # vytáhne čísla přiřazených NOKů (1-8)
+                    
                     for idx in range(1, 9):
-                        if current_outputs.get(idx, False):
-                            plc_indicators[idx].markdown(f"<div style='background-color:#FF4B4B; color:white; padding:10px; border-radius:5px; text-align:center; font-weight:bold; margin-bottom:5px;'>🚨 NOK {idx}</div>", unsafe_allow_html=True)
+                        if idx not in aktivni_plc_vystupy:
+                            # Výstup se v tomto projektu vůbec nepoužívá -> zešedne
+                            plc_indicators[idx].markdown(
+                                f"<div style='background-color:#F5F5F5; color:#9E9E9E; padding:10px; border-radius:5px; text-align:center; font-weight:normal; margin-bottom:5px; border: 1px dashed #E0E0E0;'>⚫ Neaktivní {idx}</div>", 
+                                unsafe_allow_html=True
+                            )
+                        elif current_outputs.get(idx, False):
+                            # Výstup je aktivní a má hlášenou vadu (NOK)
+                            plc_indicators[idx].markdown(
+                                f"<div style='background-color:#FF4B4B; color:white; padding:10px; border-radius:5px; text-align:center; font-weight:bold; margin-bottom:5px; box-shadow: 0px 2px 4px rgba(0,0,0,0.1);'>🚨 NOK {idx}</div>", 
+                                unsafe_allow_html=True
+                            )
                         else:
-                            plc_indicators[idx].markdown(f"<div style='background-color:#00D48A; color:white; padding:10px; border-radius:5px; text-align:center; font-weight:bold; margin-bottom:5px;'>✅ OK {idx}</div>", unsafe_allow_html=True)
-                else:
-                    for idx in range(1, 9):
-                        plc_indicators[idx].markdown(f"<div style='background-color:#E0E0E0; color:#666; padding:10px; border-radius:5px; text-align:center; margin-bottom:5px;'>⚫ Výstup {idx}</div>", unsafe_allow_html=True)
-                    for m, r in all_active_rois:
-                        roi_placeholders[r[0]].info("Čeká...")
+                            # Výstup je aktivní a zóna prošla v pořádku (OK)
+                            plc_indicators[idx].markdown(
+                                f"<div style='background-color:#00D48A; color:white; padding:10px; border-radius:5px; text-align:center; font-weight:bold; margin-bottom:5px; box-shadow: 0px 2px 4px rgba(0,0,0,0.1);'>✅ OK {idx}</div>", 
+                                unsafe_allow_html=True
+                            )
     else:
         st.warning("⚠️ Nejdříve vyberte nebo vytvořte projekt v levém panelu.")
 
