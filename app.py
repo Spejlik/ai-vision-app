@@ -404,7 +404,9 @@ with tab3:
                         def update_progress(pct, msg):
                             progress_bar.progress(pct)
                             status_text.text(msg)
-                        success, result_msg = ai_engine.train_ai_model(active_p, "Univerzalni_Sit", update_progress)
+                        
+                        # Změna: Posíláme prázdný název zóny, aby si ai_engine načetl čistě celou složku z disku
+                        success, result_msg = ai_engine.train_ai_model(active_p, "", update_progress)
                         if success: st.success(f"🎉 Úspěšně naučeno! {result_msg}")
                         else: st.error(f"❌ Chyba: {result_msg}")
 
