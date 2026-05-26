@@ -434,27 +434,29 @@ with tab5:
             
             if uploaded_hist_files:
                 if st.button("🚀 IMPORTOVAT DO HISTORIE", use_container_width=True):
-                    unsorted_dir = os.path.join("C:/Image", "Unsorted", active_p)
-                    if not os.path.exists(unsorted_dir):
-                        os.makedirs(unsorted_dir)
-                    
-                    imported_count = 0
-                    import random as rand_mod
-                    
-                    for f in uploaded_hist_files:
-                        base_name = os.path.splitext(f.name)[0]
-                        ext = os.path.splitext(f.name)[1]
-                        new_filename = os.path.join(unsorted_dir, f"{base_name}_import_{int(time.time())}_{rand_mod.randint(100,999)}{ext}")
+                    # Přidáváme vizuální zámek obrazovky, aby uživatel viděl, že se něco děje
+                    with st.spinner("💾 Kopíruji a zapisuji fotky do historie lisu... Počkejte prosím."):
+                        unsorted_dir = os.path.join("C:/Image", "Unsorted", active_p)
+                        if not os.path.exists(unsorted_dir):
+                            os.makedirs(unsorted_dir)
                         
-                        img = Image.open(f).convert("RGB")
-                        img.save(new_filename)
+                        imported_count = 0
+                        import random as rand_mod
                         
-                        database.save_to_history(active_p, "Importováno", new_filename, "Neroztříděno")
-                        imported_count += 1
-                        
-                    st.success(f"🎉 Úspěšně importováno {imported_count} snímků do historie!")
-                    time.sleep(0.5)
-                    st.rerun()
+                        for f in uploaded_hist_files:
+                            base_name = os.path.splitext(f.name)[0]
+                            ext = os.path.splitext(f.name)[1]
+                            new_filename = os.path.join(unsorted_dir, f"{base_name}_import_{int(time.time())}_{rand_mod.randint(100,999)}{ext}")
+                            
+                            img = Image.open(f).convert("RGB")
+                            img.save(new_filename)
+                            
+                            database.save_to_history(active_p, "Importováno", new_filename, "Neroztříděno")
+                            imported_count += 1
+                            
+                        st.success(f"🎉 Úspěšně importováno {imported_count} snímků do historie!")
+                        time.sleep(0.8) # Krátká pauza, aby si technolog stihl přečíst zelenou hlášku
+                        st.rerun()
         
         st.divider()
         
