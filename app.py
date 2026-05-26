@@ -424,9 +424,25 @@ with tab5:
     if not active_p:
         st.warning("⚠️ Nejdříve vyberte nebo vytvořte projekt v levém panelu.")
     else:
+        # --- FILTRY (NÁVRAT ROLETEK NAHORU) ---
+        f_col1, f_col2, f_col3 = st.columns(3)
+        with f_col1:
+            # Projekt předvybereme podle sidebar výběru, ale dá se přepnout
+            history_projects = database.get_unique_projects_from_history() if hasattr(database, 'get_unique_projects_from_history') else []
+            project_options = list(set(["Vše", active_p] + history_projects))
+            proj_f = st.selectbox("Aktivní projekt (Lis):", project_options, index=project_options.index(active_p) if active_p in project_options else 0)
+        with f_col2:
+            status_f = st.selectbox("Stav hodnocení zóny:", ["Neroztříděno", "OK", "NOK", "Vše"])
+        with f_col3:
+            history_rois = database.get_unique_rois_from_history(proj_f) if hasattr(database, 'get_unique_rois_from_history') else []
+            roi_options = ["Vše"] + history_rois
+            roi_f = st.selectbox("Neuronová síť (Zóna):", roi_options)
+
+        st.write("")
+
         # HROMADNÝ IMPORT ZE SOUBORŮ
         with st.expander("📥 Hromadný import testovacích fotek ze souborů (Příprava offline)", expanded=False):
-            st.write("Vyberte jednu nebo více fotek z disku/flashky. Systém je vloží do historie pro roztřídění.")
+            st.write(f"Vyberte jednu nebo více fotek z disku/flashky. Systém je vloží do historie aktivního projektu: **{active_p}**")
             uploaded_hist_files = st.file_uploader(
                 "Vybrat fotky pro import:", 
                 type=["jpg", "jpeg", "png", "JPG", "JPEG", "PNG"], 
@@ -461,33 +477,30 @@ with tab5:
         
         st.divider()
         
-        # ZOBRAZENÍ A TŘÍDĚNÍ FOTEK S STRÁNKOVÁNÍM
-        hist_data = database.get_history(active_p, "Neroztříděno", "Vše")
+        # NAČTENÍ DAT PODLE VYBRANÝCH FILTRŮ
+        hist_data = database.get_history(proj_f, status_f, roi_f)
         
         if not hist_data:
-            st.info("ℹ️ Žádné nové nasnímané ani importované vzorky k roztřídění.")
+            st.info("ℹ️ Žádné snímky neodpovídají vybranému filtru nebo je vše roztříděno.")
         else:
-            st.write(f"🔍 Celkový počet snímků k zařazení: **{len(hist_data)}**")
+            st.write(f"🔍 Počet nalezených snímků podle filtrů: **{len(hist_data)}**")
             
-            # --- VÝPOČET STRÁNKOVÁNÍ ---
+            # VÝPOČET STRÁNKOVÁNÍ
             ITEMS_PER_PAGE = 12
             total_items = len(hist_data)
             total_pages = max(1, (total_items + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE)
             
-            # Inicializace stavu stránky v paměti Streamlitu, pokud neexistuje
             if "history_page" not in st.session_state:
                 st.session_state.history_page = 1
                 
-            # Bezpečnostní kontrola přetečení stránek po promazání
             if st.session_state.history_page > total_pages:
                 st.session_state.history_page = total_pages
                 
-            # Výřez dat pro aktuální stránku
             start_idx = (st.session_state.history_page - 1) * ITEMS_PER_PAGE
             end_idx = start_idx + ITEMS_PER_PAGE
             page_items = hist_data[start_idx:end_idx]
             
-            # Vykreslení mřížky s fotkami aktuální stránky
+            # Vykreslení mřížky fotek
             h_cols = st.columns(3)
             for idx, row in enumerate(page_items):
                 with h_cols[idx % 3]:
@@ -495,33 +508,38 @@ with tab5:
                         st.write(f"**Zdroj:** `{os.path.basename(row[3])}`")
                         if os.path.exists(row[3]):
                             st.image(row[3], use_container_width=True)
-                            b_ok, b_nok = st.columns(2)
-                            with b_ok:
-                                if st.button("🟢 ok", key=f"ok_h_{row[0]}", use_container_width=True):
-                                    src_path = row[3]
-                                    dest_dir = os.path.join("C:/Image", "OK", active_p)
-                                    if not os.path.exists(dest_dir): os.makedirs(dest_dir)
-                                    import shutil
-                                    shutil.copy(src_path, os.path.join(dest_dir, os.path.basename(src_path)))
-                                    database.update_image_status(row[0], "OK")
-                                    try: os.remove(src_path)
-                                    except: pass
-                                    st.rerun()
-                            with b_nok:
-                                if st.button("🔴 nok", key=f"nok_h_{row[0]}", use_container_width=True):
-                                    src_path = row[3]
-                                    dest_dir = os.path.join("C:/Image", "NOK", active_p)
-                                    if not os.path.exists(dest_dir): os.makedirs(dest_dir)
-                                    import shutil
-                                    shutil.copy(src_path, os.path.join(dest_dir, os.path.basename(src_path)))
-                                    database.update_image_status(row[0], "NOK")
-                                    try: os.remove(src_path)
-                                    except: pass
-                                    st.rerun()
+                            
+                            # Tlačítka se zobrazují pouze pokud třídíme Neroztříděné vzorky
+                            if status_f == "Neroztříděno" or row[4] == "Neroztříděno":
+                                b_ok, b_nok = st.columns(2)
+                                with b_ok:
+                                    if st.button("🟢 ok", key=f"ok_h_{row[0]}", use_container_width=True):
+                                        src_path = row[3]
+                                        dest_dir = os.path.join("C:/Image", "OK", active_p)
+                                        if not os.path.exists(dest_dir): os.makedirs(dest_dir)
+                                        import shutil
+                                        shutil.copy(src_path, os.path.join(dest_dir, os.path.basename(src_path)))
+                                        database.update_image_status(row[0], "OK")
+                                        try: os.remove(src_path)
+                                        except: pass
+                                        st.rerun()
+                                with b_nok:
+                                    if st.button("🔴 nok", key=f"nok_h_{row[0]}", use_container_width=True):
+                                        src_path = row[3]
+                                        dest_dir = os.path.join("C:/Image", "NOK", active_p)
+                                        if not os.path.exists(dest_dir): os.makedirs(dest_dir)
+                                        import shutil
+                                        shutil.copy(src_path, os.path.join(dest_dir, os.path.basename(src_path)))
+                                        database.update_image_status(row[0], "NOK")
+                                        try: os.remove(src_path)
+                                        except: pass
+                                        st.rerun()
+                            else:
+                                st.info(f"Označeno jako: **{row[4]}**")
                         else: 
                             st.error("Snímek smazán nebo přesunut.")
             
-            # --- OVLÁDACÍ LIŠTA STRÁNKOVÁNÍ ---
+            # OVLÁDÁNÍ STRÁNEK
             st.write("")
             p_col1, p_col2, p_col3 = st.columns([1, 2, 1])
             with p_col1:
