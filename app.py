@@ -536,7 +536,7 @@ with tab5:
                                 # 2. Zápis do DB a smazání z Unsorted
                                 database.update_image_status(row[0], "NOK")
                                 try: os.remove(src_path)
-                                catch: pass
+                                except: pass
                                 st.rerun()
                     else:
                         st.error("Soubor snímku nebyl na disku nalezen.")
