@@ -271,17 +271,18 @@ with tab2:
 
     with col_img:
         if st.button("📸 Zachytit testovací snímek"):
-            st.session_state.setup_image_buffer = Image.new('RGB', (1200, 800), color=(73, 109, 137))
-        
-        if st.session_state.setup_image_buffer is not None:
-            preview_img = st.session_state.setup_image_buffer.copy()
+            import glob
+            # Podíváme se do tvé složky a zkusíme vzít první skutečnou fotku z lisu
+            test_images = glob.glob("dataset/OK/Zebro_P1/*.jpg") + glob.glob("dataset/OK/Zebro_P1/*.png")
             
-            cam_w = preview_img.size[0]
-            master_line_w = max(2, int(cam_w * 0.007))
-            
-            draw = ImageDraw.Draw(preview_img)
-            draw.rectangle([ax, ay, ax+aw, ay+ah], outline="red", width=master_line_w)
-            st.image(preview_img, use_container_width=True, caption="Červený rámeček ukazuje budoucí ořez")
+            if test_images:
+                # Pokud fotky najde, načte první z nich jako podklad pro tvůj Master
+                st.session_state.setup_image_buffer = Image.open(test_images[0]).convert("RGB")
+                st.success("Reálný snímek z lisu úspěšně načten do konfigurace!")
+            else:
+                # Bezpečný fallback, pokud by složka byla prázdná
+                st.session_state.setup_image_buffer = Image.new('RGB', (1200, 800), color=(73, 109, 137))
+                st.warning("Složka 'dataset/OK/Zebro_P1' neobsahuje žádné fotky. Načtena nouzová modrá plocha.")
 
 # --- TAB 3: ZÓNY ---
 with tab3:
