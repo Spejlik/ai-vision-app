@@ -434,7 +434,6 @@ with tab5:
             
             if uploaded_hist_files:
                 if st.button("🚀 IMPORTOVAT DO HISTORIE", use_container_width=True):
-                    # Přidáváme vizuální zámek obrazovky, aby uživatel viděl, že se něco děje
                     with st.spinner("💾 Kopíruji a zapisuji fotky do historie lisu... Počkejte prosím."):
                         unsorted_dir = os.path.join("C:/Image", "Unsorted", active_p)
                         if not os.path.exists(unsorted_dir):
@@ -455,20 +454,40 @@ with tab5:
                             imported_count += 1
                             
                         st.success(f"🎉 Úspěšně importováno {imported_count} snímků do historie!")
-                        time.sleep(0.8) # Krátká pauza, aby si technolog stihl přečíst zelenou hlášku
+                        time.sleep(0.5)
                         st.rerun()
         
         st.divider()
         
-        # ZOBRAZENÍ A TŘÍDĚNÍ FOTEK
+        # ZOBRAZENÍ A TŘÍDĚNÍ FOTEK S STRÁNKOVÁNÍM
         hist_data = database.get_history(active_p, "Neroztříděno", "Vše")
         
         if not hist_data:
             st.info("ℹ️ Žádné nové nasnímané ani importované vzorky k roztřídění.")
         else:
-            st.write(f"🔍 Počet snímků v historii k zařazení: **{len(hist_data)}**")
+            st.write(f"🔍 Celkový počet snímků k zařazení: **{len(hist_data)}**")
+            
+            # --- VÝPOČET STRÁNKOVÁNÍ ---
+            ITEMS_PER_PAGE = 12
+            total_items = len(hist_data)
+            total_pages = max(1, (total_items + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE)
+            
+            # Inicializace stavu stránky v paměti Streamlitu, pokud neexistuje
+            if "history_page" not in st.session_state:
+                st.session_state.history_page = 1
+                
+            # Bezpečnostní kontrola přetečení stránek po promazání
+            if st.session_state.history_page > total_pages:
+                st.session_state.history_page = total_pages
+                
+            # Výřez dat pro aktuální stránku
+            start_idx = (st.session_state.history_page - 1) * ITEMS_PER_PAGE
+            end_idx = start_idx + ITEMS_PER_PAGE
+            page_items = hist_data[start_idx:end_idx]
+            
+            # Vykreslení mřížky s fotkami aktuální stránky
             h_cols = st.columns(3)
-            for idx, row in enumerate(hist_data[:12]):
+            for idx, row in enumerate(page_items):
                 with h_cols[idx % 3]:
                     with st.container(border=True):
                         st.write(f"**Zdroj:** `{os.path.basename(row[3])}`")
@@ -499,3 +518,17 @@ with tab5:
                                     st.rerun()
                         else: 
                             st.error("Snímek smazán nebo přesunut.")
+            
+            # --- OVLÁDACÍ LIŠTA STRÁNKOVÁNÍ ---
+            st.write("")
+            p_col1, p_col2, p_col3 = st.columns([1, 2, 1])
+            with p_col1:
+                if st.button("⬅️ Předchozí stránka", use_container_width=True, disabled=(st.session_state.history_page == 1)):
+                    st.session_state.history_page -= 1
+                    st.rerun()
+            with p_col2:
+                st.markdown(f"<p style='text-align:center; padding-top:5px; font-weight:bold;'>Stránka {st.session_state.history_page} z {total_pages}</p>", unsafe_allow_html=True)
+            with p_col3:
+                if st.button("Další stránka ➡️", use_container_width=True, disabled=(st.session_state.history_page == total_pages)):
+                    st.session_state.history_page += 1
+                    st.rerun()
