@@ -1,60 +1,77 @@
-import cv2
 import os
 import time
 from PIL import Image
+import numpy as np
 
 def capture_live_frame(camera_source=0):
     """
-    Připojí se k reálné kameře na lisu a zachytí aktuální snímek.
-    
-    Parametry:
-    - camera_source: buď číslo (0, 1, 2 pro USB kamery) 
-                     nebo textový řetězec (např. "rtsp://192.168.1.50/stream1" pro IP kamery)
+    Zachytí snímek z reálné průmyslové kamery Basler nebo z Emulátoru přes Pylon SDK.
     """
-    # Inicializace spojení s kamerou přes OpenCV
-    cap = cv2.VideoCapture(camera_source)
-    
-    # Průmyslové kamery potřebují chvilku na nastavení expozice a jasu po startu
-    # Nastavíme vyrovnávací paměť na 1 snímek, ať nemáme zpožděný obraz
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-    
-    if not cap.isOpened():
-        print(f"❌ Chyba: Nepodařilo se připojit ke kameře na zdroji: {camera_source}")
-        return None
-        
     try:
-        # Přečteme snímek z čipu kamery
-        ret, frame = cap.read()
+        from pypylon import pylon
         
-        # Pro jistotu přečteme ještě jednou, abychom vyčistili buffer a měli 100% aktuální kus po otevření formy
-        ret, frame = cap.read()
+        tl_factory = pylon.TlFactory.GetInstance()
+        devices = tl_factory.EnumerateDevices()
         
-        if ret and frame is not None:
-            # OpenCV standardně načítá v BGR formátu, převedeme na RGB pro Pillow/Streamlit
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            pil_img = Image.fromarray(rgb_frame)
-            return pil_img
-        else:
-            print("❌ Chyba: Kamera neodpovídá nebo neposílá obrazová data.")
+        if not devices:
+            print("❌ Chyba: V systému není dostupná žádná Basler kamera ani emulátor.")
             return None
             
-    except Exception as e:
-        print(f"💥 Výjimka při snímání z kamery: {str(e)}")
-        return None
+        # Třídění: Pokud detekujeme reálnou kameru, vezmeme ji. Jinak bereme emulátor.
+        target_device = devices[0]
+        for d in devices:
+            if "Emulation" not in d.GetFriendlyName():
+                target_device = d
+                break
+                
+        print(f"🔌 Připojuji se k zařízení: {target_device.GetFriendlyName()}")
+        camera = pylon.InstantCamera(tl_factory.CreateDevice(target_device))
+        camera.Open()
         
-    finally:
-        # Vždy korektně uvolníme kameru, aby nezůstala uzamčená pro ostatní procesy ve Windows
-        cap.release()
+        # Nastavení základního formátu (Mono8 nebo RGB8 podle typu kamery)
+        try:
+            camera.PixelFormat.SetValue("Mono8")
+        except:
+            try: camera.PixelFormat.SetValue("RGB8")
+            except: pass
+            
+        # Zachycení jednoho snímku (timeout 2000 ms)
+        grab_result = camera.GrabOne(2000)
+        
+        if grab_result.GrabSucceeded():
+            img_array = grab_result.Array
+            
+            # Převedeme jednovrstvý černobílý obraz do pseudo-RGB pro Streamlit mřížku
+            if len(img_array.shape) == 2:
+                pil_img = Image.fromarray(img_array).convert("RGB")
+            else:
+                pil_img = Image.fromarray(img_array)
+                
+            grab_result.ReleaseResult()
+            camera.Close()
+            return pil_img
+        else:
+            print(f"❌ Chyba snímání z Pylonu: {grab_result.ErrorCode}")
+            grab_result.ReleaseResult()
+            camera.Close()
+            return None
+            
+    except ImportError:
+        print("❌ Chyba: Spusťte v CMD příkaz: pip install pypylon")
+        return None
+    except Exception as e:
+        print(f"💥 Výjimka Basler Pylonu: {str(e)}")
+        return None
 
 def save_live_to_unsorted(project_name, camera_id, image_pil):
     """
-    Vezme živý snímek z kamery a uloží ho do průběžného sběru pro Historii.
+    Uloží živý snímek do průběžného sběru pro Historii.
     """
     import random
     unsorted_dir = f"C:/Image/Unsorted/{project_name}"
     if not os.path.exists(unsorted_dir):
         os.makedirs(unsorted_dir)
         
-    filename = os.path.join(unsorted_dir, f"camera_{camera_id}_{int(time.time())}_{random.randint(100,999)}.jpg")
+    filename = os.path.join(unsorted_dir, f"basler_{camera_id}_{int(time.time())}_{random.randint(100,999)}.jpg")
     image_pil.save(filename, "JPEG", quality=95)
     return filename
