@@ -438,8 +438,9 @@ with tab3:
                     ok_dir_check = os.path.join(base_drive, "Image", "OK", active_p)
                     nok_dir_check = os.path.join(base_drive, "Image", "NOK", active_p)
                     
-                    count_ok = len(glob.glob(f"dataset/OK/Zebro_P1/*.jpg")) # Sleduje tvou hlavní složku
-                    count_nok = len(glob.glob(f"dataset/NOK/Zebro_P1/*.jpg"))
+                    # Spočítáme všechny fotky bez ohledu na to, zda mají příponu malým nebo velkým písmem
+                    count_ok = len(glob.glob("dataset/OK/Zebro_P1/*.jpg")) + len(glob.glob("dataset/OK/Zebro_P1/*.JPG")) + len(glob.glob("dataset/OK/Zebro_P1/*.png")) + len(glob.glob("dataset/OK/Zebro_P1/*.PNG"))
+                    count_nok = len(glob.glob("dataset/NOK/Zebro_P1/*.jpg")) + len(glob.glob("dataset/NOK/Zebro_P1/*.JPG")) + len(glob.glob("dataset/NOK/Zebro_P1/*.png")) + len(glob.glob("dataset/NOK/Zebro_P1/*.PNG"))
                     
                     if count_ok < 4 or count_nok < 4:
                         st.warning(f"⚠️ **Nedostatečné množství dat:** Máte pouze **{count_ok}x OK** a **{count_nok}x NOK** snímků. (Vyžadováno aspoň 4x OK a 4x NOK).")
