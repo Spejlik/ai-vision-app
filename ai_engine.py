@@ -17,49 +17,23 @@ def get_model():
     return model
 
 # --- 2. TRÉNOVACÍ PROCES (UČENÍ) ---
-def train_ai_model(project_name, progress_bar_callback=None):
-    """
-    Vezme fotky ze složek C:/Image/OK/Projekt a C:/Image/NOK/Projekt,
-    natrénuje neuronovou síť a uloží ji na disk.
-    """
-    base_drive = "D:/" if os.path.exists("D:/") else "C:/"
-    
-    # Definujeme cesty ke složkám jakosti (OK / NOK)
-    # Pro správné fungování torchvision ImageFolder potřebujeme mít strukturu:
-    # Root_Slozka / Třída (OK nebo NOK) / Obrázky.png
-    root_dir = os.path.join(base_drive, "Image")
-    
-    # Ověříme, zda složky OK a NOK vůbec obsahují nějaká data
-    ok_dir = os.path.join(root_dir, "OK", project_name)
-    nok_dir = os.path.join(root_dir, "NOK", project_name)
-    
-    if not os.path.exists(ok_dir) or not os.path.exists(nok_dir):
-        return False, "Chybí složky OK nebo NOK s daty pro tento projekt."
-        
-    # Příprava transformací (Úprava velikosti na 224x224, což je standard pro neuronky + normalizace)
-    data_transforms = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ])
-    
-    # Vytvoření dočasné struktury pro dataset (sloučíme OK a NOK pod daným projektem)
-    # PyTorch automaticky přiřadí indexy tříd podle názvů složek (např. NOK=0, OK=1)
-    try:
-        # Abychom zachovali strukturu, vytvoříme virtuální dataset ze specifických cest projektů
+# --- UPRAVENÝ HISTORICKÝ DATASET PRO KONKRÉTNÍ ZÓNU ---
         class CustomProjectDataset(torch.utils.data.Dataset):
-            def __init__(self, ok_path, nok_path, transform):
+            def __init__(self, ok_path, nok_path, transform, roi_name):
                 self.samples = []
                 self.transform = transform
                 
-                # Načteme OK snímky (Třída 1)
-                for f in os.listdir(ok_path):
-                    if f.endswith(('.png', '.jpg', '.jpeg')):
-                        self.samples.append((os.path.join(ok_path, f), 1))
-                # Načteme NOK snímky (Třída 0)
-                for f in os.listdir(nok_path):
-                    if f.endswith(('.png', '.jpg', '.jpeg')):
-                        self.samples.append((os.path.join(nok_path, f), 0))
+                # Načteme OK snímky, ale pouze ty, které v názvu obsahují naši zónu (např. GumaRoh_1716...)
+                if os.path.exists(ok_path):
+                    for f in os.listdir(ok_path):
+                        if f.startswith(f"{roi_name}_") and f.endswith(('.png', '.jpg', '.jpeg')):
+                            self.samples.append((os.path.join(ok_path, f), 1))
+                            
+                # Načteme NOK snímky pro konkrétní zónu
+                if os.path.exists(nok_path):
+                    for f in os.listdir(nok_path):
+                        if f.startswith(f"{roi_name}_") and f.endswith(('.png', '.jpg', '.jpeg')):
+                            self.samples.append((os.path.join(nok_path, f), 0))
                         
             def __len__(self):
                 return len(self.samples)
@@ -71,24 +45,22 @@ def train_ai_model(project_name, progress_bar_callback=None):
                     img = self.transform(img)
                 return img, label
 
-        dataset = CustomProjectDataset(ok_dir, nok_dir, data_transforms)
+        # Inicializace datasetu s filtrem na konkrétní zónu (roi_name)
+        dataset = CustomProjectDataset(ok_dir, nok_dir, data_transforms, roi_name)
         if len(dataset) < 4:
-            return False, "Nedostatek snímků v archivu. Nasbírejte aspoň 2x OK a 2x NOK snímek."
+            return False, f"Nedostatek snímků pro zónu '{roi_name}'. Zařaďte v historii aspoň 2x ok a 2x nok pro tuto zónu."
             
         dataloader = DataLoader(dataset, batch_size=4, shuffle=True)
         
-        # Inicializace modelu a nastavení parametrů učení
         model = get_model()
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.Adam(model.parameters(), lr=0.001)
         
         model.train()
-        
-        # Trénujeme na 5 cyklů (Epoch), což pro Transfer Learning menších detailů bohatě stačí
         epochs = 5
         for epoch in range(epochs):
             running_loss = 0.0
-            for inputs, labels in dataloader:
+            for inputs, labels in dataloader: # ZDE JE OPRAVENÝ PŘEKLEP
                 optimizer.zero_grad()
                 outputs = model(inputs)
                 loss = criterion(outputs, labels)
@@ -99,17 +71,14 @@ def train_ai_model(project_name, progress_bar_callback=None):
             if progress_bar_callback:
                 progress_bar_callback((epoch + 1) / epochs, f"Epocha {epoch+1}/{epochs} dokončena...")
                 
-        # Uložení natrénovaného modelu přímo do složky projektu
+        # Uložení modelu se jménem projektu I ZÓNY
         model_dir = "models"
         if not os.path.exists(model_dir):
             os.makedirs(model_dir)
             
-        model_path = os.path.join(model_dir, f"model_ai_{project_name}.pth")
+        model_path = os.path.join(model_dir, f"model_ai_{project_name}_{roi_name}.pth")
         torch.save(model.state_dict(), model_path)
         return True, model_path
-        
-    except Exception as e:
-        return False, str(e)
 
 # --- 3. INFERENCE (OSTRE VYHODNOCENÍ NA LINCE) ---
 def predict_with_ai(model_path, pil_image):

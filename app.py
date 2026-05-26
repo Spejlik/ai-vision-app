@@ -85,7 +85,6 @@ with tab1:
                 with col_run_1:
                     st.markdown("### 🔍 Detailní náhledy inspekčních zón (ROI)")
                     roi_placeholders = {}
-                    # Zobrazíme max 4 čtvercové ROI vedle sebe
                     roi_cols = st.columns(4)
                     
                     for i, (m, r) in enumerate(all_active_rois):
@@ -113,14 +112,11 @@ with tab1:
                     import glob
                     import numpy as np
                     
-                    # Procházíme nadefinované zóny v aplikaci
                     for m, r in all_active_rois:
                         m_path = m[3]
-                        # r[0]=id, r[3]=název zóny, r[8]=NOK typ, r[9]=tolerance
                         r_id, r_name, r_nok = r[0], r[3], r[8]
                         r_tolerance = r[9] if len(r) > 9 else 20
                         
-                        # 1. NAČTENÍ MASTER ŠABLONY (Reference)
                         if os.path.exists(m_path):
                             master_full = Image.open(m_path).convert("RGB")
                         else:
@@ -128,14 +124,10 @@ with tab1:
                         master_crop = master_full.crop((r[4], r[5], r[4]+r[6], r[5]+r[7]))
                         master_roi_np = np.array(master_crop)
 
-                        # 2. CHYTRÉ VYHLEDÁVÁNÍ TESTOVACÍCH FOTEK
-                        # Zkusíme nejprve hledat ve složce podle jména zóny, pokud tam nic není, 
-                        # podíváme se do složky projektu (např. dataset/OK/MQB/) nebo do jakékoli podsložky v datasetu
                         all_extensions = ["*.jpg", "*.jpeg", "*.png", "*.JPG", "*.JPEG", "*.PNG"]
                         ok_files = []
                         nok_files = []
                         
-                        # Seznam cest, kde postupně zkusíme hledat vzorky fotek
                         search_paths = [
                             f"dataset/OK/{r_name}",
                             f"dataset/OK/{active_p}",
@@ -144,7 +136,7 @@ with tab1:
                         ]
                         
                         for path in search_paths:
-                            if ok_files: break # Pokud jsme už fotky našli, nehledáme dál
+                            if ok_files: break
                             for ext in all_extensions:
                                 ok_files.extend(glob.glob(f"{path}/{ext}"))
                                 
@@ -162,14 +154,11 @@ with tab1:
                             live_roi_img = live_roi_img.resize((r[6], r[7]), Image.Resampling.LANCZOS)
                             live_roi_np = np.array(live_roi_img)
                         else:
-                            # Bezpečný zálohový fallback, aby se kód nikdy nezasekl a VŽDY ukládal
                             chosen_file_name = "Generovany_snimek.png"
                             live_roi_np = np.array(master_crop)
-                            # Pokud nejsou soubory, nasimulujeme občasnou vadu, ať vidíme ukládání do OK i NOK
                             if random.random() > 0.5:
                                 live_roi_np = np.clip(live_roi_np.astype(int) - 50, 0, 255).astype(np.uint8)
 
-                        # 3. VÝPOČET OPENCV ODCHYLKY
                         err = np.sum((master_roi_np.astype("float") - live_roi_np.astype("float")) ** 2)
                         err /= float(master_roi_np.shape[0] * master_roi_np.shape[1] * master_roi_np.shape[2])
                         final_deviation = min(100, int(err / 15))
@@ -184,33 +173,19 @@ with tab1:
                             
                         zone_color = "#00FF00" if is_zone_ok else "#FF4B4B"
                         
-                        # --- UPRAVENÉ UKLÁDÁNÍ: VŠECHNO JDE DO "UNSORTED" PRO RUČNÍ OZNAČENÍ ---
                         base_drive = "D:/" if os.path.exists("D:/") else "C:/"
-                        
-                        # Všechny živé snímky padají do dočasné složky Unsorted
                         history_dir = os.path.join(base_drive, "Image", "Unsorted", active_p)
                         if not os.path.exists(history_dir):
                             os.makedirs(history_dir)
-                        
-                        if not os.path.exists(history_dir):
-                            os.makedirs(history_dir)
                             
-                        # Vytvoření názvu souboru (např. Zóna 1_1716634123.png)
                         history_filename = os.path.join(history_dir, f"{r_name}_{int(time.time())}_{random.randint(100,999)}.png")
                         Image.fromarray(live_roi_np).save(history_filename)
                         
-                        # Uložení originálního nedeformovaného snímku na disk
-                        Image.fromarray(live_roi_np).save(history_filename)
-                        
-                        # Výchozí stav v DB bude "Neroztříděno" (undefined)
                         database.save_to_history(active_p, r_name, history_filename, "Neroztříděno")
-                        # ---------------------------------------------------------------------
                         
-                        # Původní vizuální vyhodnocení na obrazovce v mřížce necháme podle MSE
                         status_text = "NOK" if final_deviation > r_tolerance else "OK"
                         zone_color = "#FF4B4B" if status_text == "NOK" else "#00FF00"
                         
-                        # 4. Úprava na čtvercovou dlaždici pro live dashboard
                         roi_img = Image.fromarray(live_roi_np)
                         desired_square_size = 500
                         roi_square = roi_img.resize((desired_square_size, desired_square_size), Image.Resampling.LANCZOS)
@@ -222,20 +197,19 @@ with tab1:
                         caption_str = f"Snímek: {chosen_file_name} | Odchylka: {final_deviation}% (Limit: {r_tolerance}%) | {status_text}"
                         roi_placeholders[r_id].image(roi_square, use_container_width=True, caption=caption_str)
                         
-                    # Aktualizace PLC kontrolek
                     for idx in range(1, 9):
                         if current_outputs.get(idx, False):
                             plc_indicators[idx].markdown(f"<div style='background-color:#FF4B4B; color:white; padding:10px; border-radius:5px; text-align:center; font-weight:bold; margin-bottom:5px;'>🚨 NOK {idx}</div>", unsafe_allow_html=True)
                         else:
                             plc_indicators[idx].markdown(f"<div style='background-color:#00D48A; color:white; padding:10px; border-radius:5px; text-align:center; font-weight:bold; margin-bottom:5px;'>✅ OK {idx}</div>", unsafe_allow_html=True)
                 else:
-                    # Tento else patří k "if run_engine:" když je inspekce vypnutá
                     for idx in range(1, 9):
                         plc_indicators[idx].markdown(f"<div style='background-color:#E0E0E0; color:#666; padding:10px; border-radius:5px; text-align:center; margin-bottom:5px;'>⚫ Výstup {idx}</div>", unsafe_allow_html=True)
                     for m, r in all_active_rois:
                         roi_placeholders[r[0]].info("Čeká...")
     else:
         st.warning("⚠️ Nejdříve vyberte nebo vytvořte projekt v levém panelu.")
+
 # --- TAB 2: MASTER ---
 with tab2:
     st.subheader("📸 Nastavení Master snímků")
@@ -245,7 +219,6 @@ with tab2:
         st.write("### ✂️ Definice výřezu")
         m_id_name = st.text_input("Název Masteru (např. Kamera 1)")
         
-        # Slidery pro ořez (ax, ay, aw, ah)
         ax = st.slider("X začátek", 0, 2000, 100)
         ay = st.slider("Y začátek", 0, 2000, 100)
         aw = st.slider("Šířka výřezu", 10, 2000, 500)
@@ -259,10 +232,8 @@ with tab2:
                 filename = f"masters/master_{int(time.time())}.png"
                 img = st.session_state.setup_image_buffer
                 
-                # 1. Klasický ořez ze sliderů
                 cropped_img = img.crop((ax, ay, ax + aw, ay + ah))
                 
-                # 2. Úprava na čtverec (Square Padding), aby mřížka držela tvar
                 max_side = max(aw, ah)
                 square_img = Image.new('RGB', (max_side, max_side), color=(50, 50, 50))
                 
@@ -270,11 +241,9 @@ with tab2:
                 offset_y = (max_side - ah) // 2
                 square_img.paste(cropped_img, (offset_x, offset_y))
                 
-                # Zmenšení na jednotný rozměr pro rychlé náhledy
                 square_img = square_img.resize((500, 500), Image.Resampling.LANCZOS)
                 square_img.save(filename)
                 
-                # TADY BYLA CHYBA: Musíme poslat aktivní projekt jako PRVNÍ parametr!
                 database.add_master(st.session_state.active_project, m_id_name, filename, ax, ay, aw, ah)
                 st.success(f"Master {m_id_name} uložen pro projekt {st.session_state.active_project}!")
                 st.rerun()
@@ -286,7 +255,6 @@ with tab2:
         if st.session_state.setup_image_buffer is not None:
             preview_img = st.session_state.setup_image_buffer.copy()
             
-            # Adaptivní tloušťka pro náhled ořezu
             cam_w = preview_img.size[0]
             master_line_w = max(2, int(cam_w * 0.007))
             
@@ -310,7 +278,6 @@ with tab3:
         if 'selected_master_id' not in st.session_state or st.session_state.selected_master_id is None:
             st.session_state.selected_master_id = all_masters[0][0]
 
-        # --- DOKONALÁ ČTVERCOVÁ MŘÍŽKA GALERIE (S RÁMEČKY) ---
         st.write("### 🖼️ Výběr pozice / kamery:")
         
         COLUMNS_PER_ROW = 6
@@ -322,7 +289,6 @@ with tab3:
                 m_id_loop, m_name_loop, m_path_loop = m[0], m[2], m[3]
                 
                 with cols[idx]:
-                    # Použijeme kontejner s rámečkem, aby se obrázky a tlačítka neslily dohromady
                     with st.container(border=True):
                         if os.path.exists(m_path_loop):
                             st.image(m_path_loop, use_container_width=True)
@@ -341,7 +307,6 @@ with tab3:
 
         st.divider()
         
-        # Načtení aktivního masteru ze seznamu
         sel_m = next((m for m in all_masters if m[0] == st.session_state.selected_master_id), None)
         
         if sel_m is None and all_masters:
@@ -355,18 +320,15 @@ with tab3:
             W, H = img_roi.size
             all_rois = database.get_rois(m_id, active_p)
             
-            # Rozvržení: Ovládání vlevo, obraz vpravo
             c_ctrl, c_viz = st.columns([1, 1.8])
             
             with c_ctrl:
                 st.markdown(f"### 🔧 Nastavení zón: {m_name}")
                 
-                # Načtení dat pokud jsme v režimu editace
                 current_roi = None
                 if st.session_state.editing_roi_id:
                     current_roi = next((r for r in all_rois if r[0] == st.session_state.editing_roi_id), None)
                 
-                # Výchozí hodnoty pro formulář
                 default_name = current_roi[3] if current_roi else f"Zóna {len(all_rois)+1}"
                 default_nok = current_roi[8] if current_roi else 1
                 default_x = current_roi[4] if current_roi else 50
@@ -377,15 +339,12 @@ with tab3:
                 zn = st.text_input("Název zóny", value=default_name)
                 nok_val = st.selectbox("Přiřazení chyby (NOK 1-8)", range(1, 9), index=default_nok - 1)
                 
-                # Načtení výchozí tolerance z DB (r[9]), pokud editujeme, jinak výchozí 20
-                default_tolerance = current_roi[9] if current_roi and len(current_roi) > i else 20
+                default_tolerance = current_roi[9] if current_roi and len(current_roi) > 9 else 20
                 
                 zx = st.slider("X", 0, W, default_x, key="sx")
                 zy = st.slider("Y", 0, H, default_y, key="sy")
                 zw = st.slider("Šířka", 10, W, default_w, key="sw")
                 zh = st.slider("Výška", 10, H, default_h, key="sh")
-                
-                # NOVÝ SLIDER: Čím menší číslo, tím je kontrola přísnější
                 ztol = st.slider("Tolerance odchylky (čím méně, tím přísnější)", 1, 100, default_tolerance, key="stol")
                 
                 if st.session_state.editing_roi_id:
@@ -406,7 +365,6 @@ with tab3:
                         st.success("Zóna uložena!")
                         st.rerun()
                 
-                # --- SPRÁVA ZÓN (EDITACE / MAZÁNÍ) ---
                 if all_rois:
                     st.write("---")
                     st.write("📋 **Uložené zóny (Správa):**")
@@ -427,7 +385,6 @@ with tab3:
                                     st.session_state.editing_roi_id = None
                                 st.rerun()
 
-                # --- SMAZÁNÍ CELÉHO MASTERU ---
                 st.write("---")
                 if st.button("🚨 SMAZAT TENTO MASTER", key="del_master_btn", use_container_width=True):
                     database.delete_master(m_id)
@@ -440,57 +397,65 @@ with tab3:
                 draw = ImageDraw.Draw(img_roi)
                 line_w = max(2, int(W * 0.007))
                 
-                # 1. Kreslení uložených zón
                 for r in all_rois:
                     rx, ry, rw, rh = r[4], r[5], r[6], r[7]
-                    # Pokud zónu zrovna editujeme, nevykreslíme ji zeleně (překrývala by oranžový náhled)
                     if r[0] != st.session_state.editing_roi_id:
                         draw.rectangle([rx, ry, rx+rw, ry+rh], outline="#00FF00", width=line_w)
                         draw.text((rx, ry-15), f"{r[3]} (NOK{r[8]})", fill="#00FF00")
 
-                # 2. Kreslení oranžového náhledu z aktuálních sliderů
                 draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=line_w + 2)
                 draw.text((zx, zy-25), "NÁHLED / EDITACE ZÓNY", fill="orange")
                 
                 st.image(img_roi, use_container_width=True, caption=f"Pracovní plocha: {m_name}")
-                # --- NOVÁ SEKCE: TRÉNOVÁNÍ AI NEURONOVÉ SÍTĚ ---
-                st.divider()
-                st.markdown("### 🧠 Řízení umělé inteligence (AI)")
-                st.write("Pokud máte v archivu nasbírané dostatečné množství OK a NOK snímků, můžete jedním kliknutím přetrénovat neuronovou síť MobileNetV3 přímo pro tento projekt.")
                 
-                if st.button("🚀 SPUSTIT UČENÍ NEURONOVÉ SÍTĚ PROJEKTU", type="secondary", use_container_width=True):
-                    with st.spinner("AI Engine se inicializuje..."):
-                        # Vytvoříme vizuální progress bar přímo ve Streamlitu
-                        progress_bar = st.progress(0.0)
-                        status_text = st.empty()
-                        
-                        def update_progress(pct, msg):
-                            progress_bar.progress(pct)
-                            status_text.text(msg)
+                # --- NOVÁ UPRAVENÁ SEKCE: TRÉNOVÁNÍ STRUKTUROVANÉ PODLE SÍTÍ/ZÓN (ELVAC STYLE) ---
+                st.divider()
+                st.markdown("### 🧠 Řízení neuronových sítí (AI)")
+                st.write("Vyberte konkrétní síť/zónu, kterou chcete přetrénovat na základě schválených snímků z archivu.")
+                
+                # Vytáhneme unikátní zóny z databáze pro tento projekt
+                active_rois_list = []
+                for m_temp in all_masters:
+                    rois_p = database.get_rois(m_temp[0], active_p)
+                    for r_temp in rois_p:
+                        if r_temp[3] not in active_rois_list:
+                            active_rois_list.append(r_temp[3])
+                
+                if active_rois_list:
+                    selected_net_to_train = st.selectbox("Vyberte neuronovou síť k přetrénování:", active_rois_list, key="ai_net_select")
+                    
+                    if st.button(f"🚀 SPUSTIT UČENÍ SÍTÊ: {selected_net_to_train}", type="secondary", use_container_width=True):
+                        with st.spinner(f"Inicializace učení sítě {selected_net_to_train}..."):
+                            progress_bar = st.progress(0.0)
+                            status_text = st.empty()
                             
-                        # Spustíme trénování z ai_engine.py
-                        success, result_msg = ai_engine.train_ai_model(active_p, update_progress)
-                        
-                        if success:
-                            st.success(f"🎉 Výborně! AI model byl úspěšně natrénován a uložen: {result_msg}")
-                        else:
-                            st.error(f"❌ Trénování selhalo: {result_msg}")
+                            def update_progress(pct, msg):
+                                progress_bar.progress(pct)
+                                status_text.text(msg)
+                                
+                            # Posíláme jak projekt, tak vybranou zónu do ai_engine.py
+                            success, result_msg = ai_engine.train_ai_model(active_p, selected_net_to_train, update_progress)
+                            
+                            if success:
+                                st.success(f"🎉 Síť '{selected_net_to_train}' byla úspěšně naučena! Soubor: {result_msg}")
+                            else:
+                                st.error(f"❌ Trénování selhalo: {result_msg}")
+                else:
+                    st.info("💡 Nejdříve vytvořte aspoň jednu inspekční zónu výše, aby bylo možné přiřadit síť.")
 
 # --- TAB 4: I/O ---
 with tab4:
     st.subheader("🔌 Nastavení komunikace (Modbus TCP / Moxa)")
     st.write("Zde bude konfigurace IP adresy a registru pro odesílání NOK signálů do linky.")
     
-    # Rychlý testovací status pro kontrolu spojení
     st.text_input("IP Adresa Moxa I/O modulu", value="192.168.1.200")
     st.button("🔄 Testovat připojení hardwaru", use_container_width=True)
     
 # --- TAB 5: HISTORIE ---
 with tab5:
     st.subheader("📋 Lis 1300/18A - Správa snímků a anotace pro NN")
-    st.write("Proklikáním snímků určíte jejich reálnou jakost. Snímky se následně uloží do datasetu pro učení neuronové sítě.")
+    st.write("Proklikáním snímků určíte their reálnou jakost. Snímky se následně uloží do datasetu pro učení neuronové sítě.")
     
-    # Načtení projektů z historie
     history_projects = database.get_unique_projects_from_history()
     project_options = ["Vše"] + history_projects
     
@@ -498,19 +463,16 @@ with tab5:
     if st.session_state.active_project in project_options:
         default_p_idx = project_options.index(st.session_state.active_project)
         
-    # Filtrační lišta podle vzoru Elvac
     f_col1, f_col2, f_col3 = st.columns(3)
     with f_col1:
         proj_f = st.selectbox("Aktivní projekt (Lis):", project_options, index=default_p_idx)
     with f_col2:
-        # Výchozí filtr je nastaven na "Neroztříděno" (odpovídá stavu undefined)
         status_f = st.selectbox("Stav hodnocení zóny:", ["Neroztříděno", "OK", "NOK", "Vše"])
     with f_col3:
         history_rois = database.get_unique_rois_from_history(proj_f)
         roi_options = ["Vše"] + history_rois
         roi_f = st.selectbox("Neuronová siť (Zóna):", roi_options)
         
-    # Načtení dat z DB
     hist_data = database.get_history(proj_f, status_f, roi_f)
     
     if not hist_data:
@@ -518,7 +480,6 @@ with tab5:
     else:
         st.write(f"🔍 Počet snímků k revizi: **{len(hist_data)}**")
         
-        # Mřížka pro anotační karty (3 karty na řádek)
         H_COLUMNS = 3
         h_rows = [hist_data[i:i + H_COLUMNS] for i in range(0, len(hist_data), H_COLUMNS)]
         
@@ -536,7 +497,6 @@ with tab5:
                     
                 with cols[idx]:
                     with st.container(border=True):
-                        # Zobrazení stavu (undefined vs ok/nok)
                         if h_status == "Neroztříděno":
                             st.markdown("<span style='background-color:#555; color:#fff; padding:3px 8px; border-radius:3px; font-size:12px; font-weight:bold;'>⚪ undefined</span>", unsafe_allow_html=True)
                         elif h_status == "OK":
@@ -550,7 +510,6 @@ with tab5:
                         if os.path.exists(h_path):
                             st.image(h_path, use_container_width=True)
                             
-                            # Tlačítka pro uložení do příslušného datasetu NN
                             st.markdown("<p style='margin-bottom:2px; font-size:13px; color:#aaa;'>Uložit do datasetu NN:</p>", unsafe_allow_html=True)
                             btn_ok, btn_nok = st.columns(2)
                             with btn_ok:
@@ -562,4 +521,4 @@ with tab5:
                                     database.update_image_status(r_id, "NOK")
                                     st.rerun()
                         else:
-                            st.error("Soubor snímku nebyl na disku nalezen.")    
+                            st.error("Soubor snímku nebyl na disku nalezen.")
