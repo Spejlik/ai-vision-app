@@ -130,31 +130,25 @@ with tab1:
                         ok_files = []
                         nok_files = []
                         
-                        # 2. CHYTRÉ VYHLEDÁVÁNÍ TESTOVACÍCH FOTEK (STRIKTNĚ PODLE ZÓNY)
+                        # 2. CHYTRÉ VYHLEDÁVÁNÍ TESTOVACÍCH FOTEK (FLEXIBILNÍ A BEZPEČNÉ)
                         all_extensions = ["*.jpg", "*.jpeg", "*.png", "*.JPG", "*.JPEG", "*.PNG"]
                         ok_files = []
                         nok_files = []
                         
-                        # Síť si bere vzorky výhradně ze své vlastní složky (např. dataset/OK/Zóna P1)
+                        # Postupný seznam cest: nejdřív detailní zóna, pak hlavní složka projektu, pak obecný dataset
                         search_paths = [
-                            f"dataset/OK/{r_name}"
+                            f"dataset/OK/{r_name}",
+                            f"dataset/OK/{active_p}",
+                            f"dataset/OK"
                         ]
                         
+                        # Vyhledání OK souborů
                         for path in search_paths:
                             if ok_files: break
                             for ext in all_extensions:
                                 ok_files.extend(glob.glob(f"{path}/{ext}"))
                                 
-                        for path in search_paths:
-                            if nok_files: break
-                            for ext in all_extensions:
-                                nok_files.extend(glob.glob(f"{path.replace('OK', 'NOK')}/{ext}"))
-                        
-                        for path in search_paths:
-                            if ok_files: break
-                            for ext in all_extensions:
-                                ok_files.extend(glob.glob(f"{path}/{ext}"))
-                                
+                        # Vyhledání NOK souborů
                         for path in search_paths:
                             if nok_files: break
                             for ext in all_extensions:
@@ -163,17 +157,20 @@ with tab1:
                         all_test_files = ok_files + nok_files
                         
                         if all_test_files:
+                            # Máme reálné fotky z disku -> použijeme je
                             selected_path = random.choice(all_test_files)
                             chosen_file_name = os.path.basename(selected_path)
                             live_roi_img = Image.open(selected_path).convert("RGB")
                             live_roi_img = live_roi_img.resize((r[6], r[7]), Image.Resampling.LANCZOS)
                             live_roi_np = np.array(live_roi_img)
                         else:
-                            chosen_file_name = "Generovany_snimek.png"
+                            # ABSOLUTNÍ FALLBACK: Pokud na disku vůbec nic není, vytvoříme aspoň reálný výřez z Masteru
+                            chosen_file_name = "Fallback_z_Masteru.png"
                             live_roi_img = master_crop.copy()
                             live_roi_np = np.array(live_roi_img)
+                            # Nasimulujeme mírnou změnu jasu, ať se obraz hýbe
                             if random.random() > 0.5:
-                                live_roi_np = np.clip(live_roi_np.astype(int) - 50, 0, 255).astype(np.uint8)
+                                live_roi_np = np.clip(live_roi_np.astype(int) - 30, 0, 255).astype(np.uint8)
                                 live_roi_img = Image.fromarray(live_roi_np)
 
                         # --- INTEGRACE ŽIVÉHO AI VYHODNOCENÍ ---
