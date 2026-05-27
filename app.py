@@ -85,196 +85,187 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(["🚀 BĚH", "🎯 MASTER", "🔍 ZÓNY"
 
 # --- TAB 1: BĚH ---
 with tab1:
-    st.subheader(f"🚀 Live Inspekce - Projekt: {st.session_state.active_project}")
-    # --- FILTR POZIC V BĚHU ---
     if st.session_state.active_project:
+        active_p = st.session_state.active_project
+        
+        # --- HORNÍ LIŠTA: VOLBA POZICE SEKVENCE (ELVAC STANDARD) ---
         if "current_run_position" not in st.session_state:
             st.session_state.current_run_position = 1
             
-        # Zjistíme, jaké pozice reálně v projektu existují, nebo necháme výchozí 1 a 2
         avail_pos = st.session_state.get("available_positions", [1, 2])
         
-        st.write("")
-        run_cols = st.columns(len(avail_pos))
+        # Vodorovný panel pro výběr aktuálního kroku sekvence
+        run_pos_cols = st.columns(len(avail_pos) + 2)
+        with run_pos_cols[0]:
+            st.markdown("<p style='padding-top:25px; font-weight:bold; margin:0;'>📍 Krok sekvence:</p>", unsafe_allow_html=True)
+            
         for idx, pos in enumerate(avail_pos):
-            with run_cols[idx]:
+            with run_pos_cols[idx + 1]:
+                st.write("") # Zarovnání
                 is_active = (st.session_state.current_run_position == pos)
-                if st.button(f"🔍 Zobrazit Pozici {pos}", key=f"run_pos_{pos}", type="primary" if is_active else "secondary", use_container_width=True):
+                if st.button(f"Pozice {pos}", key=f"run_pos_{pos}", type="primary" if is_active else "secondary", use_container_width=True):
                     st.session_state.current_run_position = pos
                     st.rerun()
+                    
         st.divider()
-    
-    if st.session_state.active_project:
-        active_p = st.session_state.active_project
+
+        # Načtení masterů a zón filtrovaných podle AKTIVNÍ pozice sekvence
         all_masters = database.get_all_masters(active_p)
+        all_active_rois = []
         
-        if not all_masters:
-            st.warning("⚠️ Nemáte vytvořené žádné Mastery. Systém nemá z čeho inspekci spouštět.")
-        else:
-            all_active_rois = []
+        if all_masters:
             for m in all_masters:
                 rois = database.get_rois(m[0], active_p)
                 for r in rois:
-                    all_active_rois.append((m, r))
+                    # Filtrujeme zóny, které patří do aktuálně zvolené pozice (index 10 nebo session state)
+                    r_pos = r[10] if len(r) > 10 else 1
+                    if r_pos == st.session_state.current_run_position:
+                        all_active_rois.append((m, r))
+
+        # HLAVNÍ ROZVRŽENÍ 2:1 (Mřížka kamer vlevo vs. Výsledky a PLC vpravo)
+        col_run_1, col_run_2 = st.columns([2.2, 1])
+        
+        with col_run_1:
+            st.markdown("### 📺 Živé náhledy kamer lisu")
+            run_engine = st.toggle("▶️ SPUSTIT ŽIVOU INSPEKCI VÝLISKŮ", key="run_engine_toggle")
+            st.write("")
             
+            roi_placeholders = {}
             if not all_active_rois:
-                st.warning("⚠️ Nemáte definované žádné zóny (ROI). Vytvořte je v Tabu 3.")
+                st.info(f"ℹ️ Pro Pozici {st.session_state.current_run_position} nejsou v tomto kroku sekvence definovány žádné zóny.")
             else:
-                run_engine = st.toggle("▶️ SPUSTIT ŽIVOU INSPEKCI", key="run_engine_toggle")
-                st.divider()
+                # Vytvoření čisté průmyslové mřížky 3x3 nebo 3x2
+                roi_cols = st.columns(3)
+                for i, (m, r) in enumerate(all_active_rois):
+                    r_id, r_name = r[0], r[3]
+                    with roi_cols[i % 3]:
+                        # Použijeme tmavé průmyslové ohraničení kontejneru
+                        with st.container(border=True):
+                            roi_placeholders[r_id] = st.empty()
+
+        with col_run_2:
+            st.markdown("### 📋 Výsledky inspekce")
+            global_status_placeholder = st.empty()
+            st.write("")
+            
+            st.markdown("**🛡️ Stav jednotlivých kontrol:**")
+            control_placeholders = {}
+            for i, (m, r) in enumerate(all_active_rois):
+                r_name = r[3]
+                control_placeholders[r[0]] = st.empty()
                 
-                col_run_1, col_run_2 = st.columns([2.5, 1])
+        # --- VYHODNOCOVACÍ SMYČKA ZA BĚHU ---
+        current_outputs = {i: False for i in range(1, 9)}
+        is_entire_mold_ok = True
+        
+        if run_engine and all_active_rois:
+            for m, r in all_active_rois:
+                m_path = m[3]
+                r_id, r_name, r_nok = r[0], r[3], r[8]
+                r_tolerance = r[9] if len(r) > 9 else 20
+                m_camera_name = m[2] # Název masteru bereme jako identifikátor kamery (např. cam1)
                 
-                with col_run_1:
-                    st.markdown("### 🔍 Detailní náhledy inspekčních zón (ROI)")
-                    roi_placeholders = {}
-                    roi_cols = st.columns(4)
-                    
-                    for i, (m, r) in enumerate(all_active_rois):
-                        m_name, r_id, r_name = m[2], r[0], r[3]
-                        with roi_cols[i % 4]:
-                            with st.container(border=True):
-                                st.markdown(f"**{r_name}** <br><span style='font-size:0.8em; color:gray;'>📷 {m_name}</span>", unsafe_allow_html=True)
-                                roi_placeholders[r_id] = st.empty()
-                
-                with col_run_2:
-                    st.markdown("### 📊 Výstupy PLC (NOK 1-8)")
-                    io_col1, io_col2 = st.columns(2)
-                    plc_indicators = {}
-                    for idx in range(1, 9):
-                        target_col = io_col1 if idx <= 4 else io_col2
-                        with target_col:
-                            plc_indicators[idx] = st.empty()
-                
-                current_outputs = {i: False for i in range(1, 9)}
-
-                if run_engine:
-                    for m, r in all_active_rois:
-                        m_path = m[3]
-                        r_id, r_name, r_nok = r[0], r[3], r[8]
-                        r_tolerance = r[9] if len(r) > 9 else 20
-                        
-                        if os.path.exists(m_path):
-                            master_full = Image.open(m_path).convert("RGB")
-                        else:
-                            master_full = Image.new('RGB', (1200, 800), color=(70, 109, 137))
-                        master_crop = master_full.crop((r[4], r[5], r[4]+r[6], r[5]+r[7]))
-                        master_roi_np = np.array(master_crop)
-
-                        # --- OSTRÉ NAČTENÍ Z REÁLNÉ KAMERY LISU ---
-                        import camera_manager
-                        
-                        # Zde zadáš buď index USB (0, 1, 2) nebo reálnou Baslerku přes Pylon
-                        CAMERA_SOURCE = 0 
-                        
-                        live_full_img = camera_manager.capture_live_frame(CAMERA_SOURCE)
-                        
-                        if live_full_img is not None:
-                            # Kamera úspěšně dodala snímek -> provedeme přesný ořez zóny podle souřadnic
-                            chosen_file_name = f"Live_Kamera_{int(time.time())}.jpg"
-                            
-                            # SPRÁVNÝ VÝŘEZ: Řežeme přímo živý snímek z kamery, nikoliv neexistující 'selected_path'
-                            try:
-                                live_crop = live_full_img.crop((r[4], r[5], r[4]+r[6], r[5]+r[7]))
-                                live_roi_img = live_crop.resize((500, 500), Image.Resampling.LANCZOS)
-                                live_roi_np = np.array(live_crop.resize((r[6], r[7]), Image.Resampling.LANCZOS))
-                            except Exception:
-                                # Nouzový fallback pokud by souřadnice zóny neseděly s rozlišením kamery
-                                live_roi_img = master_crop.resize((500, 500), Image.Resampling.LANCZOS)
-                                live_roi_np = np.array(master_crop)
-                            
-                            # Automaticky uložíme surový snímek do historie pro průběžný sběr dat
-                            hist_path = camera_manager.save_live_to_unsorted(active_p, CAMERA_SOURCE, live_crop)
-                            database.save_to_history(active_p, r_name, hist_path, "Neroztříděno")
-                        else:
-                            # Nouzový fallback pokud kamera úplně vypadne (např. odpojený kabel)
-                            chosen_file_name = "⚠️ CHYBA_KAMERY_FALLBACK.png"
-                            live_roi_img = master_crop.resize((500, 500), Image.Resampling.LANCZOS)
-                            live_roi_np = np.array(master_crop)
-
-                        # INTEGRACE UNIVERZÁLNÍHO NEURONOVÉHO MODELU PROJEKTU
-                        # Nejprve zkusíme specifický model zóny, pokud neexistuje, vezmeme univerzální síť projektu
-                        model_path = f"models/model_ai_{active_p}_{r_name}.pth"
-                        universal_model_path = f"models/model_ai_{active_p}_Univerzalni_Sit.pth"
-                        
-                        active_model = None
-                        if os.path.exists(model_path):
-                            active_model = model_path
-                        elif os.path.exists(universal_model_path):
-                            active_model = universal_model_path
-
-                        # SPRÁVNÝ VÝŘEZ TESTOVACÍ FOTKY (Ořízneme testovací snímek podle souřadnic zóny z Tabu 3)
-                        # r[4]=X, r[5]=Y, r[6]=Šířka, r[7]=Výška
-                        try:
-                            # Načteme reálnou testovací fotku z lisu (V PLNSÉM ROZLIŠENÍ)
-                            live_full_img = Image.open(selected_path).convert("RGB")
-                            
-                            # Fyzicky z ní vyřízneme zónu, aby se neporovnával detail s celkem!
-                            live_crop = live_full_img.crop((r[4], r[5], r[4]+r[6], r[5]+r[7]))
-                            
-                            # Uložíme si ořez pro porovnání
-                            live_roi_img = live_crop.resize((desired_square_size, desired_square_size), Image.Resampling.LANCZOS)
-                            live_roi_np = np.array(live_crop.resize((r[6], r[7]), Image.Resampling.LANCZOS))
-                        except Exception:
-                            # Fallback pokud by neseděly rozměry (např. zóna je mimo obraz)
-                            # Změněno: Používáme natvrdo rozměr 500 místo nedefinované proměnné
-                            live_roi_img = master_crop.resize((500, 500), Image.Resampling.LANCZOS)
-                            live_roi_np = np.array(master_crop)
-
-                        if active_model:
-                            # Spustíme vyhodnocení AI na OŘÍZNUTÉM detailu zóny
-                            is_zone_ok, ai_confidence = ai_engine.predict_with_ai(active_model, live_roi_img)
-                            jistota_procenta = int(ai_confidence * 100)
-                            status_text = "OK" if is_zone_ok else "NOK"
-                            caption_str = f"{chosen_file_name} | 🧠 AI Jistota: {jistota_procenta}% | Stav: {status_text}"
-                        else:
-                            # Nouzové matematické porovnání pixelů (teď už na správně oříznutém kusu)
-                            err = np.sum((master_roi_np.astype("float") - live_roi_np.astype("float")) ** 2)
-                            err /= float(master_roi_np.shape[0] * master_roi_np.shape[1] * master_roi_np.shape[2])
-                            final_deviation = min(100, int(err / 15))
-                            is_zone_ok = final_deviation <= r_tolerance
-                            status_text = "OK" if is_zone_ok else "NOK"
-                            caption_str = f"{chosen_file_name} | ⚠️ Bez AI (Odchylka: {final_deviation}%) | {status_text}"
-                        
-                        if not is_zone_ok:
-                            current_outputs[r_nok] = True
-                            
-                        zone_color = "#00FF00" if is_zone_ok else "#FF4B4B"
-                        
-                        # UKLÁDÁNÍ DO UNSORTED PRO PRŮBĚŽNÝ SBĚR
-                        unsorted_dir = os.path.join("C:/Image", "Unsorted", active_p)
-                        if not os.path.exists(unsorted_dir):
-                            os.makedirs(unsorted_dir)
-                            
-                        import random as rand_mod
-                        history_filename = os.path.join(unsorted_dir, f"{r_name}_{int(time.time())}_{rand_mod.randint(100,999)}.png")
-                        Image.fromarray(live_roi_np).save(history_filename)
-                        database.save_to_history(active_p, r_name, history_filename, "Neroztříděno")
-                        
-                        desired_square_size = 500
-                        roi_square = live_roi_img.resize((desired_square_size, desired_square_size), Image.Resampling.LANCZOS)
-                        draw_sq = ImageDraw.Draw(roi_square)
-                        sq_line_w = max(6, int(desired_square_size * 0.015)) 
-                        draw_sq.rectangle([0, 0, desired_square_size-1, desired_square_size-1], outline=zone_color, width=sq_line_w)
-                        
-                        roi_placeholders[r_id].image(roi_square, use_container_width=True, caption=caption_str)
-                        
-                    # AKTUALIZACE KONTROLEK PLC
-                    aktivni_plc_vystupy = set(r[1][8] for r in all_active_rois)
-                    for idx in range(1, 9):
-                        if idx not in aktivni_plc_vystupy:
-                            plc_indicators[idx].markdown(f"<div style='background-color:#F5F5F5; color:#9E9E9E; padding:10px; border-radius:5px; text-align:center; font-size:14px; margin-bottom:5px; border: 1px dashed #E0E0E0;'>⚫ Neaktivní {idx}</div>", unsafe_allow_html=True)
-                        elif current_outputs.get(idx, False):
-                            plc_indicators[idx].markdown(f"<div style='background-color:#FF4B4B; color:white; padding:10px; border-radius:5px; text-align:center; font-weight:bold; font-size:14px; margin-bottom:5px;'>🚨 NOK {idx}</div>", unsafe_allow_html=True)
-                        else:
-                            plc_indicators[idx].markdown(f"<div style='background-color:#00D48A; color:white; padding:10px; border-radius:5px; text-align:center; font-weight:bold; font-size:14px; margin-bottom:5px;'>✅ OK {idx}</div>", unsafe_allow_html=True)
+                if os.path.exists(m_path):
+                    master_full = Image.open(m_path).convert("RGB")
                 else:
-                    for idx in range(1, 9):
-                        plc_indicators[idx].markdown(f"<div style='background-color:#E0E0E0; color:#666; padding:10px; border-radius:5px; text-align:center; margin-bottom:5px;'>⚫ Výstup {idx}</div>", unsafe_allow_html=True)
-                    for m, r in all_active_rois:
-                        roi_placeholders[r[0]].info("Čeká...")
+                    master_full = Image.new('RGB', (500, 500), color=(30, 30, 30))
+                master_crop = master_full.crop((r[4], r[5], r[4]+r[6], r[5]+r[7]))
+                master_roi_np = np.array(master_crop)
+
+                # Snímání z kamery
+                import camera_manager
+                CAMERA_SOURCE = 0 
+                live_full_img = camera_manager.capture_live_frame(CAMERA_SOURCE)
+                
+                if live_full_img is not None:
+                    chosen_file_name = f"Live_{int(time.time())}.jpg"
+                    try:
+                        live_crop = live_full_img.crop((r[4], r[5], r[4]+r[6], r[5]+r[7]))
+                        live_roi_img = live_crop.resize((500, 500), Image.Resampling.LANCZOS)
+                        live_roi_np = np.array(live_crop.resize((r[6], r[7]), Image.Resampling.LANCZOS))
+                    except Exception:
+                        live_roi_img = master_crop.resize((500, 500), Image.Resampling.LANCZOS)
+                        live_roi_np = np.array(master_crop)
+                else:
+                    chosen_file_name = "⚠️ CAM_ERR"
+                    live_roi_img = master_crop.resize((500, 500), Image.Resampling.LANCZOS)
+                    live_roi_np = np.array(master_crop)
+
+                # Vyhodnocení AI modelu
+                model_path = f"models/model_ai_{active_p}_{r_name}.pth"
+                universal_model_path = f"models/model_ai_{active_p}_Univerzalni_Sit.pth"
+                
+                active_model = model_path if os.path.exists(model_path) else (universal_model_path if os.path.exists(universal_model_path) else None)
+
+                if active_model:
+                    is_zone_ok, ai_confidence = ai_engine.predict_with_ai(active_model, live_roi_img)
+                    jistota_procenta = int(ai_confidence * 100)
+                    status_text = "OK" if is_zone_ok else "NOK"
+                    caption_str = f"✨ AI Jistota: {jistota_procenta}%"
+                else:
+                    err = np.sum((master_roi_np.astype("float") - live_roi_np.astype("float")) ** 2)
+                    err /= float(master_roi_np.shape[0] * master_roi_np.shape[1] * master_roi_np.shape[2])
+                    final_deviation = min(100, int(err / 15))
+                    is_zone_ok = final_deviation <= r_tolerance
+                    status_text = "OK" if is_zone_ok else "NOK"
+                    caption_str = f"📐 Odchylka: {final_deviation}%"
+                
+                if not is_zone_ok:
+                    current_outputs[r_nok] = True
+                    is_entire_mold_ok = False
+                
+                # Formátování popisku přímo v mřížce obrázku podle vzoru Elvac
+                zone_color = "#00FF00" if is_zone_ok else "#FF4B4B"
+                text_color_html = "color:#00FF00;" if is_zone_ok else "color:#FF4B4B; font-weight:bold;"
+                
+                desired_square_size = 500
+                roi_square = live_roi_img.resize((desired_square_size, desired_square_size), Image.Resampling.LANCZOS)
+                draw_sq = ImageDraw.Draw(roi_square)
+                sq_line_w = 10
+                draw_sq.rectangle([0, 0, desired_square_size-1, desired_square_size-1], outline=zone_color, width=sq_line_w)
+                
+                # Vykreslení do mřížky vlevo (čisté jméno zóny, kamera, stav)
+                html_label = f"""
+                    <div style='background-color:#1E1E1E; padding:5px; border-radius:3px; margin-bottom:5px;'>
+                        <span style='color:#FFF; font-weight:bold;'>{r_name}</span><br>
+                        <span style='color:#FFA500; font-size:0.85em;'>{m_camera_name.lower()}</span> | 
+                        <span style='{text_color_html} font-size:0.85em;'>{status_text}</span>
+                    </div>
+                """
+                roi_placeholders[r_id].markdown(html_label, unsafe_allow_html=True)
+                roi_placeholders[r_id].image(roi_square, use_container_width=True, caption=caption_str)
+                
+                # Aktualizace pravého sloupce (Přehledný seznam kontrol s fajfkou/křížkem)
+                if is_zone_ok:
+                    control_placeholders[r_id].markdown(f"🍏 **Kontrola {r_name}** — `OK`", unsafe_allow_html=True)
+                else:
+                    control_placeholders[r_id].markdown(f"🍎 <span style='color:#FF4B4B;'>**Kontrola {r_name}** — `NOK (Výstup {r_nok})`</span>", unsafe_allow_html=True)
+
+            # ZOBRAZENÍ VELKÉHO SIGNALIZAČNÍHO STATUSU (Zelené OK / Červené NOK jako v Elvacu)
+            if is_entire_mold_ok:
+                global_status_placeholder.markdown("""
+                    <div style='background-color:#007D2F; color:white; padding:30px; border-radius:8px; text-align:center; font-size:55px; font-weight:bold; letter-spacing: 3px; box-shadow: 0px 4px 10px rgba(0,0,0,0.3);'>
+                        OK
+                    </div>
+                """, unsafe_allow_html=True)
+            else:
+                global_status_placeholder.markdown("""
+                    <div style='background-color:#C80000; color:white; padding:30px; border-radius:8px; text-align:center; font-size:55px; font-weight:bold; letter-spacing: 3px; box-shadow: 0px 4px 10px rgba(0,0,0,0.3);'>
+                        NOK
+                    </div>
+                """, unsafe_allow_html=True)
+                
+        else:
+            # Klidový stav před spuštěním inspekce lisu
+            global_status_placeholder.markdown("""
+                <div style='background-color:#333333; color:#888888; padding:25px; border-radius:8px; text-align:center; font-size:35px; font-weight:bold;'>
+                    ČEKÁ NA LIS
+                </div>
+            """, unsafe_allow_html=True)
+            for m, r in all_active_rois:
+                roi_placeholders[r[0]].info(f"⏳ Zóna {r[3]} připravena...")
     else:
-        st.warning("⚠️ Vyberte nebo vytvořte projekt.")
+        st.warning("⚠️ Vyberte nebo vytvořte aktivní projekt v konfiguraci.")
 
 # --- TAB 2: MASTER ---
 with tab2:
