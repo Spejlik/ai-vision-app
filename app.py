@@ -172,10 +172,10 @@ with tab1:
                 master_crop = master_full.crop((r[4], r[5], r[4]+r[6], r[5]+r[7]))
                 master_roi_np = np.array(master_crop)
 
-                # Snímání z kamery
+                # Snímání z kamery - nyní přebíráme i automatické jméno z Pylonu
                 import camera_manager
                 CAMERA_SOURCE = 0 
-                live_full_img = camera_manager.capture_live_frame(CAMERA_SOURCE)
+                live_full_img, pylon_camera_name = camera_manager.capture_live_frame(CAMERA_SOURCE)
                 
                 if live_full_img is not None:
                     chosen_file_name = f"Live_{int(time.time())}.jpg"
@@ -188,6 +188,7 @@ with tab1:
                         live_roi_np = np.array(master_crop)
                 else:
                     chosen_file_name = "⚠️ CAM_ERR"
+                    pylon_camera_name = "Odpojeno"
                     live_roi_img = master_crop.resize((500, 500), Image.Resampling.LANCZOS)
                     live_roi_np = np.array(master_crop)
 
@@ -224,11 +225,11 @@ with tab1:
                 sq_line_w = 10
                 draw_sq.rectangle([0, 0, desired_square_size-1, desired_square_size-1], outline=zone_color, width=sq_line_w)
                 
-                # Vykreslení do mřížky vlevo (čisté jméno zóny, kamera, stav)
+                # Vykreslení do mřížky vlevo - nyní bereme automatické pylon_camera_name namísto jména masteru!
                 html_label = f"""
                     <div style='background-color:#1E1E1E; padding:5px; border-radius:3px; margin-bottom:5px;'>
                         <span style='color:#FFF; font-weight:bold;'>{r_name}</span><br>
-                        <span style='color:#FFA500; font-size:0.85em;'>{m_camera_name.lower()}</span> | 
+                        <span style='color:#FFA500; font-size:0.85em; font-weight:bold;'>{pylon_camera_name}</span> | 
                         <span style='{text_color_html} font-size:0.85em;'>{status_text}</span>
                     </div>
                 """
