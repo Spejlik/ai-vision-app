@@ -158,6 +158,26 @@ with tab1:
         current_outputs = {i: False for i in range(1, 9)}
         is_entire_mold_ok = True
         
+        # --- AUTOMATICKÝ MODBUS TRIGGER Z LISU ---
+        if run_engine:
+            import communication_manager
+            
+            # Inicializace modbus klienta v paměti, pokud ještě neběží
+            if "lis_modbus" not in st.session_state:
+                st.session_state.lis_modbus = communication_manager.LisModbusManager(ip_address="192.168.1.200")
+                st.session_state.lis_modbus.connect()
+            
+            # Zjistíme maximální počet pozic, které v projektu operátor naklikal
+            max_pos_count = len(st.session_state.get("available_positions", [1, 2]))
+            
+            # Zkontrolujeme, zda z lisu nepřišel impuls náběžné hrany
+            is_triggered, target_pos = st.session_state.lis_modbus.check_trigger_and_sequence(max_pos_count)
+            
+            if is_triggered:
+                # Lis poslal signál! Přepneme zobrazení i vyhodnocení na pozici, která je na řadě
+                st.session_state.current_run_position = target_pos
+                st.toast(f"⚡ Lis odtriggeroval! Spouštím inspekci pro Pozici {target_pos}", icon="📸")
+                # Zde kód okamžitě pokračuje a vyfotí zóny přiřazené k této aktivní pozici...
         if run_engine and all_active_rois:
             for m, r in all_active_rois:
                 m_path = m[3]
