@@ -9,6 +9,25 @@ import glob
 import numpy as np
 from PIL import Image, ImageDraw
 
+# --- JEDNORÁZOVÁ PRŮMYSLOVÁ POJISTKA PRO ROZŠÍŘENÍ DATABÁZE (ELVAC STANDARD) ---
+def check_database_structure():
+    import sqlite3
+    try:
+        # Připojíme se k naší lokální SQL databázi
+        conn = sqlite3.connect("vision_system.db")
+        cursor = conn.cursor()
+        # Pokusíme se přidat sloupec pro číslo pozice sekvence lisu
+        cursor.execute("ALTER TABLE rois ADD COLUMN position_num INTEGER DEFAULT 1")
+        conn.commit()
+        conn.close()
+        print("📊 Databáze úspěšně rozšířena o sloupec position_num.")
+    except Exception:
+        # Pokud sloupec už existuje, SQLite vyhodí chybu a kód bezpečně pokračuje dál
+        pass
+
+# Spustíme kontrolu hned při startu aplikace
+check_database_structure()
+
 # 1. GLOBÁLNÍ KONFIGURACE A CESTY
 st.set_page_config(layout="wide", page_title="Vision System Terminal")
 
@@ -128,24 +147,30 @@ with tab1:
                         # --- OSTRÉ NAČTENÍ Z REÁLNÉ KAMERY LISU ---
                         import camera_manager
                         
-                        # Zde zadáš buď index USB (0, 1, 2) nebo RTSP adresu tvé IP kamery
-                        # Do budoucna to propojíme s políčkem v záložce I/O
+                        # Zde zadáš buď index USB (0, 1, 2) nebo reálnou Baslerku přes Pylon
                         CAMERA_SOURCE = 0 
                         
                         live_full_img = camera_manager.capture_live_frame(CAMERA_SOURCE)
                         
                         if live_full_img is not None:
-                            # Kamera úspěšně dodala snímek -> provedeme přesný ořez zóny
+                            # Kamera úspěšně dodala snímek -> provedeme přesný ořez zóny podle souřadnic
                             chosen_file_name = f"Live_Kamera_{int(time.time())}.jpg"
-                            live_crop = live_full_img.crop((r[4], r[5], r[4]+r[6], r[5]+r[7]))
-                            live_roi_img = live_crop.resize((500, 500), Image.Resampling.LANCZOS)
-                            live_roi_np = np.array(live_crop.resize((r[6], r[7]), Image.Resampling.LANCZOS))
+                            
+                            # SPRÁVNÝ VÝŘEZ: Řežeme přímo živý snímek z kamery, nikoliv neexistující 'selected_path'
+                            try:
+                                live_crop = live_full_img.crop((r[4], r[5], r[4]+r[6], r[5]+r[7]))
+                                live_roi_img = live_crop.resize((500, 500), Image.Resampling.LANCZOS)
+                                live_roi_np = np.array(live_crop.resize((r[6], r[7]), Image.Resampling.LANCZOS))
+                            except Exception:
+                                # Nouzový fallback pokud by souřadnice zóny neseděly s rozlišením kamery
+                                live_roi_img = master_crop.resize((500, 500), Image.Resampling.LANCZOS)
+                                live_roi_np = np.array(master_crop)
                             
                             # Automaticky uložíme surový snímek do historie pro průběžný sběr dat
                             hist_path = camera_manager.save_live_to_unsorted(active_p, CAMERA_SOURCE, live_crop)
                             database.save_to_history(active_p, r_name, hist_path, "Neroztříděno")
                         else:
-                            # Nouzový fallback pokud kamera vypadne (např. utržený kabel)
+                            # Nouzový fallback pokud kamera úplně vypadne (např. odpojený kabel)
                             chosen_file_name = "⚠️ CHYBA_KAMERY_FALLBACK.png"
                             live_roi_img = master_crop.resize((500, 500), Image.Resampling.LANCZOS)
                             live_roi_np = np.array(master_crop)
@@ -338,6 +363,48 @@ with tab2:
 with tab3:
     active_p = st.session_state.active_project
     st.info(f"🏗️ Nastavení zón pro projekt: **{active_p}**")
+    
+    # --- VODOROVNÝ PÁS POZIC PODLE ELVACU ---
+    st.write("---")
+    st.markdown("### 🗺️ Vyberte pozici pro úpravu (Sekvence lisu)")
+    
+    if "available_positions" not in st.session_state:
+        st.session_state.available_positions = [1, 2]
+    if "current_position" not in st.session_state:
+        st.session_state.current_position = 1
+
+    # Vykreslení tlačítek vedle sebe
+    pos_count = len(st.session_state.available_positions)
+    cols = st.columns(pos_count + 1)
+    
+    for i, pos in enumerate(st.session_state.available_positions):
+        with cols[i]:
+            is_active = (st.session_state.current_position == pos)
+            if st.button(f" Pozice {pos}", key=f"pos_btn_{pos}", type="primary" if is_active else "secondary", use_container_width=True):
+                st.session_state.current_position = pos
+                st.rerun()
+                
+    with cols[-1]:
+        if st.button("➕", key="add_pos_btn", use_container_width=True):
+            new_pos_id = max(st.session_state.available_positions) + 1
+            st.session_state.available_positions.append(new_pos_id)
+            st.session_state.current_position = new_pos_id
+            st.success(f"🎉 Přidána nová pozice {new_pos_id}!")
+            time.sleep(0.4)
+            st.rerun()
+
+    if pos_count > 1:
+        if st.button(f"🗑️ Smazat Pozici {st.session_state.current_position} ze sekvence", use_container_width=True):
+            curr = st.session_state.current_position
+            st.session_state.available_positions.remove(curr)
+            st.session_state.current_position = st.session_state.available_positions[0]
+            st.warning(f"⚠️ Pozice {curr} smazána.")
+            time.sleep(0.4)
+            st.rerun()
+            
+    st.info(f"📍 Aktuálně konfigurujete zóny pro: **Pozice {st.session_state.current_position}**")
+    st.write("---")
+
     all_masters = database.get_all_masters(active_p) if active_p else []
     
     if not all_masters:
@@ -346,7 +413,7 @@ with tab3:
         if 'selected_master_id' not in st.session_state or st.session_state.selected_master_id is None:
             st.session_state.selected_master_id = all_masters[0][0]
 
-        st.write("### 🖼️ Výběr pozice / kamery:")
+        st.write("### 🖼️ Výběr podkladového Masteru / kamery:")
         m_cols = st.columns(6)
         for idx, m in enumerate(all_masters):
             m_id_loop, m_name_loop, m_path_loop = m[0], m[2], m[3]
@@ -380,8 +447,10 @@ with tab3:
                 ztol = st.slider("Tolerance odchylky", 1, 100, 20)
                 
                 if st.button("💾 ULOŽIT NOVOU ZÓNU", type="primary", use_container_width=True):
-                    database.save_roi(m_id, active_p, zn, zx, zy, zw, zh, nok_val, ztol)
-                    st.success("Zóna uložena!")
+                    # Použijeme stávající uložení a v database.py pak zajistíme uložení position_num
+                    database.save_roi(m_id, active_p, zn, zx, zy, zw, zh, nok_val, ztol, st.session_state.current_position)
+                    st.success(f"Zóna {zn} úspěšně uložena do Pozice {st.session_state.current_position}!")
+                    time.sleep(0.4)
                     st.rerun()
                 
                 if all_rois:
