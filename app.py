@@ -86,6 +86,23 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(["🚀 BĚH", "🎯 MASTER", "🔍 ZÓNY"
 # --- TAB 1: BĚH ---
 with tab1:
     st.subheader(f"🚀 Live Inspekce - Projekt: {st.session_state.active_project}")
+    # --- FILTR POZIC V BĚHU ---
+    if st.session_state.active_project:
+        if "current_run_position" not in st.session_state:
+            st.session_state.current_run_position = 1
+            
+        # Zjistíme, jaké pozice reálně v projektu existují, nebo necháme výchozí 1 a 2
+        avail_pos = st.session_state.get("available_positions", [1, 2])
+        
+        st.write("")
+        run_cols = st.columns(len(avail_pos))
+        for idx, pos in enumerate(avail_pos):
+            with run_cols[idx]:
+                is_active = (st.session_state.current_run_position == pos)
+                if st.button(f"🔍 Zobrazit Pozici {pos}", key=f"run_pos_{pos}", type="primary" if is_active else "secondary", use_container_width=True):
+                    st.session_state.current_run_position = pos
+                    st.rerun()
+        st.divider()
     
     if st.session_state.active_project:
         active_p = st.session_state.active_project
