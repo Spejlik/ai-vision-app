@@ -154,63 +154,117 @@ with tab1:
                 r_name = r[3]
                 control_placeholders[r[0]] = st.empty()
                 
-        # --- VYHODNOCOVACÍ SMYČKA ZA BĚHU ---
+        # --- VYHODNOCOVACÍ SMYČKA ZA BĚHU (PROPOJENÍ MOXA -> KAMERA -> AI) ---
         current_outputs = {i: False for i in range(1, 9)}
-        is_entire_mold_ok = True
         
-        # --- AUTOMATICKÝ MODBUS TRIGGER Z LISU ---
         if run_engine:
             import communication_manager
             
-            # Inicializace modbus klienta v paměti, pokud ještě neběží
+            # 1. Inicializace Modbus manažera z haly (pokud ještě neběží)
             if "lis_modbus" not in st.session_state:
-                st.session_state.lis_modbus = communication_manager.LisModbusManager(ip_address="192.168.1.200")
-                st.session_state.lis_modbus.connect()
-            
-            # Zjistíme maximální počet pozic, které v projektu operátor naklikal
+                # Nastavíme IP adresu podle tvé konfigurace z lisu
+                st.session_state.lis_modbus = communication_manager.LisModbusManager(ip_address="10.42.0.167")
+                if st.session_state.lis_modbus.connect():
+                    st.toast("🔌 Úspěšně připojeno k Moxa I/O modulu lisu!", icon="✅")
+                else:
+                    st.toast("⚠️ Moxa neodpovídá. Systém běží v simulačním režimu.", icon="ℹ️")
+
+            # Maximální počet kroků sekvence podle nadefinovaných pozic
             max_pos_count = len(st.session_state.get("available_positions", [1, 2]))
             
-            # Zkontrolujeme, zda z lisu nepřišel impuls náběžné hrany
+            # 2. Kontrola triggeru z lisu (náběžná hrana z registru 0x08)
             is_triggered, target_pos = st.session_state.lis_modbus.check_trigger_and_sequence(max_pos_count)
             
             if is_triggered:
-                # Lis poslal signál! Přepneme zobrazení i vyhodnocení na pozici, která je na řadě
                 st.session_state.current_run_position = target_pos
-                st.toast(f"⚡ Lis odtriggeroval! Spouštím inspekci pro Pozici {target_pos}", icon="📸")
-                # Zde kód okamžitě pokračuje a vyfotí zóny přiřazené k této aktivní pozici...
-        if run_engine and all_active_rois:
-            for m, r in all_active_rois:
-                m_path = m[3]
-                r_id, r_name, r_nok = r[0], r[3], r[8]
-                r_tolerance = r[9] if len(r) > 9 else 20
-                m_camera_name = m[2] # Název masteru bereme jako identifikátor kamery (např. cam1)
+                st.toast(f"⚡ Lis odtriggeroval! Spouštím kontrolu pro Pozici {target_pos}", icon="📸")
                 
-                if os.path.exists(m_path):
-                    master_full = Image.open(m_path).convert("RGB")
-                else:
-                    master_full = Image.new('RGB', (500, 500), color=(30, 30, 30))
-                master_crop = master_full.crop((r[4], r[5], r[4]+r[6], r[5]+r[7]))
-                master_roi_np = np.array(master_crop)
-
-                # Snímání z kamery - nyní přebíráme i automatické jméno z Pylonu
-                import camera_manager
-                CAMERA_SOURCE = 0 
-                live_full_img, pylon_camera_name = camera_manager.capture_live_frame(CAMERA_SOURCE)
+                is_entire_mold_ok = True
                 
-                if live_full_img is not None:
-                    chosen_file_name = f"Live_{int(time.time())}.jpg"
-                    try:
-                        live_crop = live_full_img.crop((r[4], r[5], r[4]+r[6], r[5]+r[7]))
-                        live_roi_img = live_crop.resize((500, 500), Image.Resampling.LANCZOS)
-                        live_roi_np = np.array(live_crop.resize((r[6], r[7]), Image.Resampling.LANCZOS))
-                    except Exception:
-                        live_roi_img = master_crop.resize((500, 500), Image.Resampling.LANCZOS)
-                        live_roi_np = np.array(master_crop)
+                # Projedeme zóny přiřazené k této konkrétní pozici lisu
+                for m, r in all_active_rois:
+                    m_path = m[3]
+                    r_id, r_name, r_nok = r[0], r[3], r[8]
+                    r_tolerance = r[9] if len(r) > 9 else 20
+                    
+                    # Zachycení reálného snímku z Basler kamery přes tvůj camera_manager
+                    live_full_img, pylon_camera_name = camera_manager.capture_live_frame(0)
+                    
+                    if live_full_img is not None:
+                        # Uložení surového snímku z kamery do historie (Unsorted) pro pozdější učení z flashky/historie
+                        timestamp = int(time.time())
+                        ulozeny_raw_soubor = f"C:/Image/Unsorted/{active_p}/basler_{pylon_camera_name}_{timestamp}.jpg"
+                        os.makedirs(os.path.dirname(ulozeny_raw_soubor), exist_ok=True)
+                        live_full_img.save(ulozeny_raw_soubor, "JPEG", quality=95)
+                        
+                        # Zápis do SQLite historie jako 'Neroztříděno'
+                        database.save_to_history(active_p, r_name, ulozeny_raw_soubor, "Neroztříděno")
+                        
+                        # Ořez zóny (ROI) pro vyhodnocení AI
+                        try:
+                            live_crop = live_full_img.crop((r[4], r[5], r[4]+r[6], r[5]+r[7]))
+                            live_roi_img = live_crop.resize((500, 500), Image.Resampling.LANCZOS)
+                        except Exception:
+                            live_roi_img = Image.new('RGB', (500, 500), color=(30, 30, 30))
+                    else:
+                        pylon_camera_name = "Chyba Kamery"
+                        live_roi_img = Image.new('RGB', (500, 500), color=(30, 30, 30))
+                    
+                    # Spuštění AI modelu na oříznutou zónu
+                    model_path = f"models/model_ai_{active_p}_{r_name}.pth"
+                    universal_model_path = f"models/model_ai_{active_p}_Univerzalni_Sit.pth"
+                    active_model = model_path if os.path.exists(model_path) else (universal_model_path if os.path.exists(universal_model_path) else None)
+                    
+                    if active_model:
+                        is_zone_ok, ai_confidence = ai_engine.predict_with_ai(active_model, live_roi_img)
+                        status_text = "OK" if is_zone_ok else "NOK"
+                        caption_str = f"✨ AI Jistota: {int(ai_confidence * 100)}%"
+                    else:
+                        # Fallback na pixelovou odchylku, pokud model ještě není naučený
+                        is_zone_ok = True
+                        status_text = "OK (Bez AI)"
+                        caption_str = "📐 Čeká na model"
+                    
+                    if not is_zone_ok:
+                        current_outputs[r_nok] = True
+                        is_entire_mold_ok = False
+                    
+                    # Vykreslení výsledku do mřížky Streamlitu (Zelená / Červená)
+                    zone_color = "#00FF00" if is_zone_ok else "#FF4B4B"
+                    roi_square = live_roi_img.copy()
+                    draw_sq = ImageDraw.Draw(roi_square)
+                    draw_sq.rectangle([0, 0, 499, 499], outline=zone_color, width=12)
+                    
+                    html_label = f"""
+                        <div style='background-color:#1E1E1E; padding:5px; border-radius:3px; margin-bottom:5px;'>
+                            <span style='color:#FFF; font-weight:bold;'>{r_name}</span><br>
+                            <span style='color:#FFA500; font-size:0.85em;'>{pylon_camera_name}</span> | 
+                            <span style='color:{zone_color}; font-size:0.85em; font-weight:bold;'>{status_text}</span>
+                        </div>
+                    """
+                    roi_placeholders[r_id].markdown(html_label, unsafe_allow_html=True)
+                    roi_placeholders[r_id].image(roi_square, use_container_width=True, caption=caption_str)
+                
+                # 3. Zápis finálního výsledku zpět do lisu přes Modbus (Moxa)
+                # Výstup 1 = OK, Výstup 2 = NOK (zmetek)
+                if st.session_state.lis_modbus.client and st.session_state.lis_modbus.client.is_socket_open():
+                    stav_pro_moxu = 1 if is_entire_mold_ok else 2
+                    st.session_state.lis_modbus.client.write_single_register(address=0, value=stav_pro_moxu)
+                
+                # Aktualizace velkého Elvac statusu (OK/NOK banner)
+                if is_entire_mold_ok:
+                    global_status_placeholder.markdown("<div style='background-color:#007D2F; color:white; padding:30px; border-radius:8px; text-align:center; font-size:55px; font-weight:bold;'>OK</div>", unsafe_allow_html=True)
                 else:
-                    chosen_file_name = "⚠️ CAM_ERR"
-                    pylon_camera_name = "Odpojeno"
-                    live_roi_img = master_crop.resize((500, 500), Image.Resampling.LANCZOS)
-                    live_roi_np = np.array(master_crop)
+                    global_status_placeholder.markdown("<div style='background-color:#C80000; color:white; padding:30px; border-radius:8px; text-align:center; font-size:55px; font-weight:bold;'>NOK</div>", unsafe_allow_html=True)
+            
+            # Krátká pauza smyčky, aby nedošlo k přetížení CPU při čtení Modbusu
+            time.sleep(0.1)
+            st.rerun()
+        else:
+            # Pokud je inspekce vypnutá, odpojíme klienta lisu
+            if "lis_modbus" in st.session_state:
+                st.session_state.lis_modbus.close()
+                del st.session_state.lis_modbus
 
                 # Vyhodnocení AI modelu
                 model_path = f"models/model_ai_{active_p}_{r_name}.pth"
