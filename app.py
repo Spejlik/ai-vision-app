@@ -333,20 +333,20 @@ with tab1:
             # Krátká pauza smyčky, aby nedošlo k přetížení CPU při čtení Modbusu
             time.sleep(0.1)
             st.rerun()
-        else:
-            # KLIDOVÝ STAV - Pokud je přepínač 'run_engine' vypnutý (Čeká na zapnutí operátorem)
-            if "lis_modbus" in st.session_state:
-                st.session_state.lis_modbus.close()
-                del st.session_state.lis_modbus
-                
-            global_status_placeholder.markdown("""
-                <div style='background-color:#333333; color:#888888; padding:25px; border-radius:8px; text-align:center; font-size:35px; font-weight:bold;'>
-                    ČEKÁ NA LIS
-                </div>
-            """, unsafe_allowed_html=True)
-            
-            for m, r in all_active_rois:
-                roi_placeholders[r[0]].info(f"⏳ Zóna {r[3]} připravena...")
+else:
+    # # KLIDOVÝ STAV - Pokud je přepínač 'run_engine' vypnutý (Čeká na zapnutí operátorem)
+    if "lis_modbus" in st.session_state:
+        st.session_state.lis_modbus.close()
+        del st.session_state.lis_modbus
+        
+    global_status_placeholder.markdown("""
+        <div style='background-color:#333333; color:#888888; padding:25px; border-radius:8px; text-align:center; font-size:35px; font-weight:bold;'>
+            ČEKÁ NA LIS
+        </div>
+    """, unsafe_allowed_html=True)
+    
+    for m, r in all_active_rois:
+        roi_placeholders[r[0]].info(f"⏳ Zóna {r[3]} připravena...")
 
 # --- TAB 2: MASTER ---
 with tab2:
