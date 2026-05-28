@@ -317,30 +317,36 @@ with tab1:
                     control_placeholders[r_id].markdown(f"🍎 <span style='color:#FF4B4B;'>**Kontrola {r_name}** — `NOK (Výstup {r_nok})`</span>", unsafe_allow_html=True)
 
             # ZOBRAZENÍ VELKÉHO SIGNALIZAČNÍHO STATUSU (Zelené OK / Červené NOK jako v Elvacu)
-            if is_entire_mold_ok:
-                global_status_placeholder.markdown("""
-                    <div style='background-color:#007D2F; color:white; padding:30px; border-radius:8px; text-align:center; font-size:55px; font-weight:bold; letter-spacing: 3px; box-shadow: 0px 4px 10px rgba(0,0,0,0.3);'>
-                        OK
-                    </div>
-                """, unsafe_allow_html=True)
-            else:
-                global_status_placeholder.markdown("""
-                    <div style='background-color:#C80000; color:white; padding:30px; border-radius:8px; text-align:center; font-size:55px; font-weight:bold; letter-spacing: 3px; box-shadow: 0px 4px 10px rgba(0,0,0,0.3);'>
-                        NOK
-                    </div>
-                """, unsafe_allow_html=True)
+                if is_entire_mold_ok:
+                    global_status_placeholder.markdown("""
+                        <div style='background-color:#007D2F; color:white; padding:30px; border-radius:8px; text-align:center; font-size:55px; font-weight:bold;'>
+                            OK
+                        </div>
+                    """, unsafe_allowed_html=True)
+                else:
+                    global_status_placeholder.markdown("""
+                        <div style='background-color:#C80000; color:white; padding:30px; border-radius:8px; text-align:center; font-size:55px; font-weight:bold;'>
+                            NOK
+                        </div>
+                    """, unsafe_allowed_html=True)
+            
+            # Krátká pauza smyčky, aby nedošlo k přetížení CPU při čtení Modbusu
+            time.sleep(0.1)
+            st.rerun()
+        else:
+            # KLIDOVÝ STAV - Pokud je přepínač 'run_engine' vypnutý (Čeká na zapnutí operátorem)
+            if "lis_modbus" in st.session_state:
+                st.session_state.lis_modbus.close()
+                del st.session_state.lis_modbus
                 
-            else:
-                # Klidový stav před spuštěním inspekce lisu
-                global_status_placeholder.markdown("""
+            global_status_placeholder.markdown("""
                 <div style='background-color:#333333; color:#888888; padding:25px; border-radius:8px; text-align:center; font-size:35px; font-weight:bold;'>
                     ČEKÁ NA LIS
                 </div>
-                """, unsafe_allow_html=True)
+            """, unsafe_allowed_html=True)
+            
             for m, r in all_active_rois:
                 roi_placeholders[r[0]].info(f"⏳ Zóna {r[3]} připravena...")
-            else:
-                st.warning("⚠️ Vyberte nebo vytvořte aktivní projekt v konfiguraci.")
 
 # --- TAB 2: MASTER ---
 with tab2:
