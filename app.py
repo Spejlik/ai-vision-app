@@ -162,7 +162,6 @@ with tab1:
             
             # 1. Inicializace Modbus manažera z haly (pokud ještě neběží)
             if "lis_modbus" not in st.session_state:
-                # Nastavíme IP adresu podle tvé konfigurace z lisu
                 st.session_state.lis_modbus = communication_manager.LisModbusManager(ip_address="10.42.0.167")
                 if st.session_state.lis_modbus.connect():
                     st.toast("🔌 Úspěšně připojeno k Moxa I/O modulu lisu!", icon="✅")
@@ -191,7 +190,7 @@ with tab1:
                     live_full_img, pylon_camera_name = camera_manager.capture_live_frame(0)
                     
                     if live_full_img is not None:
-                        # Uložení surového snímku z kamery do historie (Unsorted) pro pozdější učení z flashky/historie
+                        # Uložení surového snímku z kamery do historie (Unsorted) pro pozdější učení
                         timestamp = int(time.time())
                         ulozeny_raw_soubor = f"C:/Image/Unsorted/{active_p}/basler_{pylon_camera_name}_{timestamp}.jpg"
                         os.makedirs(os.path.dirname(ulozeny_raw_soubor), exist_ok=True)
@@ -244,109 +243,41 @@ with tab1:
                     """
                     roi_placeholders[r_id].markdown(html_label, unsafe_allow_html=True)
                     roi_placeholders[r_id].image(roi_square, use_container_width=True, caption=caption_str)
-                
-                # 3. Zápis finálního výsledku zpět do lisu přes Modbus (Moxa)
-                # Výstup 1 = OK, Výstup 2 = NOK (zmetek)
+                    
+                    # Aktualizace pravého sloupce (Seznam kontrol)
+                    if is_zone_ok:
+                        control_placeholders[r_id].markdown(f"🍏 **Kontrola {r_name}** — `OK`", unsafe_allow_html=True)
+                    else:
+                        control_placeholders[r_id].markdown(f"🍎 <span style='color:#FF4B4B;'>**Kontrola {r_name}** — `NOK (Výstup {r_nok})`</span>", unsafe_allow_html=True)
+
+                # Zápis finálního výsledku zpět do lisu přes Modbus (Moxa)
                 if st.session_state.lis_modbus.client and st.session_state.lis_modbus.client.is_socket_open():
                     stav_pro_moxu = 1 if is_entire_mold_ok else 2
                     st.session_state.lis_modbus.client.write_single_register(address=0, value=stav_pro_moxu)
                 
-                # Aktualizace velkého Elvac statusu (OK/NOK banner)
+                # Aktualizace velkého statusu (OK/NOK banner)
                 if is_entire_mold_ok:
                     global_status_placeholder.markdown("<div style='background-color:#007D2F; color:white; padding:30px; border-radius:8px; text-align:center; font-size:55px; font-weight:bold;'>OK</div>", unsafe_allow_html=True)
                 else:
                     global_status_placeholder.markdown("<div style='background-color:#C80000; color:white; padding:30px; border-radius:8px; text-align:center; font-size:55px; font-weight:bold;'>NOK</div>", unsafe_allow_html=True)
             
-            # Krátká pauza smyčky, aby nedošlo k přetížení CPU při čtení Modbusu
+            # Krátká pauza smyčky, aby nedošlo k přetížení CPU
             time.sleep(0.1)
             st.rerun()
         else:
-            # Pokud je inspekce vypnutá, odpojíme klienta lisu
+            # KLIDOVÝ STAV - Pokud je přepínač vypnutý, odpojíme klienta lisu a vypíšeme status
             if "lis_modbus" in st.session_state:
                 st.session_state.lis_modbus.close()
                 del st.session_state.lis_modbus
-
-                # Vyhodnocení AI modelu
-                model_path = f"models/model_ai_{active_p}_{r_name}.pth"
-                universal_model_path = f"models/model_ai_{active_p}_Univerzalni_Sit.pth"
                 
-                active_model = model_path if os.path.exists(model_path) else (universal_model_path if os.path.exists(universal_model_path) else None)
-
-                if active_model:
-                    is_zone_ok, ai_confidence = ai_engine.predict_with_ai(active_model, live_roi_img)
-                    jistota_procenta = int(ai_confidence * 100)
-                    status_text = "OK" if is_zone_ok else "NOK"
-                    caption_str = f"✨ AI Jistota: {jistota_procenta}%"
-                else:
-                    err = np.sum((master_roi_np.astype("float") - live_roi_np.astype("float")) ** 2)
-                    err /= float(master_roi_np.shape[0] * master_roi_np.shape[1] * master_roi_np.shape[2])
-                    final_deviation = min(100, int(err / 15))
-                    is_zone_ok = final_deviation <= r_tolerance
-                    status_text = "OK" if is_zone_ok else "NOK"
-                    caption_str = f"📐 Odchylka: {final_deviation}%"
-                
-                if not is_zone_ok:
-                    current_outputs[r_nok] = True
-                    is_entire_mold_ok = False
-                
-                # Formátování popisku přímo v mřížce obrázku podle vzoru Elvac
-                zone_color = "#00FF00" if is_zone_ok else "#FF4B4B"
-                text_color_html = "color:#00FF00;" if is_zone_ok else "color:#FF4B4B; font-weight:bold;"
-                
-                desired_square_size = 500
-                roi_square = live_roi_img.resize((desired_square_size, desired_square_size), Image.Resampling.LANCZOS)
-                draw_sq = ImageDraw.Draw(roi_square)
-                sq_line_w = 10
-                draw_sq.rectangle([0, 0, desired_square_size-1, desired_square_size-1], outline=zone_color, width=sq_line_w)
-                
-                # Vykreslení do mřížky vlevo - nyní bereme automatické pylon_camera_name namísto jména masteru!
-                html_label = f"""
-                    <div style='background-color:#1E1E1E; padding:5px; border-radius:3px; margin-bottom:5px;'>
-                        <span style='color:#FFF; font-weight:bold;'>{r_name}</span><br>
-                        <span style='color:#FFA500; font-size:0.85em; font-weight:bold;'>{pylon_camera_name}</span> | 
-                        <span style='{text_color_html} font-size:0.85em;'>{status_text}</span>
-                    </div>
-                """
-                roi_placeholders[r_id].markdown(html_label, unsafe_allow_html=True)
-                roi_placeholders[r_id].image(roi_square, use_container_width=True, caption=caption_str)
-                
-                # Aktualizace pravého sloupce (Přehledný seznam kontrol s fajfkou/křížkem)
-                if is_zone_ok:
-                    control_placeholders[r_id].markdown(f"🍏 **Kontrola {r_name}** — `OK`", unsafe_allow_html=True)
-                else:
-                    control_placeholders[r_id].markdown(f"🍎 <span style='color:#FF4B4B;'>**Kontrola {r_name}** — `NOK (Výstup {r_nok})`</span>", unsafe_allow_html=True)
-
-            # ZOBRAZENÍ VELKÉHO SIGNALIZAČNÍHO STATUSU (Zelené OK / Červené NOK jako v Elvacu)
-                if is_entire_mold_ok:
-                    global_status_placeholder.markdown("""
-                        <div style='background-color:#007D2F; color:white; padding:30px; border-radius:8px; text-align:center; font-size:55px; font-weight:bold;'>
-                            OK
-                        </div>
-                    """, unsafe_allowed_html=True)
-                else:
-                    global_status_placeholder.markdown("""
-                        <div style='background-color:#C80000; color:white; padding:30px; border-radius:8px; text-align:center; font-size:55px; font-weight:bold;'>
-                            NOK
-                        </div>
-                    """, unsafe_allowed_html=True)
+            global_status_placeholder.markdown("""
+                <div style='background-color:#333333; color:#888888; padding:25px; border-radius:8px; text-align:center; font-size:35px; font-weight:bold;'>
+                    ČEKÁ NA LIS
+                </div>
+            """, unsafe_allowed_html=True)
             
-            # Krátká pauza smyčky, aby nedošlo k přetížení CPU při čtení Modbusu
-            time.sleep(0.1)
-            st.rerun()
-else:
-        # # KLIDOVÝ STAV - Pokud je přepínač 'run_engine' vypnutý (Čeká na zapnutí operátorem)
-        if "lis_modbus" in st.session_state:
-            st.session_state.lis_modbus.close()
-            del st.session_state.lis_modbus
-            
-        global_status_placeholder.markdown("""
-            <div style='background-color:#333333; color:#888888; padding:25px; border-radius:8px; text-align:center; font-size:35px; font-weight:bold;'>
-                ČEKÁ NA LIS
-            </div>
-        """, unsafe_allowed_html=True)
-        
-        for m, r in all_active_rois:
-            roi_placeholders[r[0]].info(f"⏳ Zóna {r[3]} připravena...")
+            for m, r in all_active_rois:
+                roi_placeholders[r[0]].info(f"⏳ Zóna {r[3]} připravena...")
 
 # --- TAB 2: MASTER ---
 with tab2:
