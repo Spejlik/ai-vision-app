@@ -274,7 +274,7 @@ with tab1:
                 <div style='background-color:#333333; color:#888888; padding:25px; border-radius:8px; text-align:center; font-size:35px; font-weight:bold;'>
                     ČEKÁ NA LIS
                 </div>
-            """, unsafe_allowed_html=True)
+            """, unsafe_allow_html=True)
             
             for m, r in all_active_rois:
                 roi_placeholders[r[0]].info(f"⏳ Zóna {r[3]} připravena...")
