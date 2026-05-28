@@ -330,17 +330,17 @@ with tab1:
                     </div>
                 """, unsafe_allow_html=True)
                 
-        else:
-            # Klidový stav před spuštěním inspekce lisu
-            global_status_placeholder.markdown("""
+            else:
+                # Klidový stav před spuštěním inspekce lisu
+                global_status_placeholder.markdown("""
                 <div style='background-color:#333333; color:#888888; padding:25px; border-radius:8px; text-align:center; font-size:35px; font-weight:bold;'>
                     ČEKÁ NA LIS
                 </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
             for m, r in all_active_rois:
                 roi_placeholders[r[0]].info(f"⏳ Zóna {r[3]} připravena...")
-    else:
-        st.warning("⚠️ Vyberte nebo vytvořte aktivní projekt v konfiguraci.")
+            else:
+                st.warning("⚠️ Vyberte nebo vytvořte aktivní projekt v konfiguraci.")
 
 # --- TAB 2: MASTER ---
 with tab2:
