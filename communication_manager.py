@@ -12,10 +12,7 @@ class LisModbusManager:
     def connect(self):
         """Naváže spojení s I/O modulem Moxa lisu."""
         return True
-        except Exception as e:
-            print(f"❌ Nelze inicializovat Modbus klienta: {str(e)}")
-            return False
-
+        
     def check_trigger_and_sequence(self, max_positions=2):
         """
         Vyčte registr 0x08 z lisu, hlídá náběžnou hranu triggeru (0 -> 1)
