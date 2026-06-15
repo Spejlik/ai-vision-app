@@ -5,51 +5,32 @@ import numpy as np
 
 def capture_live_frame(camera_source=0):
     """
-    Zachytí snímek z reálné kamery Basler – upraveno pro síťové prostředí Valeo (GigE).
-    Vrací: (pil_image, camera_name)
+    Zachytí snímek z první dostupné GigE kamery na síťové kartě (Elvac standard).
+    Není závislé na jméně ani na sériovém čísle.
     """
     try:
         from pypylon import pylon
         
         tl_factory = pylon.TlFactory.GetInstance()
-        devices = tl_factory.EnumerateDevices()
         
-        camera = None
-        camera_name = "Kamera_Neznama"
+        # ELVAC TRIK: Vytvoříme obecný filtr, který hledá jakoukoli síťovou GigE kameru
+        info = pylon.DeviceInfo()
+        info.SetDeviceClass("BaslerGigE")
         
-        # 1. Pokud detekujeme reálnou kameru
-        if devices:
-            target_device = devices[0]
-            for d in devices:
-                if "Emulation" not in d.GetFriendlyName():
-                    target_device = d
-                    break
-            
-            camera_name = target_device.GetUserDefinedName()
-            if not camera_name:
-                camera_name = target_device.GetFriendlyName().split("(")[0].strip()
-                
-            camera = pylon.InstantCamera(tl_factory.CreateDevice(target_device))
-        
-        # 2. Pokud jedeme na emulátor (Záloha)
-        else:
-            info = pylon.DeviceInfo()
-            info.SetDeviceClass("BaslerCamEmu")
-            camera = pylon.InstantCamera(tl_factory.CreateDevice(info))
-            camera_name = "Basler Emulátor (Kamera 4)"
+        # Inicializace kamery přímo přes tento síťový filtr
+        camera = pylon.InstantCamera(tl_factory.CreateDevice(info))
+        camera_name = "Průmyslová GigE Kamera"
 
-        # --- PRŮMYSLOVÁ KONFIGURACE PRO GIGE SÍTĚ ---
         camera.Open()
         
-        # Ochrana proti zahlcení síťové karty (standard Elvac/Valeo pro stabilní stream)
-        if camera.GetDeviceInfo().GetDeviceClass() == "BaslerGigE":
-            try:
-                camera.GevSCPSPacketSize.SetValue(1500) # Standardní MTU velikost paketů
-                camera.MaxNumBuffer.SetValue(10)        # Čištění a limitace paměťového bufferu
-            except:
-                pass
+        # Nastavení síťových parametrů pro Valeo síť (MTU a stability buffer)
+        try:
+            camera.GevSCPSPacketSize.SetValue(1500)
+            camera.MaxNumBuffer.SetValue(10)
+        except:
+            pass
 
-        # Nastavení formátu barev
+        # Vynucení formátu obrazu
         try: camera.PixelFormat.SetValue("Mono8")
         except:
             try: camera.PixelFormat.SetValue("RGB8")
@@ -73,7 +54,7 @@ def capture_live_frame(camera_source=0):
             return None, "CHYBA_SNÍMÁNÍ"
             
     except Exception as e:
-        # Fallback pro USB webkamery
+        # Nouzová větev pro USB/Webkamery, pokud GigE selže
         try:
             import cv2
             cap = cv2.VideoCapture(camera_source)
@@ -88,7 +69,7 @@ def capture_live_frame(camera_source=0):
 
 def save_live_to_unsorted(project_name, camera_id, image_pil):
     """
-    Uloží živý snímek do průběžného sběru pro Historii.
+    Uloží živý snímek do historie.
     """
     import random
     unsorted_dir = f"C:/Image/Unsorted/{project_name}"
