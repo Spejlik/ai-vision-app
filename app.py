@@ -329,18 +329,17 @@ with tab2:
         with col_img:
             if "Simulovat z kamery" in source_type:
                 if st.button("📸 Zachytit testovací snímek z kamery lisu", use_container_width=True):
-                    target_dir = os.path.join("C:/Image", "OK", active_p)
-                    test_images = []
-                    if os.path.exists(target_dir):
-                        for ext in ["*.jpg", "*.JPG", "*.png", "*.PNG"]:
-                            test_images.extend(glob.glob(os.path.join(target_dir, ext)))
+                    # ZMĚNA: Voláme reálný hardwarový snímek z kamery 0 přes pypylon
+                    live_full_img, pylon_camera_name = camera_manager.capture_live_frame(0)
                     
-                    if test_images:
-                        st.session_state.setup_image_buffer = Image.open(test_images[0]).convert("RGB")
-                        st.success("Reálný snímek z lisu úspěšně načten!")
+                    if live_full_img is not None:
+                        st.session_state.setup_image_buffer = live_full_img
+                        st.success(f"📸 Živý snímek z kamery ({pylon_camera_name}) úspěšně načten z lisu!")
                     else:
                         st.session_state.setup_image_buffer = Image.new('RGB', (640, 480), color=(73, 109, 137))
-                        st.warning(f"Složka '{target_dir}' je prázdná. Použita nouzová modrá plocha.")
+                        st.error("❌ Kamera neodpovídá! Zkontroluj, zda je zapojená a zda je zavřený Pylon Viewer.")
+            else:
+                uploaded_file = st.file_uploader("Vyberte obrázek formy z disku počítače:", type=["jpg", "jpeg", "png", "JPG", "JPEG", "PNG"])
             else:
                 uploaded_file = st.file_uploader("Vyberte obrázek formy z disku počítače:", type=["jpg", "jpeg", "png", "JPG", "JPEG", "PNG"])
                 if uploaded_file is not None:
