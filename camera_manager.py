@@ -18,13 +18,14 @@ def capture_live_frame(camera_source=0):
             
         camera.Open()
         
-        # --- ZÁKLADNÍ VYPNUTÍ AUTOMATIKY ---
-        try: camera.ExposureAuto.SetValue("Off")
-        except: pass
-        try: camera.GainAuto.SetValue("Off")
-        except: pass
-        
-        # --- STABILITA SÍTĚ ---
+        # --- KLÍČOVÝ KROK: Natažení tvého profilu z paměti kamery ---
+        try:
+            camera.UserSetSelector.SetValue("UserSet1")
+            camera.UserSetLoad.Execute()
+        except:
+            pass
+            
+        # Ochrana sítě
         try: camera.GevSCPSPacketSize.SetValue(1500)
         except: pass
         try: camera.MaxNumBuffer.SetValue(10)
