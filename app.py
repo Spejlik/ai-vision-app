@@ -338,8 +338,6 @@ with tab2:
                         st.error("❌ Kamera neodpovídá! Zkontroluj zapojení nebo zavři Pylon Viewer.")
             else:
                 uploaded_file = st.file_uploader("Vyberte obrázek formy z disku počítače:", type=["jpg", "jpeg", "png", "JPG", "JPEG", "PNG"])
-            else:
-                uploaded_file = st.file_uploader("Vyberte obrázek formy z disku počítače:", type=["jpg", "jpeg", "png", "JPG", "JPEG", "PNG"])
                 if uploaded_file is not None:
                     st.session_state.setup_image_buffer = Image.open(uploaded_file).convert("RGB")
                     st.success("Externí soubor úspěšně nahrán do paměti aplikace!")
