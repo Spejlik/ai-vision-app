@@ -329,15 +329,18 @@ with tab2:
         with col_img:
             if "Simulovat z kamery" in source_type:
                 if st.button("📸 Zachytit testovací snímek z kamery lisu", use_container_width=True):
-                    # ZMĚNA: Voláme reálný hardwarový snímek z kamery 0 přes pypylon
+                    # Voláme reálný hardwarový snímek z kamery 0 přes pypylon
                     live_full_img, pylon_camera_name = camera_manager.capture_live_frame(0)
                     
                     if live_full_img is not None:
                         st.session_state.setup_image_buffer = live_full_img
-                        st.success(f"📸 Živý snímek z kamery ({pylon_camera_name}) úspěšně načten z lisu!")
+                        st.success(f"📸 Živý snímek úspěšně načten z lisu!")
+                        
+                        # ZÁPIS DO SUMMARY: Automaticky zapíšeme info o kameře a času pořízení
+                        st.info(f"📝 **Summary (Shrnutí):** Snímek pořízen z průmyslové kamery {pylon_camera_name} dne {time.strftime('%d.%m.%Y v %H:%M:%S')}")
                     else:
                         st.session_state.setup_image_buffer = Image.new('RGB', (640, 480), color=(73, 109, 137))
-                        st.error("❌ Kamera neodpovídá! Zkontroluj, zda je zapojená a zda je zavřený Pylon Viewer.")
+                        st.error("❌ Kamera neodpovídá! Zkontroluj zapojení nebo zavři Pylon Viewer.")
             else:
                 uploaded_file = st.file_uploader("Vyberte obrázek formy z disku počítače:", type=["jpg", "jpeg", "png", "JPG", "JPEG", "PNG"])
             else:
