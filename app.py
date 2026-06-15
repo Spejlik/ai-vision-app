@@ -332,10 +332,12 @@ with tab2:
                 live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM Z KAMERY LISU", key="master_live_stream_toggle")
                 
                 if live_stream_active:
+                    # Pokud je stream aktivní, každou smyčku zavoláme kameru a obnovíme buffer
                     live_full_img, pylon_camera_name = camera_manager.capture_live_frame(0)
                     if live_full_img is not None:
                         st.session_state.setup_image_buffer = live_full_img
                     else:
+                        # Vypíšeme chybu, pokud se nedaří Basler otevřít
                         st.error("❌ Průmyslová kamera Basler neodpovídá! Zkontroluj propojovací kabel nebo IP adresu.")
             else:
                 uploaded_file = st.file_uploader("Vyberte obrázek formy z disku počítače:", type=["jpg", "jpeg", "png", "JPG", "JPEG", "PNG"])
@@ -374,8 +376,9 @@ with tab2:
                         st.session_state.setup_image_buffer = None
                         st.success("Master smazán!")
                         st.rerun()
-                        # Automatická obnova stránky pro plynulé video v záložce MASTER
+                        # Automatická obnova stránky pro plynulé video v záložce MASTER (Live Stream)
         if "Simulovat z kamery" in source_type and st.session_state.get("master_live_stream_toggle", False):
+            # Krátká pauza pro stabilitu a poté vynucený rerun Streamlitu
             time.sleep(0.05)
             st.rerun()
 

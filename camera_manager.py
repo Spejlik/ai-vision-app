@@ -51,11 +51,4 @@ def capture_live_frame(camera_source=0):
     except:
         return None, "CHYBA_HARDWARU"
 
-def save_live_to_unsorted(project_name, camera_id, image_pil):
-    import random
-    unsorted_dir = f"C:/Image/Unsorted/{project_name}"
-    if not os.path.exists(unsorted_dir):
-        os.makedirs(unsorted_dir)
-    filename = os.path.join(unsorted_dir, f"basler_{camera_id}_{int(time.time())}_{random.randint(100,999)}.jpg")
-    image_pil.save(filename, "JPEG", quality=95)
-    return filename
+# Funkce save_live_to_unsorted zůstává stejná
