@@ -327,6 +327,11 @@ with tab2:
                     st.error("❌ Pro uložení musíte zadat název a mít načtený/nahraný obrázek!")
 
         with col_img:
+            source_type = st.radio("Vyberte zdroj:", ["Simulovat z kamery", "Nahrát soubor"])
+    
+            st.write(f"DEBUG: Vybraný zdroj je: {source_type}") # <--- TADY UVIDÍŠ, ZDA JE TO AKTIVNÍ
+    
+            if "Simulovat z kamery" in source_type:
             live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")
             
             if live_stream_active:
