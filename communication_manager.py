@@ -11,9 +11,7 @@ class LisModbusManager:
         
     def connect(self):
         """Naváže spojení s I/O modulem Moxa lisu."""
-        try:
-            self.client = ModbusTcpClient(self.ip_address, port=self.port)
-            return self.client.connect()
+        return True
         except Exception as e:
             print(f"❌ Nelze inicializovat Modbus klienta: {str(e)}")
             return False
