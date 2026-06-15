@@ -5,7 +5,7 @@ import numpy as np
 
 def capture_live_frame(camera_source=0):
     """
-    Zachytí snímek z reálné kamery Basler a vytáhne její hardwarové jméno z Pylonu.
+    Zachytí snímek z reálné kamery Basler – upraveno pro síťové prostředí Valeo (GigE).
     Vrací: (pil_image, camera_name)
     """
     try:
@@ -25,23 +25,31 @@ def capture_live_frame(camera_source=0):
                     target_device = d
                     break
             
-            # Vytáhneme uživatelské jméno kamery nastavené v Pylonu (UserDefinedName), 
-            # pokud není, vezmeme modelové označení (FriendlyName)
             camera_name = target_device.GetUserDefinedName()
             if not camera_name:
                 camera_name = target_device.GetFriendlyName().split("(")[0].strip()
                 
             camera = pylon.InstantCamera(tl_factory.CreateDevice(target_device))
         
-        # 2. Pokud jedeme na emulátor (Příprava v kanclu)
+        # 2. Pokud jedeme na emulátor (Záloha)
         else:
             info = pylon.DeviceInfo()
             info.SetDeviceClass("BaslerCamEmu")
             camera = pylon.InstantCamera(tl_factory.CreateDevice(info))
             camera_name = "Basler Emulátor (Kamera 4)"
 
+        # --- PRŮMYSLOVÁ KONFIGURACE PRO GIGE SÍTĚ ---
         camera.Open()
         
+        # Ochrana proti zahlcení síťové karty (standard Elvac/Valeo pro stabilní stream)
+        if camera.GetDeviceInfo().GetDeviceClass() == "BaslerGigE":
+            try:
+                camera.GevSCPSPacketSize.SetValue(1500) # Standardní MTU velikost paketů
+                camera.MaxNumBuffer.SetValue(10)        # Čištění a limitace paměťového bufferu
+            except:
+                pass
+
+        # Nastavení formátu barev
         try: camera.PixelFormat.SetValue("Mono8")
         except:
             try: camera.PixelFormat.SetValue("RGB8")
@@ -58,14 +66,14 @@ def capture_live_frame(camera_source=0):
                 
             grab_result.ReleaseResult()
             camera.Close()
-            return pil_img, camera_name # Vracíme obrázek i s vyčteným jménem z lisu
+            return pil_img, camera_name
         else:
             grab_result.ReleaseResult()
             camera.Close()
             return None, "CHYBA_SNÍMÁNÍ"
             
     except Exception as e:
-        # Fallback pro USB webkamery nebo situaci bez pypylonu
+        # Fallback pro USB webkamery
         try:
             import cv2
             cap = cv2.VideoCapture(camera_source)
