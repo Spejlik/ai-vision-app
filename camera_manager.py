@@ -22,12 +22,15 @@ def capture_live_frame(camera_source=0):
             
         camera.Open()
         
-        # Nastavení stability pro síť Valeo
+        # --- ZAFIXOVÁNÍ JASU A EXPOZICE (Průmyslový standard) ---
         try:
-            camera.GevSCPSPacketSize.SetValue(1500)
-            camera.MaxNumBuffer.SetValue(10)
+            camera.ExposureAuto.SetValue("Off")
+            camera.GainAuto.SetValue("Off")
         except:
             pass
+        
+        # Nastavení stability pro síť Valeo
+        # ... zbytek kódu pokračuje ...
 
         try: camera.PixelFormat.SetValue("Mono8")
         except:
