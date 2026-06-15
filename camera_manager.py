@@ -27,29 +27,26 @@ def capture_live_frame(camera_source=0, exposure_time=None):
             
         camera.Open()
         
-        # --- AGRESIVNÍ VYPNUTÍ AUTOMATIK ---
-        try:
-            # Nastavení na manuální režim
-            camera.ExposureAuto.SetValue("Off")
-            camera.GainAuto.SetValue("Off")
-            # Pokud kamera podporuje další korekce, vypneme je
-            if camera.GetNodeMap().GetNode("BalanceWhiteAuto"):
-                 camera.BalanceWhiteAuto.SetValue("Off")
-        except Exception as e:
-            pass # Ignorujeme, pokud kamera některý z uzlů nemá
+        # --- BEZPEČNÉ VYPNUTÍ AUTOMATIK ---
+        try: camera.ExposureAuto.SetValue("Off")
+        except: pass
+        try: camera.GainAuto.SetValue("Off")
+        except: pass
+        try: camera.BalanceWhiteAuto.SetValue("Off")
+        except: pass
 
-        # --- NASTAVENÍ MANUÁLNÍ EXPOZICE ---
+        # --- BEZPEČNÉ NASTAVENÍ MANUÁLNÍ EXPOZICE ---
         if exposure_time is not None:
+             try: camera.ExposureMode.SetValue("Timed")
+             except: pass
+             
              try:
-                 # Nastavíme režim expozice na časovaný a předáme hodnotu
-                 camera.ExposureMode.SetValue("Timed")
-                 # Parametr expozice se u novějších modelů jmenuje ExposureTime, u starších ExposureTimeAbs
-                 if camera.GetNodeMap().GetNode("ExposureTime"):
-                     camera.ExposureTime.SetValue(float(exposure_time))
-                 elif camera.GetNodeMap().GetNode("ExposureTimeAbs"):
+                 camera.ExposureTime.SetValue(float(exposure_time))
+             except:
+                 try:
                      camera.ExposureTimeAbs.SetValue(float(exposure_time))
-             except Exception as e:
-                 print(f"Nelze nastavit expozici: {e}")
+                 except:
+                     pass
         
         # Nastavení stability pro síť Valeo
         try:

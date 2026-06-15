@@ -381,9 +381,13 @@ with tab2:
                         st.rerun()
                         # Automatická obnova stránky pro plynulé video v záložce MASTER (Live Stream)
         if "Simulovat z kamery" in source_type and st.session_state.get("master_live_stream_toggle", False):
-            # Krátká pauza pro stabilitu a poté vynucený rerun Streamlitu
-            time.sleep(0.05)
-            st.rerun()
+            if st.session_state.setup_image_buffer is not None:
+                # Vše je v pořádku, můžeme plynule obnovovat video
+                time.sleep(0.05)
+                st.rerun()
+            else:
+                # Došlo k chybě kamery! Zastavíme rerun smyčku, ať chyba nezmizí z obrazovky.
+                st.warning("⚠️ Stream byl automaticky pozastaven kvůli chybě kamery. Chybu vidíte výše.")
 
 # --- TAB 3: ZÓNY ---
 with tab3:
