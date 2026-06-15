@@ -6,7 +6,7 @@ import numpy as np
 def capture_live_frame(camera_source=0):
     """
     Vrátí jeden snímek z první dostupné GigE kamery Basler. 
-    Pokud kamera chybí, vrátí None a přesný text chyby (webkamera notebooku je přísně zakázána).
+    Pokud kamera chybí, vrátí None a přesný text chyby.
     """
     try:
         from pypylon import pylon
@@ -41,16 +41,18 @@ def capture_live_frame(camera_source=0):
                 pil_img = Image.fromarray(img_array).convert("RGB")
             else:
                 pil_img = Image.fromarray(img_array)
-            grab_result.ReleaseResult()
+            
+            # ZDE JE OPRAVA:
+            grab_result.Release()
             camera.Close()
             return pil_img, "Průmyslová GigE Kamera"
         
-        grab_result.ReleaseResult()
+        # ZDE JE OPRAVA:
+        grab_result.Release()
         camera.Close()
         return None, "CHYBA_SNÍMÁNÍ"
         
     except Exception as e:
-        # TADY SE ZACHYTÍ TA PRAVÁ CHYBA OD BASLERU
         return None, str(e)
 
 def save_live_to_unsorted(project_name, camera_id, image_pil):
