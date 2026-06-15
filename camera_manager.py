@@ -3,7 +3,7 @@ import time
 from PIL import Image
 from pypylon import pylon
 
-# Globální instance kamery, aby se neotevírala pořád dokola
+# Globální instance
 _camera = None
 
 def get_camera():
@@ -12,24 +12,17 @@ def get_camera():
         try:
             tl_factory = pylon.TlFactory.GetInstance()
             devices = tl_factory.EnumerateDevices()
-            if not devices:
-                info = pylon.DeviceInfo()
-                info.SetDeviceClass("BaslerGigE")
-                _camera = pylon.InstantCamera(tl_factory.CreateDevice(info))
-            else:
-                _camera = pylon.InstantCamera(tl_factory.CreateDevice(devices[0]))
+            if not devices: return None
             
+            _camera = pylon.InstantCamera(tl_factory.CreateDevice(devices[0]))
             _camera.Open()
-            # Načtení zafixovaného profilu (User Set 1) z Pylon Vieweru
-            try:
-                _camera.UserSetSelector.SetValue("UserSet1")
-                _camera.UserSetLoad.Execute()
-            except: pass
             
-            # Start kontinuálního snímání
+            # --- ZDE JSME DŘÍV MĚLI ÚPRAVY EXPOZICE ---
+            # TEĎ VŠE MAŽEME, ABY KAMERA ZŮSTALA PŘESNĚ TAK, JAK JSI JI NASTAVIL V PYLON VIEWERU
+            
             _camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
         except Exception as e:
-            print(f"Kamera se nespustila: {e}")
+            print(f"Kamera se neotevřela: {e}")
             return None
     return _camera
 
@@ -37,13 +30,17 @@ def capture_live_frame():
     cam = get_camera()
     if cam and cam.IsGrabbing():
         try:
-            # Vyzobne nejnovější snímek z bufferu kamery (timeout 5s)
-            grab_result = cam.RetrieveResult(5000, pylon.TimeoutHandling_ThrowException)
+            # Vyčistíme staré snímky v bufferu, aby tam nezůstávaly "staré" expozice
+            while cam.RetrieveResult(1, pylon.TimeoutHandling_Return).GrabSucceeded():
+                pass
+            
+            # Získáme jen ten úplně nejnovější
+            grab_result = cam.RetrieveResult(2000, pylon.TimeoutHandling_ThrowException)
             if grab_result.GrabSucceeded():
                 img_array = grab_result.Array
                 pil_img = Image.fromarray(img_array).convert("RGB")
                 grab_result.Release()
-                return pil_img, "Kamera Lisu (Cont. Mode)"
+                return pil_img, "OK"
             grab_result.Release()
         except Exception as e:
             return None, str(e)
