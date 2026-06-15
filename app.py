@@ -328,16 +328,22 @@ with tab2:
 
         with col_img:
             if "Simulovat z kamery" in source_type:
+                # --- NOVÝ POSUVNÍK PRO EXPOZICI ---
+                st.write("**Nastavení kamery:**")
+                # Výchozí hodnota expozice (v mikrosekundách). Např. 10000 = 10 ms.
+                # Rozsah závisí na modelu kamery, obvykle 1000 až 50000.
+                exposure_val = st.slider("Délka expozice (světlost obrazu) [µs]", min_value=1000, max_value=50000, value=15000, step=500)
+                
                 live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM Z KAMERY LISU", key="master_live_stream_toggle")
                 
                 if live_stream_active:
-                    live_full_img, error_msg = camera_manager.capture_live_frame(0)
+                    # Předáme nastavenou expozici do manageru
+                    live_full_img, error_msg = camera_manager.capture_live_frame(0, exposure_time=exposure_val)
                     if live_full_img is not None:
                         st.session_state.setup_image_buffer = live_full_img
                     else:
-                        st.session_state.setup_image_buffer = None # SMAŽE ZASEKNUTÝ OBRÁZEK
+                        st.session_state.setup_image_buffer = None
                         st.error(f"❌ Kamera Basler se nepřipojila! Důvod: {error_msg}")
-            else:
                 uploaded_file = st.file_uploader("Vyberte obrázek formy z disku počítače:", type=["jpg", "jpeg", "png", "JPG", "JPEG", "PNG"])
 
             if st.session_state.setup_image_buffer is not None:
