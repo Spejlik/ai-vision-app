@@ -187,7 +187,7 @@ with tab1:
                     r_tolerance = r[9] if len(r) > 9 else 20
                     
                     # Zachycení reálného snímku z Basler kamery přes tvůj camera_manager
-                    live_full_img, pylon_camera_name = camera_manager.capture_live_frame(0)
+                    live_full_img, pylon_camera_name = camera_manager.capture_live_frame()
                     
                     if live_full_img is not None:
                         # Uložení surového snímku z kamery do historie (Unsorted) pro pozdější učení
@@ -327,11 +327,6 @@ with tab2:
                     st.error("❌ Pro uložení musíte zadat název a mít načtený/nahraný obrázek!")
 
         with col_img:
-            source_type = st.radio("Vyberte zdroj:", ["Simulovat z kamery", "Nahrát soubor"])
-    
-            st.write(f"DEBUG: Vybraný zdroj je: {source_type}") # <--- TADY UVIDÍŠ, ZDA JE TO AKTIVNÍ
-    
-        if "Simulovat z kamery" in source_type:
             live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")
             
             if live_stream_active:
@@ -340,21 +335,26 @@ with tab2:
                     st.session_state.setup_image_buffer = live_full_img
                 else:
                     st.error(f"❌ {error_msg}")
-            
-            # --- VYKRESLENÍ NÁHLEDU (zde zůstává tvůj původní kód s draw.rectangle) ---
+
+            # VYKRESLENÍ (pouze pokud máme data)
             if st.session_state.setup_image_buffer is not None:
                 preview_img = st.session_state.setup_image_buffer.copy()
                 img_w, img_h = preview_img.size
                 
+                # Bezpečné ořezy
                 safe_ax = min(ax, img_w - 10)
                 safe_ay = min(ay, img_h - 10)
                 safe_aw = min(aw, img_w - safe_ax)
                 safe_ah = min(ah, img_h - safe_ay)
                 
-                master_line_w = max(2, int(img_w * 0.01))
                 draw = ImageDraw.Draw(preview_img)
-                draw.rectangle([safe_ax, safe_ay, safe_ax + safe_aw, safe_ay + safe_ah], outline="red", width=master_line_w)
-                st.image(preview_img, use_container_width=True, caption=f"Aktuální podklad ({img_w}x{img_h} px)")
+                draw.rectangle([safe_ax, safe_ay, safe_ax + safe_aw, safe_ay + safe_ah], outline="red", width=5)
+                st.image(preview_img, use_container_width=True)
+
+        # OBNOVA STRÁNKY (pouze pokud je stream aktivní a máme buffer)
+        if st.session_state.get("master_live_stream_toggle") and st.session_state.setup_image_buffer is not None:
+            time.sleep(0.05)
+            st.rerun()
 
         st.write("---")
         st.write("📋 **Aktuální Master snímky v tomto projektu:**")
