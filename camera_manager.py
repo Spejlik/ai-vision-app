@@ -3,7 +3,7 @@ import time
 from PIL import Image
 from pypylon import pylon
 
-# Globální proměnná pro udržení kamery v paměti
+# Globální instance kamery, aby se neotevírala pořád dokola
 _camera = None
 
 def get_camera():
@@ -20,16 +20,16 @@ def get_camera():
                 _camera = pylon.InstantCamera(tl_factory.CreateDevice(devices[0]))
             
             _camera.Open()
-            # Načtení User Set 1 (tvůj zafixovaný profil)
+            # Načtení zafixovaného profilu (User Set 1) z Pylon Vieweru
             try:
                 _camera.UserSetSelector.SetValue("UserSet1")
                 _camera.UserSetLoad.Execute()
             except: pass
             
-            # Spuštění kontinuálního snímání
+            # Start kontinuálního snímání
             _camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
         except Exception as e:
-            print(f"Chyba při inicializaci: {e}")
+            print(f"Kamera se nespustila: {e}")
             return None
     return _camera
 
@@ -37,7 +37,7 @@ def capture_live_frame():
     cam = get_camera()
     if cam and cam.IsGrabbing():
         try:
-            # Vyzobne nejnovější snímek z bufferu bez čekání na hardware
+            # Vyzobne nejnovější snímek z bufferu kamery (timeout 5s)
             grab_result = cam.RetrieveResult(5000, pylon.TimeoutHandling_ThrowException)
             if grab_result.GrabSucceeded():
                 img_array = grab_result.Array
@@ -45,6 +45,6 @@ def capture_live_frame():
                 grab_result.Release()
                 return pil_img, "Kamera Lisu (Cont. Mode)"
             grab_result.Release()
-        except:
-            return None, "CHYBA_STREAMU"
-    return None, "KAMERA_NEBĚŽÍ"
+        except Exception as e:
+            return None, str(e)
+    return None, "Kamera neběží"

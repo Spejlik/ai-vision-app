@@ -333,16 +333,10 @@ with tab2:
                 live_full_img, error_msg = camera_manager.capture_live_frame()
                 if live_full_img:
                     st.session_state.setup_image_buffer = live_full_img
-                    # VYKRESLENÍ... (tady ponech ten samý kód pro ImageDraw a st.image, co máš)
                 else:
                     st.error(f"❌ {error_msg}")
-            else:
-                uploaded_file = st.file_uploader("Vyberte obrázek formy z disku počítače:", type=["jpg", "jpeg", "png", "JPG", "JPEG", "PNG"])
-                if uploaded_file is not None:
-                    st.session_state.setup_image_buffer = Image.open(uploaded_file).convert("RGB")
-                    st.success("Externí soubor úspěšně nahrán do paměti aplikace!")
-
-            # --- VYKRESLENÍ NÁHLEDU ---
+            
+            # --- VYKRESLENÍ NÁHLEDU (zde zůstává tvůj původní kód s draw.rectangle) ---
             if st.session_state.setup_image_buffer is not None:
                 preview_img = st.session_state.setup_image_buffer.copy()
                 img_w, img_h = preview_img.size
