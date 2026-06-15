@@ -5,38 +5,45 @@ import numpy as np
 
 def capture_live_frame(camera_source=0):
     """
-    Zachytí snímek z první dostupné GigE kamery na síťové kartě (Elvac standard).
-    Není závislé na jméně ani na sériovém čísle.
+    Zachytí snímek z první dostupné GigE kamery (Elvac / Valeo standard).
+    V případě chyby vypíše hlášku přímo na obrazovku.
     """
     try:
         from pypylon import pylon
+        import streamlit as st
         
+        # Inicializace továrny pro síťová zařízení
         tl_factory = pylon.TlFactory.GetInstance()
+        devices = tl_factory.EnumerateDevices()
         
-        # ELVAC TRIK: Vytvoříme obecný filtr, který hledá jakoukoli síťovou GigE kameru
-        info = pylon.DeviceInfo()
-        info.SetDeviceClass("BaslerGigE")
-        
-        # Inicializace kamery přímo přes tento síťový filtr
-        camera = pylon.InstantCamera(tl_factory.CreateDevice(info))
+        # Pokud Enumerate selže, vynutíme GigE specifikaci přímo v transportní vrstvě
+        if not devices:
+            info = pylon.DeviceInfo()
+            info.SetDeviceClass("BaslerGigE")
+            camera = pylon.InstantCamera(tl_factory.CreateDevice(info))
+        else:
+            # Vezmeme první nalezené síťové zařízení
+            camera = pylon.InstantCamera(tl_factory.CreateDevice(devices[0]))
+            
         camera_name = "Průmyslová GigE Kamera"
 
+        # Otevření kamery
         camera.Open()
         
-        # Nastavení síťových parametrů pro Valeo síť (MTU a stability buffer)
+        # Nastavení stability sítě a MTU paketů
         try:
             camera.GevSCPSPacketSize.SetValue(1500)
             camera.MaxNumBuffer.SetValue(10)
         except:
             pass
 
-        # Vynucení formátu obrazu
+        # Vynucení formátu
         try: camera.PixelFormat.SetValue("Mono8")
         except:
             try: camera.PixelFormat.SetValue("RGB8")
             except: pass
             
-        grab_result = camera.GrabOne(2000)
+        grab_result = camera.GrabOne(3000) # Prodloužený timeout na 3 sekundy
         
         if grab_result.GrabSucceeded():
             img_array = grab_result.Array
@@ -51,31 +58,19 @@ def capture_live_frame(camera_source=0):
         else:
             grab_result.ReleaseResult()
             camera.Close()
-            return None, "CHYBA_SNÍMÁNÍ"
+            return None, "CHYBA_TIMEOUT_SNIMANI"
             
     except Exception as e:
-        # Nouzová větev pro USB/Webkamery, pokud GigE selže
-        try:
-            import cv2
-            cap = cv2.VideoCapture(camera_source)
-            ret, frame = cap.read()
-            cap.release()
-            if ret and frame is not None:
-                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                return Image.fromarray(rgb_frame), f"USB Kamera {camera_source}"
-        except:
-            pass
+        # ZMĚNA: Už žádné tiché OpenCV, vypíšeme chybu přímo uživateli do Streamlitu!
+        import streamlit as st
+        st.error(f"💥 Hardwarová chyba Pylonu: {str(e)}")
         return None, "CHYBA_HARDWARU"
 
 def save_live_to_unsorted(project_name, camera_id, image_pil):
-    """
-    Uloží živý snímek do historie.
-    """
     import random
     unsorted_dir = f"C:/Image/Unsorted/{project_name}"
     if not os.path.exists(unsorted_dir):
         os.makedirs(unsorted_dir)
-        
     filename = os.path.join(unsorted_dir, f"basler_{camera_id}_{int(time.time())}_{random.randint(100,999)}.jpg")
     image_pil.save(filename, "JPEG", quality=95)
     return filename
