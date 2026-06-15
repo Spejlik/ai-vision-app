@@ -347,7 +347,7 @@ with tab2:
                     st.session_state.setup_image_buffer = Image.open(uploaded_file).convert("RGB")
                     st.success("Externí soubor úspěšně nahrán do paměti aplikace!")
 
-            # --- VYKRESLENÍ NÁHLEDU (Tohle nám chybělo) ---
+            # --- VYKRESLENÍ NÁHLEDU (SROVNANÉ ODSÁZENÍ) ---
             if st.session_state.setup_image_buffer is not None:
                 preview_img = st.session_state.setup_image_buffer.copy()
                 img_w, img_h = preview_img.size
