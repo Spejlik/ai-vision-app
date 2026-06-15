@@ -14,14 +14,8 @@ class LisModbusManager:
         return True
         
     def check_trigger_and_sequence(self, max_positions=2):
-        """
-        Vyčte registr 0x08 z lisu, hlídá náběžnou hranu triggeru (0 -> 1)
-        and automaticky posouvá kroky sekvence.
-        Vrací: (True, aktualni_pozice) pokud lis zrovna odtriggeroval, jinak (False, None)
-        """
-        if not self.client or not self.client.is_socket_open():
-            if not self.connect():
-                return False, None
+        """Simulované čtení registru lisu - upraveno pro test kamer."""
+        return False, None
 
         try:
             # Čteme holding registry od adresy 8 (přesně jako Elvac read_holding_registers(0x08, 8))
