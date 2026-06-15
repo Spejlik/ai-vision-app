@@ -1,65 +1,50 @@
 import os
 import time
 from PIL import Image
-import numpy as np
+from pypylon import pylon
 
-def capture_live_frame(camera_source=0):
-    try:
-        from pypylon import pylon
-        tl_factory = pylon.TlFactory.GetInstance()
-        devices = tl_factory.EnumerateDevices()
-        
-        if not devices:
-            info = pylon.DeviceInfo()
-            info.SetDeviceClass("BaslerGigE")
-            camera = pylon.InstantCamera(tl_factory.CreateDevice(info))
-        else:
-            camera = pylon.InstantCamera(tl_factory.CreateDevice(devices[0]))
-            
-        camera.Open()
-        
-        # --- KLÍČOVÝ KROK: Natažení tvého profilu z paměti kamery ---
+# Globální proměnná pro udržení kamery v paměti
+_camera = None
+
+def get_camera():
+    global _camera
+    if _camera is None:
         try:
-            camera.UserSetSelector.SetValue("UserSet1")
-            camera.UserSetLoad.Execute()
-        except:
-            pass
+            tl_factory = pylon.TlFactory.GetInstance()
+            devices = tl_factory.EnumerateDevices()
+            if not devices:
+                info = pylon.DeviceInfo()
+                info.SetDeviceClass("BaslerGigE")
+                _camera = pylon.InstantCamera(tl_factory.CreateDevice(info))
+            else:
+                _camera = pylon.InstantCamera(tl_factory.CreateDevice(devices[0]))
             
-        # Ochrana sítě
-        try: camera.GevSCPSPacketSize.SetValue(1500)
-        except: pass
-        try: camera.MaxNumBuffer.SetValue(10)
-        except: pass
-
-        try: camera.PixelFormat.SetValue("Mono8")
-        except:
-            try: camera.PixelFormat.SetValue("RGB8")
+            _camera.Open()
+            # Načtení User Set 1 (tvůj zafixovaný profil)
+            try:
+                _camera.UserSetSelector.SetValue("UserSet1")
+                _camera.UserSetLoad.Execute()
             except: pass
             
-        grab_result = camera.GrabOne(1000)
-        if grab_result.GrabSucceeded():
-            img_array = grab_result.Array
-            if len(img_array.shape) == 2:
-                pil_img = Image.fromarray(img_array).convert("RGB")
-            else:
-                pil_img = Image.fromarray(img_array)
-            
-            grab_result.Release()
-            camera.Close()
-            return pil_img, "Kamera Lisu"
-        
-        grab_result.Release()
-        camera.Close()
-        return None, "CHYBA_SNÍMÁNÍ"
-        
-    except Exception as e:
-        return None, str(e)
+            # Spuštění kontinuálního snímání
+            _camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
+        except Exception as e:
+            print(f"Chyba při inicializaci: {e}")
+            return None
+    return _camera
 
-def save_live_to_unsorted(project_name, camera_id, image_pil):
-    import random
-    unsorted_dir = f"C:/Image/Unsorted/{project_name}"
-    if not os.path.exists(unsorted_dir):
-        os.makedirs(unsorted_dir)
-    filename = os.path.join(unsorted_dir, f"basler_{camera_id}_{int(time.time())}_{random.randint(100,999)}.jpg")
-    image_pil.save(filename, "JPEG", quality=95)
-    return filename
+def capture_live_frame():
+    cam = get_camera()
+    if cam and cam.IsGrabbing():
+        try:
+            # Vyzobne nejnovější snímek z bufferu bez čekání na hardware
+            grab_result = cam.RetrieveResult(5000, pylon.TimeoutHandling_ThrowException)
+            if grab_result.GrabSucceeded():
+                img_array = grab_result.Array
+                pil_img = Image.fromarray(img_array).convert("RGB")
+                grab_result.Release()
+                return pil_img, "Kamera Lisu (Cont. Mode)"
+            grab_result.Release()
+        except:
+            return None, "CHYBA_STREAMU"
+    return None, "KAMERA_NEBĚŽÍ"

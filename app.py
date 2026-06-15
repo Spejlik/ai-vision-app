@@ -327,16 +327,15 @@ with tab2:
                     st.error("❌ Pro uložení musíte zadat název a mít načtený/nahraný obrázek!")
 
         with col_img:
-            if "Simulovat z kamery" in source_type:
-                live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM Z KAMERY LISU", key="master_live_stream_toggle")
-                
-                if live_stream_active:
-                    live_full_img, error_msg = camera_manager.capture_live_frame(0)
-                    if live_full_img is not None:
-                        st.session_state.setup_image_buffer = live_full_img
-                    else:
-                        st.session_state.setup_image_buffer = None
-                        st.error(f"❌ Chyba kamery: {error_msg}")
+            live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")
+            
+            if live_stream_active:
+                live_full_img, error_msg = camera_manager.capture_live_frame()
+                if live_full_img:
+                    st.session_state.setup_image_buffer = live_full_img
+                    # VYKRESLENÍ... (tady ponech ten samý kód pro ImageDraw a st.image, co máš)
+                else:
+                    st.error(f"❌ {error_msg}")
             else:
                 uploaded_file = st.file_uploader("Vyberte obrázek formy z disku počítače:", type=["jpg", "jpeg", "png", "JPG", "JPEG", "PNG"])
                 if uploaded_file is not None:
