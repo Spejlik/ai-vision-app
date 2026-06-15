@@ -328,26 +328,22 @@ with tab2:
 
         with col_img:
             if "Simulovat z kamery" in source_type:
-                # --- POSUVNÍK PRO EXPOZICI ---
-                st.write("**Nastavení kamery:**")
-                exposure_val = st.slider("Délka expozice (světlost obrazu) [µs]", min_value=1000, max_value=50000, value=15000, step=500)
-                
                 live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM Z KAMERY LISU", key="master_live_stream_toggle")
                 
                 if live_stream_active:
-                    live_full_img, error_msg = camera_manager.capture_live_frame(0, exposure_time=exposure_val)
+                    live_full_img, error_msg = camera_manager.capture_live_frame(0)
                     if live_full_img is not None:
                         st.session_state.setup_image_buffer = live_full_img
                     else:
                         st.session_state.setup_image_buffer = None
-                        st.error(f"❌ Kamera Basler se nepřipojila! Důvod: {error_msg}")
+                        st.error(f"❌ Chyba kamery: {error_msg}")
             else:
                 uploaded_file = st.file_uploader("Vyberte obrázek formy z disku počítače:", type=["jpg", "jpeg", "png", "JPG", "JPEG", "PNG"])
                 if uploaded_file is not None:
                     st.session_state.setup_image_buffer = Image.open(uploaded_file).convert("RGB")
                     st.success("Externí soubor úspěšně nahrán do paměti aplikace!")
 
-            # --- VYKRESLENÍ NÁHLEDU (Tohle nám chybělo) ---
+            # --- VYKRESLENÍ NÁHLEDU ---
             if st.session_state.setup_image_buffer is not None:
                 preview_img = st.session_state.setup_image_buffer.copy()
                 img_w, img_h = preview_img.size
@@ -379,11 +375,13 @@ with tab2:
                         st.session_state.setup_image_buffer = None
                         st.success("Master smazán!")
                         st.rerun()
-                        # Automatická obnova stránky pro plynulé video v záložce MASTER (Live Stream)
+                        # --- BEZPEČNÁ OBNOVA STRÁNKY PRO VIDEO ---
         if "Simulovat z kamery" in source_type and st.session_state.get("master_live_stream_toggle", False):
-            # Krátká pauza pro stabilitu a poté vynucený rerun Streamlitu
-            time.sleep(0.05)
-            st.rerun()
+            if st.session_state.setup_image_buffer is not None:
+                time.sleep(0.05)
+                st.rerun()
+            else:
+                st.warning("⚠️ Stream pozastaven kvůli chybě kamery.")
 
 # --- TAB 3: ZÓNY ---
 with tab3:

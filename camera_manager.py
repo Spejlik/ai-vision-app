@@ -3,7 +3,7 @@ import time
 from PIL import Image
 import numpy as np
 
-def capture_live_frame(camera_source=0, exposure_time=None):
+def capture_live_frame(camera_source=0):
     try:
         from pypylon import pylon
         tl_factory = pylon.TlFactory.GetInstance()
@@ -18,34 +18,13 @@ def capture_live_frame(camera_source=0, exposure_time=None):
             
         camera.Open()
         
-        # --- 1. ZÁKAZ AUTOMATIKY (Hluboký přístup přes NodeMap) ---
-        nodemap = camera.GetNodeMap()
-        for auto_feature in ["ExposureAuto", "GainAuto", "BalanceWhiteAuto"]:
-            try:
-                node = nodemap.GetNode(auto_feature)
-                if node and node.IsWritable():
-                    node.SetValue("Off")
-            except: pass
-
-        # --- 2. MANUÁLNÍ EXPOZICE (Vynucení hodnoty z posuvníku) ---
-        if exposure_time is not None:
-            try:
-                exp_mode = nodemap.GetNode("ExposureMode")
-                if exp_mode and exp_mode.IsWritable():
-                    exp_mode.SetValue("Timed")
-            except: pass
-            
-            try:
-                exp_time = nodemap.GetNode("ExposureTime")
-                if exp_time and exp_time.IsWritable():
-                    exp_time.SetValue(float(exposure_time))
-                else:
-                    exp_time_abs = nodemap.GetNode("ExposureTimeAbs")
-                    if exp_time_abs and exp_time_abs.IsWritable():
-                        exp_time_abs.SetValue(float(exposure_time))
-            except: pass
+        # --- ZÁKLADNÍ VYPNUTÍ AUTOMATIKY ---
+        try: camera.ExposureAuto.SetValue("Off")
+        except: pass
+        try: camera.GainAuto.SetValue("Off")
+        except: pass
         
-        # --- 3. SÍŤ A FORMÁT ---
+        # --- STABILITA SÍTĚ ---
         try: camera.GevSCPSPacketSize.SetValue(1500)
         except: pass
         try: camera.MaxNumBuffer.SetValue(10)
