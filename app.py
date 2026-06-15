@@ -328,22 +328,17 @@ with tab2:
 
         with col_img:
             if "Simulovat z kamery" in source_type:
-                # ZMĚNA: Přepínač na trvalý Live Stream z Baslera místo statického mačkání tlačítka
                 live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM Z KAMERY LISU", key="master_live_stream_toggle")
                 
                 if live_stream_active:
-                    # Pokud je stream aktivní, každou smyčku zavoláme kameru a obnovíme buffer
-                    live_full_img, pylon_camera_name = camera_manager.capture_live_frame(0)
+                    live_full_img, error_msg = camera_manager.capture_live_frame(0)
                     if live_full_img is not None:
                         st.session_state.setup_image_buffer = live_full_img
                     else:
-                        # Vypíšeme chybu, pokud se nedaří Basler otevřít
-                        st.error("❌ Průmyslová kamera Basler neodpovídá! Zkontroluj propojovací kabel nebo IP adresu.")
+                        st.session_state.setup_image_buffer = None # SMAŽE ZASEKNUTÝ OBRÁZEK
+                        st.error(f"❌ Kamera Basler se nepřipojila! Důvod: {error_msg}")
             else:
                 uploaded_file = st.file_uploader("Vyberte obrázek formy z disku počítače:", type=["jpg", "jpeg", "png", "JPG", "JPEG", "PNG"])
-                if uploaded_file is not None:
-                    st.session_state.setup_image_buffer = Image.open(uploaded_file).convert("RGB")
-                    st.success("Externí soubor úspěšně nahrán do paměti aplikace!")
 
             if st.session_state.setup_image_buffer is not None:
                 preview_img = st.session_state.setup_image_buffer.copy()
