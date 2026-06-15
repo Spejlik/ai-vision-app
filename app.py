@@ -347,7 +347,7 @@ with tab2:
                     st.session_state.setup_image_buffer = Image.open(uploaded_file).convert("RGB")
                     st.success("Externí soubor úspěšně nahrán do paměti aplikace!")
 
-            # --- VYKRESLENÍ NÁHLEDU (SROVNANÉ ODSÁZENÍ) ---
+            # --- VYKRESLENÍ NÁHLEDU (Tohle nám chybělo) ---
             if st.session_state.setup_image_buffer is not None:
                 preview_img = st.session_state.setup_image_buffer.copy()
                 img_w, img_h = preview_img.size
@@ -381,13 +381,9 @@ with tab2:
                         st.rerun()
                         # Automatická obnova stránky pro plynulé video v záložce MASTER (Live Stream)
         if "Simulovat z kamery" in source_type and st.session_state.get("master_live_stream_toggle", False):
-            if st.session_state.setup_image_buffer is not None:
-                # Vše je v pořádku, můžeme plynule obnovovat video
-                time.sleep(0.05)
-                st.rerun()
-            else:
-                # Došlo k chybě kamery! Zastavíme rerun smyčku, ať chyba nezmizí z obrazovky.
-                st.warning("⚠️ Stream byl automaticky pozastaven kvůli chybě kamery. Chybu vidíte výše.")
+            # Krátká pauza pro stabilitu a poté vynucený rerun Streamlitu
+            time.sleep(0.05)
+            st.rerun()
 
 # --- TAB 3: ZÓNY ---
 with tab3:
