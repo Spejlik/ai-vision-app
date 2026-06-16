@@ -6,39 +6,36 @@ _camera = None
 _last_exposure = None
 _last_gain = None
 
+import time
+from PIL import Image
+from pypylon import pylon
+import streamlit as st
+
+# Bezpečné sdílení jedné instance kamery napříč celým Streamlitem
 def get_camera():
-    global _camera
-    if _camera is None:
-        try:
-            tl_factory = pylon.TlFactory.GetInstance()
-            devices = tl_factory.EnumerateDevices()
-            if not devices: 
-                return None
-            
-            # Elvac sychr: Vytvoříme zařízení s požadavkem na kontrolu (Exclusive Access)
-            device_info = devices[0]
-            _camera = pylon.InstantCamera(tl_factory.CreateDevice(device_info))
-            _camera.Open()
-            
-            # Pokud se druhá aplikace pokouší kameru ovládat, toto vynutí ignorování externích triggerů
-            try:
-                nodemap = _camera.GetNodeMap()
-                # Pokud kamera visí v režimu Continuous triggeru z Moxa modulu, přepneme ji na softwarový
-                trigger_selector = nodemap.GetNode("TriggerSelector")
-                if trigger_selector is not None:
-                    trigger_selector.SetValue("FrameStart")
-                    trigger_mode = nodemap.GetNode("TriggerMode")
-                    if trigger_mode is not None:
-                        trigger_mode.SetValue("Off")
-            except:
-                pass
-                
-            _camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
-            print("🍏 Kamera úspěšně otevřena v režimu Exclusive Access.")
-        except Exception as e:
-            print(f"⚠️ Chyba inicializace kamery (přístup blokován jinou aplikací): {e}")
-            _camera = None
+    # Pokud kamera už existuje a funguje, okamžitě ji vrátíme a znovu NEOTVÍRÁME
+    if "pylon_camera_instance" in st.session_state and st.session_state.pylon_camera_instance is not None:
+        if st.session_state.pylon_camera_instance.IsOpen() and st.session_state.pylon_camera_instance.IsGrabbing():
+            return st.session_state.pylon_camera_instance
+
+    try:
+        tl_factory = pylon.TlFactory.GetInstance()
+        devices = tl_factory.EnumerateDevices()
+        if not devices: 
             return None
+        
+        # Vytvoření instance a trvalé uložení do paměti aplikace
+        cam = pylon.InstantCamera(tl_factory.CreateDevice(devices[0]))
+        cam.Open()
+        cam.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
+        
+        st.session_state.pylon_camera_instance = cam
+        print("🍏 [HARDWARE] Kamera úspěšně inicializována do permanentní session.")
+        return cam
+    except Exception as e:
+        print(f"⚠️ [HARDWARE] Kritická chyba otevírání kamery: {e}")
+        st.session_state.pylon_camera_instance = None
+        return None
     return _camera
 
 def capture_live_frame(*args, **kwargs):

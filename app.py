@@ -347,9 +347,8 @@ with tab2:
         with col_img:
             live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")
             
-            if live_stream_active:
-                # 🍏 ELVAC STANDARD: Voláme bez argumentů. Kamera jede čistě podle PFS profilu, 
-                # což okamžitě zastaví červené křížky v konzoli a stabilizuje obraz.
+           if live_stream_active:
+                # Voláme čistě bez jakýchkoliv argumentů, parametry řídí jednorázové PFS tlačítko
                 live_full_img, error_msg = camera_manager.capture_live_frame()
                 if live_full_img:
                     st.session_state.setup_image_buffer = live_full_img
