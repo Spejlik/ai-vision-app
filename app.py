@@ -98,7 +98,7 @@ with tab1:
             
         avail_pos = st.session_state.get("available_positions", [1, 2])
         
-        # Vodorovný panel pro výběr aktuálního kroku sekvence
+        # Vodorovný panel pro výběr aktuálního kroku sekvence v TAB 1
         run_pos_cols = st.columns(len(avail_pos) + 2)
         with run_pos_cols[0]:
             st.markdown("<p style='padding-top:25px; font-weight:bold; margin:0;'>📍 Krok sekvence:</p>", unsafe_allow_html=True)
@@ -107,10 +107,12 @@ with tab1:
             with run_pos_cols[idx + 1]:
                 st.write("") # Zarovnání
                 is_active = (st.session_state.current_run_position == pos)
-                if st.button(f"Pozice {pos}", key=f"run_pos_{pos}", type="primary" if is_active else "secondary", use_container_width=True):
+                
+                # 🍏 OPRAVA KLÍČE PRO TAB 1 (přidán prefix run_tab_pos_)
+                if st.button(f"Pozice {pos}", key=f"run_tab_pos_{pos}", type="primary" if is_active else "secondary", use_container_width=True):
                     st.session_state.current_run_position = pos
                     
-                    # 🍏 Bezpečné získání názvu aktivního projektu ze session_state
+                    # Bezpečné získání názvu aktivního projektu ze session_state
                     proj_name = st.session_state.get("active_project", "Default_Project")
                     
                     # Načtení PFS konfigurace
@@ -421,26 +423,28 @@ with tab3:
     if "current_position" not in st.session_state:
         st.session_state.current_position = 1
 
-    # Vykreslení tlačítek vedle sebe
+    # Vykreslení tlačítek vedle sebe v TAB 3
     pos_count = len(st.session_state.available_positions)
     cols = st.columns(pos_count + 1)
     
     for i, pos in enumerate(st.session_state.available_positions):
         with cols[i]:
             is_active = (st.session_state.current_position == pos)
-            if st.button(f"Pozice {pos}", key=f"run_pos_{pos}", type="primary" if is_active else "secondary", use_container_width=True):
-                    st.session_state.current_run_position = pos
-                    
-                    # 🍏 Bezpečné získání názvu aktivního projektu ze session_state
-                    proj_name = st.session_state.get("active_project", "Default_Project")
-                    
-                    # Načtení PFS konfigurace
-                    success, msg = camera_manager.load_camera_features_from_pfs(proj_name, pos)
-                    if not success:
-                        st.toast(f"ℹ️ {msg}", icon="ℹ️")
-                    else:
-                        st.toast(f"⚙️ Kamera hardwarově přenastavena pro Pozici {pos}!", icon="✅")
-                    st.rerun()
+            
+            # 🍏 OPRAVA KLÍČE PRO TAB 3 (přidán prefix zone_tab_pos_)
+            if st.button(f" Pozice {pos}", key=f"zone_tab_pos_{pos}", type="primary" if is_active else "secondary", use_container_width=True):
+                st.session_state.current_position = pos
+                
+                # Bezpečné získání názvu aktivního projektu ze session_state
+                proj_name = st.session_state.get("active_project", "Default_Project")
+                
+                # Načtení PFS konfigurace
+                success, msg = camera_manager.load_camera_features_from_pfs(proj_name, pos)
+                if not success:
+                    st.toast(f"ℹ️ {msg}", icon="ℹ️")
+                else:
+                    st.toast(f"⚙️ Kamera hardwarově přenastavena pro Pozici {pos}!", icon="✅")
+                st.rerun()
                 
     with cols[-1]:
         if st.button("➕", key="add_pos_btn", use_container_width=True):
