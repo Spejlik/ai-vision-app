@@ -568,24 +568,26 @@ with tab5:
 
     st.divider()
 
-    # --- INTERAKTIVNÍ TŘÍDĚNÍ SNÍMKŮ PRO UČENÍ (UNIVERZÁLNÍ MAPOVÁNÍ) ---
+    # --- INTERAKTIVNÍ TŘÍDĚNÍ SNÍMKŮ PRO UČENÍ (KOMPLETNÍ DYNAMICKÉ MAPOVÁNÍ) ---
     active_p = st.session_state.get("active_project")
     if active_p:
         import sqlite3
         conn = sqlite3.connect("vision_system.db")
         cursor = conn.cursor()
         
-        # 🍏 DYNAMICKÁ KONTROLA STRUKTURY (Zjistíme, jak se sloupce opravdu jmenují)
+        # 🍏 DYNAMICKÁ KONTROLA STRUKTURY (Kompletní inspekce tabulky)
         cursor.execute("PRAGMA table_info(history)")
         columns = [col[1] for col in cursor.fetchall()]
         
-        # Najdeme správný sloupec pro název zóny (roi_name / zone_name)
+        # 1. Mapování projektu (project / project_name)
+        c_proj = "project" if "project" in columns else ("project_name" if "project_name" in columns else columns[1])
+        # 2. Mapování zóny (roi_name / zone_name)
         c_roi = "roi_name" if "roi_name" in columns else ("zone_name" if "zone_name" in columns else columns[2])
-        # Najdeme správný sloupec pro cestu k souboru (image_path / img_path / file_path / path)
+        # 3. Mapování cesty k obrázku (image_path / img_path / file_path / path)
         c_path = "image_path" if "image_path" in columns else ("img_path" if "img_path" in columns else ("file_path" if "file_path" in columns else "path"))
         
-        # Spustíme dotaz s dynamicky zjištěnými sloupci
-        query = f"SELECT id, {c_roi}, {c_path}, status FROM history WHERE project_name=? AND status='Neroztříděno' ORDER BY id DESC"
+        # Sestavení dotazu s dynamickými názvy sloupců
+        query = f"SELECT id, {c_roi}, {c_path}, status FROM history WHERE {c_proj}=? AND status='Neroztříděno' ORDER BY id DESC"
         cursor.execute(query, (active_p,))
         unassigned_records = cursor.fetchall()
         conn.close()
