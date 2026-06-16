@@ -47,32 +47,31 @@ def get_camera():
 
 def capture_live_frame(*args, **kwargs):
     """
-    Vysoce stabilní snímání. Využívá mezipaměť pro překonání Exclusive Access chyb (GigEDevice.cpp).
+    Vysoce stabilní snímání. Bere hodnoty sliderů přímo ze session_state Streamlitu.
+    Zápis provádí pouze při skutečné změně polohy slideru operátorem.
     """
     global _last_exposure, _last_gain, _last_valid_img
     
-    exposure_time = kwargs.get('exposure_time', args[0] if len(args) > 0 else None)
-    gain = kwargs.get('gain', args[1] if len(args) > 1 else None)
+    # 🍏 OPRAVA VALEO/ELVAC: Taháme hodnoty přímo ze session state sliderů pod obrazem
+    exposure_time = st.session_state.get("exp_slider_val", 20000)
+    gain = st.session_state.get("gain_slider_val", 0.0)
     
-    # 1. Pokus o získání nebo oživení kamery
     cam = get_camera()
     
     if cam is None or not cam.IsOpen():
-        # Pokud je sběrnice zablokovaná, okamžitě vrátíme poslední dobrý snímek z RAM
         if _last_valid_img is not None:
             return _last_valid_img, "OK (Záložní buffer)"
-        return None, "Kamera je momentálně blokována jiným thready lisu."
+        return None, "Kamera je momentálně blokována jinými thready lisu."
 
     try:
-        # Pojistka pro případ, že se vyčerpala kruhová fronta Grabberu
         if not cam.IsGrabbing():
             cam.StartGrabbingMax(30, pylon.GrabStrategy_LatestImageOnly)
 
         nodemap = cam.GetNodeMap()
         
-        # Vyhodnocení změn na sliderech
-        exp_changed = exposure_time is not None and float(exposure_time) != _last_exposure
-        gain_changed = gain is not None and float(gain) != _last_gain
+        # Srovnáváme přímo s float hodnotami vytaženými ze Streamlitu
+        exp_changed = _last_exposure is None or float(exposure_time) != _last_exposure
+        gain_changed = _last_gain is None or float(gain) != _last_gain
 
         if exp_changed or gain_changed:
             try:
@@ -100,14 +99,14 @@ def capture_live_frame(*args, **kwargs):
                         if gain_raw is not None:
                             gain_raw.SetValue(max(gain_raw.GetMin(), min(gain_raw.GetMax(), int(round(float(gain))))))
                     _last_gain = float(gain)
-            except:
-                pass
+            except Exception as e_reg:
+                print(f"⚠️ Nepodařilo se propsat změnu registru: {e_reg}")
 
-        # 2. Bezpečné vytažení snímku s krátkým timeoutem
+        # Bezpečné vytažení snímku
         grab_result = cam.RetrieveResult(250, pylon.TimeoutHandling_Return)
         if grab_result and grab_result.GrabSucceeded():
             img = Image.fromarray(grab_result.Array).convert("RGB")
-            _last_valid_img = img  # Uložíme čerstvý snímek do záložního bufferu
+            _last_valid_img = img
             grab_result.Release()
             return img, "OK"
         
@@ -115,10 +114,8 @@ def capture_live_frame(*args, **kwargs):
             grab_result.Release()
             
     except Exception as e_grab:
-        # Pokud vyletí GigEDevice.cpp výjimka, zachytíme ji a podstrčíme zálohu
         pass
 
-    # Fallback: Pokud cokoliv selhalo, uživatel nic nepozná, podstrčíme poslední validní frame
     if _last_valid_img is not None:
         return _last_valid_img, "OK (Záložní buffer)"
         
