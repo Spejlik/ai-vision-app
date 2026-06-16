@@ -329,30 +329,38 @@ with tab2:
         with col_img:
             live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")
             
-            # Vytvoříme stabilní kontejnery v UI, které se nebudou hýbat
+            # Stabilní kontejnery v UI
             image_placeholder = st.empty()
             error_placeholder = st.empty()
             
-            # HLAVNÍ ASYNCHRONNÍ SMYČKA STREAMU (Běží bez st.rerun())
+            # Uložíme si aktuální stav sliderů před vstupem do smyčky, abychom poznali, když s nimi pohneš
+            last_sliders_state = (ax, ay, aw, ah)
+            
+            # HLAVNÍ ASYNCHRONNÍ SMYČKA STREAMU
             while st.session_state.get("master_live_stream_toggle", False):
+                # KONTROLA ZMĚNY SLIDERŮ: Pokud uživatel pohnul sliderem, musíme vyskočit ze smyčky,
+                # aby Streamlit mohl nahoře v kódu načíst nové hodnoty z UI.
+                if (ax, ay, aw, ah) != last_sliders_state:
+                    break
+                
                 live_full_img, error_msg = camera_manager.capture_live_frame()
                 
                 if live_full_img:
-                    # Uložíme snímek do bufferu pro případné uložení masteru
+                    # Uložení do bufferu pro statické zobrazení
                     st.session_state.setup_image_buffer = live_full_img
-                    error_placeholder.empty() # Vymažeme případnou předchozí chybu
+                    error_placeholder.empty()
                     
-                    # Příprava kopie pro vykreslení grafických prvků
+                    # Příprava kopie pro výřez a kreslení
                     preview_img = live_full_img.copy()
                     img_w, img_h = preview_img.size
                     
-                    # Bezpečné ořezy podle sliderů
+                    # Bezpečné ořezy
                     safe_ax = min(ax, img_w - 10)
                     safe_ay = min(ay, img_h - 10)
                     safe_aw = min(aw, img_w - safe_ax)
                     safe_ah = min(ah, img_h - safe_ay)
                     
-                    # Vykreslení červeného zaměřovacího obdélníku
+                    # Vykreslení zaměřovacího obdélníku
                     draw = ImageDraw.Draw(preview_img)
                     draw.rectangle([safe_ax, safe_ay, safe_ax + safe_aw, safe_ay + safe_ah], outline="red", width=5)
                     
@@ -360,12 +368,12 @@ with tab2:
                     image_placeholder.image(preview_img, use_container_width=True, caption=f"Živý stream z kamery ({img_w}x{img_h} px)")
                 else:
                     error_placeholder.error(f"❌ {error_msg}")
+                    break # Při hardwarové chybě kamery raději smyčku ukončíme
                 
-                # Krátká pauza pro stabilizaci síťového přenosu z GigE rozhraní
-                time.sleep(0.04) 
-
-            # STATICKÝ STAV (Pokud je stream vypnutý, ukážeme poslední uložený snímek v bufferu)
-            if not st.session_state.get("master_live_stream_toggle", False) and st.session_state.setup_image_buffer is not None:
+                time.sleep(0.04)
+            
+            # Pokud smyčka skončila (vypnutím nebo pohybem slideru) a máme obraz v bufferu, vykreslíme ho staticky
+            if st.session_state.setup_image_buffer is not None:
                 preview_img = st.session_state.setup_image_buffer.copy()
                 img_w, img_h = preview_img.size
                 
@@ -377,11 +385,11 @@ with tab2:
                 draw = ImageDraw.Draw(preview_img)
                 draw.rectangle([safe_ax, safe_ay, safe_ax + safe_aw, safe_ay + safe_ah], outline="red", width=5)
                 image_placeholder.image(preview_img, use_container_width=True, caption=f"Uložený podklad ({img_w}x{img_h} px)")
-
-        # --- JEDINÁ BEZPEČNÁ AUTOMATICKÁ OBNOVA STRÁNKY PRO LIVE STREAM ---
-        if st.session_state.get("master_live_stream_toggle") and st.session_state.setup_image_buffer is not None:
-            time.sleep(0.1)  # 100ms pauza uleví procesoru notebooku
-            st.rerun()
+                
+                # Pokud smyčka skončila jen kvůli slideru, ale toggle je stále zapnutý, 
+                # vynutíme jedno rychlé překreslení, které smyčku okamžitě znovu nastartuje s novými souřadnicemi
+                if st.session_state.get("master_live_stream_toggle", False):
+                    st.rerun()
 
         st.write("---")
         st.write("📋 **Aktuální Master snímky v tomto projektu:**")
