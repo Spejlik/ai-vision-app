@@ -352,14 +352,13 @@ with tab2:
                 draw.rectangle([safe_ax, safe_ay, safe_ax + safe_aw, safe_ay + safe_ah], outline="red", width=5)
                 st.image(preview_img, use_container_width=True, caption=f"Aktuální podklad ({img_w}x{img_h} px)")
 
-            # --- HARDWAROVÉ SLIDERY (ANTI-FLICKER 50Hz) ---
-            st.markdown("### 💡 Hardwarové nastavení osvitu kamery")
+            # --- HARDWAROVÉ SLIDERY (ANTI-FLICKER + INC 35 JISTOTA) ---
             st.slider(
                 "Elektronická uzávěrka (Anti-Flicker 50Hz takty)", 
-                min_value=20000, 
-                max_value=160000, 
-                value=40000, 
-                step=20000, 
+                min_value=19985,     
+                max_value=159985, 
+                value=40005,         
+                step=19985,          
                 key="exp_slider_val"
             )
             st.slider("Zesílení obrazu (Gain Raw index)", 0, 18, 3, step=1, key="gain_slider_val")

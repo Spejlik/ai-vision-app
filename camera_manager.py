@@ -15,23 +15,29 @@ def set_hardware_parameters(exposure_val, gain_val):
         try:
             nodemap = hardware_core.camera.GetNodeMap()
             
-            # --- 🍏 VYNUCENÝ HARDWAROVÝ RESET TRIGGERU (ELVAC STANDARD) ---
-            # Pokud po načtení konfigurace zůstal trigger zapnutý, 
-            # softwarově ho shodíme na 'Off', aby se rozběhl plynulý náhled.
+            # --- 🍏 VYNUCENÝ HARDWAROVÝ RESET TRIGGERU ---
             t_mode = nodemap.GetNode("TriggerMode")
             if t_mode is not None and t_mode.GetValue() != "Off":
                 t_mode.SetValue("Off")
-                print("🔌 [MANAGER] Vynuceno vypnutí linkového triggeru (TriggerMode = Off) pro náhled.")
 
-            # Zápis elektronické uzávěrky
-            exp_node = nodemap.GetNode("ExposureTimeRaw") or nodemap.GetNode("ExposureTime")
-            if exp_node: exp_node.SetValue(int(exposure_val))
+            # --- 🍏 MATEMATICKÁ POJISTKA PRO INC = 35 (ELVAC STANDARD) ---
+            # Vezmeme hodnotu ze slideru a matematicky ji zarovnáme na nejbližší násobek 35
+            raw_exposure = int(exposure_val)
+            remainder = (raw_exposure - 35) % 35
+            if remainder != 0:
+                raw_exposure = raw_exposure - remainder  # Zaokrouhlíme dolů na perfektně dělitelné číslo
             
-            # Zápis zesílení obrazu
+            # Zápis elektronické uzávěrky bez rizika OutOfRangeException
+            exp_node = nodemap.GetNode("ExposureTimeRaw") or nodemap.GetNode("ExposureTime")
+            if exp_node: 
+                exp_node.SetValue(int(raw_exposure))
+            
+            # Zápis zesílení obrazu (Gain 0-18)
             gain_node = nodemap.GetNode("GainRaw") or nodemap.GetNode("Gain")
-            if gain_node: gain_node.SetValue(int(gain_val))
+            if gain_node: 
+                gain_node.SetValue(int(gain_val))
         except Exception as e:
-            print(f"⚠️ [MANAGER] Chyba zápisu parametrů nebo resetu triggeru: {e}")
+            print(f"⚠️ [MANAGER] Chyba zápisu parametrů: {e}")
 
 def save_camera_features_to_pfs(project_name, position_num):
     try:
