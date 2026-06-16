@@ -307,16 +307,24 @@ with tab2:
                     st.error("❌ Pro uložení musíte zadat název a mít načtený obrázek!")
 
         with col_img:
-            live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")
+        live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")
+        
+        if live_stream_active:
+            # 🍏 ZDE JE TO SPRÁVNÉ MÍSTO (Vložit přesně sem!):
+            # Nejdříve propíšeme hodnoty ze sliderů UI do registrů běžící kamery...
+            camera_manager.set_hardware_parameters(
+                st.session_state.get("exp_slider_val", 40000),
+                st.session_state.get("gain_slider_val", 3)
+            )
             
-            if live_stream_active:
-                live_full_img, error_msg = camera_manager.capture_live_frame()
-                if live_full_img:
-                    st.session_state.setup_image_buffer = live_full_img
-                else:
-                    st.error(f"❌ {error_msg}")
+            # ...a hned v dalším kroku stáhneme čerstvý, stabilní snímek bez pulzování
+            live_full_img, error_msg = camera_manager.capture_live_frame()
+            if live_full_img:
+                st.session_state.setup_image_buffer = live_full_img
             else:
-                sim_dir = os.path.join(BASE_IMAGE_DIR, "OK", active_p)
+                st.error(f"❌ {error_msg}")
+        else:
+            sim_dir = os.path.join(BASE_IMAGE_DIR, "OK", active_p)
                 if "Složka OK" in source_type:
                     images = []
                     if os.path.exists(sim_dir):
