@@ -128,27 +128,26 @@ def capture_live_frame(*args, **kwargs):
 def load_camera_features_from_pfs(project_name, position_num):
     cam = get_camera()
     if cam:
-        pfs_path = f"profiles/{project_name}_pos_{position_num}.pfs"
-        if os.path.exists(pfs_path):
-            try:
-                is_grabbing = cam.IsGrabbing()
-                if is_grabbing: cam.StopGrabbing()
-                pylon.FeaturePersistence.Load(pfs_path, cam.GetNodeMap(), True)
-                if is_grabbing: cam.StartGrabbingMax(30, pylon.GrabStrategy_LatestImageOnly)
-                return True, "OK"
-            except Exception as e:
-                return False, f"Chyba při nahrávání PFS profilu: {e}"
+        # Vyhledáme jakýkoliv .pfs soubor ve složce profiles, který začíná správným projektem a číslem pozice
+        profiles_dir = "profiles"
+        if os.path.exists(profiles_dir):
+            prefix = f"{project_name}_pos_{position_num}"
+            found_files = [f for f in os.listdir(profiles_dir) if f.startswith(prefix) and f.endswith(".pfs")]
+            
+            if found_files:
+                pfs_path = os.path.join(profiles_dir, found_files[0])
+                try:
+                    is_grabbing = cam.IsGrabbing()
+                    if is_grabbing: cam.StopGrabbing()
+                    pylon.FeaturePersistence.Load(pfs_path, cam.GetNodeMap(), True)
+                    if is_grabbing: cam.StartGrabbingMax(30, pylon.GrabStrategy_LatestImageOnly)
+                    
+                    # Extrahujeme textový popis z názvu souboru pro zobrazení operátorovi
+                    desc_part = found_files[0].replace(prefix, "").replace(".pfs", "").replace("_", " ")
+                    display_desc = desc_part.strip() if desc_part.strip() else "Bez popisu"
+                    return True, f"Profil načten: {display_desc}"
+                except Exception as e:
+                    return False, f"Chyba při nahrávání PFS profilu: {e}"
+        
         return False, f"Profil pro pozici {position_num} zatím neexistuje."
-    return False, "Kamera není inicializována."
-
-def save_camera_features_to_pfs(project_name, position_num):
-    cam = get_camera()
-    if cam:
-        try:
-            os.makedirs("profiles", exist_ok=True)
-            pfs_path = f"profiles/{project_name}_pos_{position_num}.pfs"
-            pylon.FeaturePersistence.Save(pfs_path, cam.GetNodeMap())
-            return True, pfs_path
-        except Exception as e:
-            return False, str(e)
     return False, "Kamera není inicializována."
