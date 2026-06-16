@@ -303,16 +303,8 @@ with tab2:
             ay = st.slider("Y začátek", 0, 2000, 0)
             aw = st.slider("Šířka výřezu", 10, 2000, 500)
             ah = st.slider("Výška výřezu", 10, 2000, 500)
-            # --- NOVÉ OVLÁDÁNÍ EXPOZICE PRO VALEO TERMINÁL ---
-            # --- OVLÁDÁNÍ EXPOZICE A GAINU (HARDWARE) ---
-            st.divider()
-            st.markdown("### 💡 Hardwarové nastavení obrazu")
-            
-            # Rozsah 1 000 μs (1 ms) až 200 000 μs (200 ms) pro průmyslové aplikace
-            exp_val = st.slider("Čas expozice (μs)", 1000, 200000, 20000, step=500)
-            gain_val = st.slider("Zesílení obrazu (Gain dB)", 0.0, 24.0, 0.0, step=0.5)
 
-            if st.button("💾 ULOŽIT MASTER", type="primary", use_container_width=True):
+            if st.button("💾 ULOŽIT MASTER", type="primary", width="stretch"):
                 if m_id_name and st.session_state.setup_image_buffer:
                     if not os.path.exists("masters"):
                         os.makedirs("masters")
@@ -333,6 +325,8 @@ with tab2:
                     st.rerun()
                 else:
                     st.error("❌ Pro uložení musíte zadat název a mít načtený/nahraný obrázek!")
+            
+            # ⚠️ ZDE KÓD V LEVÉM SLOUPCI KONČÍ. VŠECHNY STARÉ SLIDERY EXPOZICE ODPOVEDAJÍCÍ EXP_VAL ZDE SMAŽ!
 
         with col_img:
             live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")

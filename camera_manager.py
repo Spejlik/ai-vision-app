@@ -41,30 +41,40 @@ def capture_live_frame(*args, **kwargs):
     cam = get_camera()
     if cam and cam.IsGrabbing():
         # --- IZOLOVANÝ BLOK PRO HARDWAROVÝ ZÁPIS GAINU (OPRAVA PRO VALEO KAMERU) ---
+        # --- ROZŠÍŘENÝ HARDWAROVÝ ZÁPIS GAINU S ODEMČENÍM SELECTORU ---
         if gain is not None:
             try:
                 nodemap = cam.GetNodeMap()
                 gain_auto_node = nodemap.GetNode("GainAuto")
+                gain_selector_node = nodemap.GetNode("GainSelector")
                 gain_node = nodemap.GetNode("Gain")
                 gain_raw_node = nodemap.GetNode("GainRaw")
 
-                # 1. Nejprve natvrdo vypneme automatiku gainu, jinak čip ignoruje manuální slider
+                # 1. Vypnutí automatiky lisu
                 if gain_auto_node is not None and gain_auto_node.IsValid():
                     gain_auto_node.SetValue("Off")
 
-                # 2. Zápis do standardního float uzlu 'Gain'
+                # 2. ODEMČENÍ REGISTRU: Nastavení selectoru na hlavní kanál (All / Analog)
+                if gain_selector_node is not None and gain_selector_node.IsValid():
+                    try:
+                        # V průmyslu se standardně používá "All", u starších čipů "AnalogAll"
+                        if "All" in gain_selector_node.GetSymbolics():
+                            gain_selector_node.SetValue("All")
+                    except:
+                        pass
+
+                # 3. Zápis samotné hodnoty do float registru
                 if gain_node is not None and gain_node.IsValid():
-                    # Zkontrolujeme min/max limity kamery, abychom nepřestřelili rozsah
                     val_to_set = max(gain_node.GetMin(), min(gain_node.GetMax(), float(gain)))
                     gain_node.SetValue(val_to_set)
                     
-                # 3. Fallback pro starší modely s celočíselným uzlem 'GainRaw'
+                # 4. Fallback pro starší celočíselné registry
                 elif gain_raw_node is not None and gain_raw_node.IsValid():
                     val_to_set = max(gain_raw_node.GetMin(), min(gain_raw_node.GetMax(), int(round(float(gain)))))
                     gain_raw_node.SetValue(val_to_set)
                     
             except Exception as e_gain:
-                print(f"❌ Nelze vynutit manuální Gain na tomto čipu: {e_gain}")
+                print(f"❌ Nelze odemknout hardwarový Gain: {e_gain}")
         
         # --- SAMOTNÉ ZÍSKÁNÍ SNÍMKU (NESMÍ SPADNUTÍM HARDWARU SELHAT) ---
         try:
