@@ -327,21 +327,40 @@ with tab2:
                     st.error("❌ Pro uložení musíte zadat název a mít načtený/nahraný obrázek!")
 
         with col_img:
+            # Vytáhneme stream úplně nahoru – bude vidět VŽDY
             live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")
             
             if live_stream_active:
+                # Pokud zapneš stream, natvrdo se zeptáme Basler kamery přes camera_manager
                 live_full_img, error_msg = camera_manager.capture_live_frame()
                 if live_full_img:
                     st.session_state.setup_image_buffer = live_full_img
                 else:
                     st.error(f"❌ {error_msg}")
+            else:
+                # Pokud je stream vypnutý, pokusíme se načíst nouzový simulační obrázek z disku
+                if "Složka OK" in source_type:
+                    sim_dir = os.path.join(BASE_IMAGE_DIR, "OK", active_p)
+                    images = []
+                    if os.path.exists(sim_dir):
+                        for ext in ["*.jpg", "*.jpeg", "*.png", "*.JPG", "*.PNG"]:
+                            images.extend(glob.glob(os.path.join(sim_dir, ext)))
+                    
+                    if images:
+                        # Pokud ve složce něco je, vezmeme první obrázek
+                        st.session_state.setup_image_buffer = Image.open(images[0]).convert("RGB")
+                    else:
+                        # Pokud je složka prázdná, vytvoříme nouzové šedé pozadí (1920x1080)
+                        if st.session_state.setup_image_buffer is None:
+                            st.warning(f"Složka '{sim_dir}' je prázdná. Použita nouzová plocha.")
+                            st.session_state.setup_image_buffer = Image.new('RGB', (1920, 1080), color=(75, 105, 130))
 
-            # VYKRESLENÍ STANDARDNÍHO NÁHLEDU
+            # VYKRESLENÍ OBRÁZKU A ZAMĚŘOVAČE (Pokud v bufferu něco máme)
             if st.session_state.setup_image_buffer is not None:
                 preview_img = st.session_state.setup_image_buffer.copy()
                 img_w, img_h = preview_img.size
                 
-                # Bezpečné ořezy
+                # Bezpečné ořezy podle sliderů
                 safe_ax = min(ax, img_w - 10)
                 safe_ay = min(ay, img_h - 10)
                 safe_aw = min(aw, img_w - safe_ax)
@@ -351,28 +370,10 @@ with tab2:
                 draw.rectangle([safe_ax, safe_ay, safe_ax + safe_aw, safe_ay + safe_ah], outline="red", width=5)
                 st.image(preview_img, use_container_width=True, caption=f"Aktuální podklad ({img_w}x{img_h} px)")
 
-        # --- JEDINÝ JISTÝ REFRESH PRO ŽIVÉ VIDEO ---
+        # --- REFRESH PRO ŽIVÉ VIDEO ---
         if st.session_state.get("master_live_stream_toggle") and st.session_state.setup_image_buffer is not None:
             time.sleep(0.08)
             st.rerun()
-
-        st.write("---")
-        st.write("📋 **Aktuální Master snímky v tomto projektu:**")
-        m_list = database.get_all_masters(active_p)
-        if m_list:
-            for m_row in m_list:
-                m_id, _, m_name, m_path, _, _, _, _ = m_row
-                del_c1, del_c2 = st.columns([3, 1])
-                with del_c1: st.write(f"• **{m_name}** (`{m_path}`)")
-                with del_c2:
-                    if st.button("🗑️ Smazat Master", key=f"del_m_{m_id}", use_container_width=True):
-                        if m_path and os.path.exists(m_path):
-                            try: os.remove(m_path)
-                            except: pass
-                        database.delete_master(m_id)
-                        st.session_state.setup_image_buffer = None
-                        st.success("Master smazán!")
-                        st.rerun()
 
 # --- TAB 3: ZÓNY ---
 with tab3:
