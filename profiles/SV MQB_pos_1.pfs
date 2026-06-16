@@ -6,7 +6,7 @@ SequenceSetIndex	0
 SequenceSetExecutions	1
 SequenceAdvanceMode	Auto
 GainAuto	Off
-GainRaw	{GainSelector=All}	0
+GainRaw	{GainSelector=All}	3
 GainSelector	All
 BlackLevelRaw	{BlackLevelSelector=All}	8
 BlackLevelSelector	All
@@ -34,7 +34,7 @@ TriggerDelayAbs	{TriggerSelector=FrameStart}	0
 TriggerSelector	FrameStart
 ExposureMode	Timed
 ExposureAuto	Off
-ExposureTimeRaw	35000
+ExposureTimeRaw	79940
 AcquisitionFrameRateEnable	0
 AcquisitionFrameRateAbs	10
 LineMode	{LineSelector=Line1}	Input
