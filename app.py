@@ -539,3 +539,54 @@ with tab4:
     st.subheader("🔌 Nastavení komunikace (Modbus TCP / Moxa)")
     st.text_input("IP Adresa Moxa I/O modulu", value="192.168.1.200")
     st.button("🔄 Testovat připojení hardwaru", use_container_width=True)
+    
+# --- TAB 5: HISTORIE ---
+with tab5:
+    st.subheader("📜 Historie kontrol a snímků")
+    
+    # 🍏 SIMULAČNÍ TLAČÍTKO PRO RUČNÍ TEST U DISKU
+    if st.button("📸 VYFOTIT A ULOŽIT TESTOVACÍ SNÍMEK DO HISTORIE", type="primary"):
+        import camera_manager
+        live_full_img, pylon_camera_name = camera_manager.capture_live_frame()
+        
+        if live_full_img is not None:
+            active_p = st.session_state.get("active_project", "Default_Project")
+            timestamp = int(time.time())
+            
+            # Vytvoření cesty na disku C:
+            test_path = f"C:/Image/Unsorted/{active_p}/manual_{timestamp}.jpg"
+            os.makedirs(os.path.dirname(test_path), exist_ok=True)
+            
+            # Zápis souboru a uložení do SQL
+            live_full_img.save(test_path, "JPEG", quality=95)
+            database.save_to_history(active_p, "Manualni_Test", test_path, "Neroztříděno")
+            st.success(f"✅ Snímek úspěšně zapsán na disk a uložen do SQL databáze!")
+            time.sleep(0.5)
+            st.rerun()
+        else:
+            st.error("❌ Kamera nevrátila žádný snímek. Zkontrolujte, zda běží stream v TAB 2.")
+
+    st.divider()
+
+    # --- ZOBRAZENÍ TABULKY HISTORIE ---
+    active_p = st.session_state.get("active_project")
+    if active_p:
+        # Vytáhneme data z databáze přes tvůj modul database.py
+        history_records = database.get_history(active_p) if hasattr(database, "get_history") else []
+        
+        if not history_records:
+            st.info("⏳ V databázi zatím nejsou žádné záznamy. Historie se plní automaticky při triggeru z lisu.")
+        else:
+            # Vykreslení uložených snímků v mřížce
+            h_cols = st.columns(4)
+            for idx, record in enumerate(history_records[:20]): # Ukážeme posledních 20 snímků
+                # Předpokládaná struktura: (id, project, zone_name, file_path, status, timestamp)
+                r_zone, r_path, r_status = record[2], record[3], record[4]
+                with h_cols[idx % 4]:
+                    with st.container(border=True):
+                        st.markdown(f"**{r_zone}**")
+                        if os.path.exists(r_path):
+                            st.image(r_path, use_container_width=True)
+                        else:
+                            st.caption("❌ Soubor na disku C: chybí")
+                        st.caption(f"Stav: `{r_status}`")    
