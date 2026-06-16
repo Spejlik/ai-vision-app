@@ -109,6 +109,12 @@ with tab1:
                 is_active = (st.session_state.current_run_position == pos)
                 if st.button(f"Pozice {pos}", key=f"run_pos_{pos}", type="primary" if is_active else "secondary", use_container_width=True):
                     st.session_state.current_run_position = pos
+                    # 🍏 AUTOMATICKÝ ELVAC REFRESH: Při přepnutí pozice okamžitě nahrajeme její PFS konfigurační soubor
+                    success, msg = camera_manager.load_camera_features_from_pfs(active_p, pos)
+                    if not success:
+                        st.toast(f"ℹ️ {msg}", icon="ℹ️")
+                    else:
+                        st.toast(f"⚙️ Kamera hardwarově přenastavena pro Pozici {pos}!", icon="✅")
                     st.rerun()
                     
         st.divider()
@@ -379,7 +385,16 @@ with tab2:
             st.markdown("### 💡 Hardwarové nastavení osvitu kamery")
             st.slider("Čas expozice (μs)", 1000, 200000, 20000, step=500, key="exp_slider_val")
             st.slider("Zesílení obrazu (Gain dB)", 0.0, 24.0, 0.0, step=0.5, key="gain_slider_val")
-
+            
+            # 💾 NOVÉ ELVAC TLAČÍTKO PRO PEVNÉ ULOŽENÍ PFS PROFILU POZICE
+            current_setup_pos = st.session_state.get("current_run_position", 1)
+            if st.button(f"💾 ULOŽIT TUTO KONFIGURACI JAKO PFS PRO POZICI {current_setup_pos}", type="secondary", use_container_width=True):
+                success, path_or_err = camera_manager.save_camera_features_to_pfs(active_p, current_setup_pos)
+                if success:
+                    st.success(f"🎉 Průmyslový PFS profil pro Pozici {current_setup_pos} úspěšně vytvořen a uložen!")
+                else:
+                    st.error(f"❌ Selhalo vytvoření PFS souboru: {path_or_err}")
+    
         # --- REFRESH PRO ŽIVÉ VIDEO ---
         if st.session_state.get("master_live_stream_toggle") and st.session_state.setup_image_buffer is not None:
             time.sleep(0.08)
@@ -406,9 +421,15 @@ with tab3:
     for i, pos in enumerate(st.session_state.available_positions):
         with cols[i]:
             is_active = (st.session_state.current_position == pos)
-            if st.button(f" Pozice {pos}", key=f"pos_btn_{pos}", type="primary" if is_active else "secondary", use_container_width=True):
-                st.session_state.current_position = pos
-                st.rerun()
+            if st.button(f"Pozice {pos}", key=f"run_pos_{pos}", type="primary" if is_active else "secondary", use_container_width=True):
+                    st.session_state.current_run_position = pos
+                    # 🍏 AUTOMATICKÝ ELVAC REFRESH: Při přepnutí pozice okamžitě nahrajeme její PFS konfigurační soubor
+                    success, msg = camera_manager.load_camera_features_from_pfs(active_p, pos)
+                    if not success:
+                        st.toast(f"ℹ️ {msg}", icon="ℹ️")
+                    else:
+                        st.toast(f"⚙️ Kamera hardwarově přenastavena pro Pozici {pos}!", icon="✅")
+                    st.rerun()
                 
     with cols[-1]:
         if st.button("➕", key="add_pos_btn", use_container_width=True):
