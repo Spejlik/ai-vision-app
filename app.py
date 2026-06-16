@@ -598,29 +598,31 @@ with tab5:
             st.markdown(f"### 📥 Snímky čekající na roztřídění ({len(unassigned_records)}x)")
             
             h_cols = st.columns(4)
-            for idx, record in enumerate(unassigned_records[:12]):
+            displayed_count = 0
+            
+            for idx, record in enumerate(unassigned_records):
+                if displayed_count >= 12: # Ukážeme maximálně 12 VALIDNÍCH karet najednou
+                    break
+                    
                 r_id, r_zone, r_path, r_status = record[0], record[1], record[2], record[3]
                 
-                with h_cols[idx % 4]:
+                # Pokud soubor na disku neexistuje, přeskočíme ho (nechceme prázdné karty)
+                if not os.path.exists(r_path):
+                    continue
+                
+                with h_cols[displayed_count % 4]:
                     with st.container(border=True):
                         st.caption(f"📍 Zdroj: {r_zone}")
-                        
-                        if os.path.exists(r_path):
-                            st.image(r_path, use_container_width=True)
-                        else:
-                            st.caption("❌ Soubor nenalezen")
+                        st.image(r_path, use_container_width=True)
                         
                         btn_col1, btn_col2 = st.columns(2)
                         
                         with btn_col1:
-                            # 🍏 OPRAVA: Přidán _idx pro absolutní unikátnost klíče
                             if st.button("🍏 OK", key=f"btn_ok_{r_id}_{idx}", use_container_width=True):
                                 target_dir = f"C:/Image/OK/{active_p}"
                                 os.makedirs(target_dir, exist_ok=True)
                                 target_path = os.path.join(target_dir, os.path.basename(r_path))
-                                
-                                if os.path.exists(r_path):
-                                    os.rename(r_path, target_path)
+                                os.rename(r_path, target_path)
                                 
                                 conn = sqlite3.connect("vision_system.db")
                                 cursor = conn.cursor()
@@ -632,14 +634,12 @@ with tab5:
                                 st.rerun()
                                 
                         with btn_col2:
-                            # 🍏 OPRAVA: Přidán _idx pro absolutní unikátnost klíče
+                            # 🍏 OPRAVENO: Tlačítko NOK je zde pouze JEDNOU
                             if st.button("🍎 NOK", key=f"btn_nok_{r_id}_{idx}", use_container_width=True):
                                 target_dir = f"C:/Image/NOK/{active_p}"
                                 os.makedirs(target_dir, exist_ok=True)
                                 target_path = os.path.join(target_dir, os.path.basename(r_path))
-                                
-                                if os.path.exists(r_path):
-                                    os.rename(r_path, target_path)
+                                os.rename(r_path, target_path)
                                 
                                 conn = sqlite3.connect("vision_system.db")
                                 cursor = conn.cursor()
@@ -649,24 +649,5 @@ with tab5:
                                 st.toast(f"Uloženo do složky NOK", icon="🚨")
                                 time.sleep(0.1)
                                 st.rerun()
-                                
-                        with btn_col2:
-                            if st.button("🍎 NOK", key=f"btn_nok_{r_id}", use_container_width=True):
-                                # 1. Definice nové cesty pro zmetek (chybový vzorek)
-                                target_dir = f"C:/Image/NOK/{active_p}"
-                                os.makedirs(target_dir, exist_ok=True)
-                                target_path = os.path.join(target_dir, os.path.basename(r_path))
-                                
-                                # 2. Fyzický přesun souboru na disku
-                                if os.path.exists(r_path):
-                                    os.rename(r_path, target_path)
-                                
-                                # 3. Zápis nového stavu do SQL databáze
-                                conn = sqlite3.connect("vision_system.db")
-                                cursor = conn.cursor()
-                                cursor.execute("UPDATE history SET status='NOK', file_path=? WHERE id=?", (target_path, r_id))
-                                conn.commit()
-                                conn.close()
-                                st.toast(f"Uloženo do složky NOK", icon="🚨")
-                                time.sleep(0.1)
-                                st.rerun()    
+                
+                displayed_count += 1    
