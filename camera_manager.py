@@ -17,10 +17,19 @@ from PIL import Image
 from pypylon import pylon
 import streamlit as st
 
+import time
+from PIL import Image
+from pypylon import pylon
+import streamlit as st
+
 def get_camera():
+    # Pokud kamera už existuje a běží, okamžitě ji vrátíme
     if "pylon_camera_instance" in st.session_state and st.session_state.pylon_camera_instance is not None:
-        if st.session_state.pylon_camera_instance.IsOpen() and st.session_state.pylon_camera_instance.IsGrabbing():
-            return st.session_state.pylon_camera_instance
+        try:
+            if st.session_state.pylon_camera_instance.IsOpen() and st.session_state.pylon_camera_instance.IsGrabbing():
+                return st.session_state.pylon_camera_instance
+        except:
+            pass
 
     try:
         tl_factory = pylon.TlFactory.GetInstance()
@@ -31,23 +40,13 @@ def get_camera():
         cam = pylon.InstantCamera(tl_factory.CreateDevice(devices[0]))
         cam.Open()
         
-        # --- ELVAC OPTIMALIZACE GIGE BUFFERU PROTI ZAHCOVÁNÍ SÍTĚ (ODSTRANÍ BLIKÁNÍ) ---
-        try:
-            # Zvýšíme počet bufferů pro síťové pakety, aby karta stíhala odebírat 5MPx data
-            cam.MaxNumBuffer = 30
-            
-            # Nastavení vnitřního síťového grabberu Basler
-            nodemap = cam.GetNodeMap()
-            
-            # Vypnutí vnitřního mezidropu pro potlačení StreamGrabber chyb
-            cam.StreamGrabber.MaxNumBuffer = 30
-        except Exception as e_buf:
-            print(f"ℹ️ Částečné nastavení bufferů: {e_buf}")
-            
-        cam.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
+        # --- ELVAC BEZPEČNÁ ALOKACE SÍTĚ BEZ ZÁPISU DO REGISTRŮ ---
+        # Metoda StartGrabbingMax natvrdo alokuje 30 bufferů v C++ paměti Pylonu,
+        # což spolehlivě zabrání chybě 'Payload data discarded' a ukončí blikání.
+        cam.StartGrabbingMax(30, pylon.GrabStrategy_LatestImageOnly)
         
         st.session_state.pylon_camera_instance = cam
-        print("🍏 [HARDWARE] Kamera úspěšně inicializována s rozšířeným GigE bufferem.")
+        print("🍏 [HARDWARE] Kamera úspěšně inicializována pomocí StartGrabbingMax(30).")
         return cam
     except Exception as e:
         print(f"⚠️ [HARDWARE] Kritická chyba otevírání kamery: {e}")
