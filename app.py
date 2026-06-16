@@ -337,15 +337,19 @@ with tab2:
         with col_img:
             live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")
             
+            # Inicializace prázdného místa pro dynamické prvky jasu, abychom je mohli předat do funkce níže
+            # v průběhu lineárního vykreslování Streamlitu.
             if live_stream_active:
-                # Předání nastavených hodnot ze sliderů do camera_manageru
+                # Načtení hodnot ze sliderů (definovaných níže pod obrazem, Streamlit si je v session pamatuje)
+                exp_val = st.session_state.get("exp_slider_val", 20000)
+                gain_val = st.session_state.get("gain_slider_val", 0.0)
+                
                 live_full_img, error_msg = camera_manager.capture_live_frame(exposure_time=exp_val, gain=gain_val)
                 if live_full_img:
                     st.session_state.setup_image_buffer = live_full_img
                 else:
                     st.error(f"❌ {error_msg}")
             else:
-                # Pokud stream neběží, podíváme se do složky OK
                 if "Složka OK" in source_type:
                     sim_dir = os.path.join(BASE_IMAGE_DIR, "OK", active_p)
                     images = []
@@ -360,7 +364,7 @@ with tab2:
                             st.warning(f"Složka '{sim_dir}' je prázdná. Použita nouzová plocha.")
                             st.session_state.setup_image_buffer = Image.new('RGB', (1920, 1080), color=(75, 105, 130))
 
-            # VYKRESLENÍ - Upraveno pro moderní verzi Streamlitu (rok 2026)
+            # VYKRESLENÍ OBRAZU
             if st.session_state.setup_image_buffer is not None:
                 preview_img = st.session_state.setup_image_buffer.copy()
                 img_w, img_h = preview_img.size
@@ -372,9 +376,12 @@ with tab2:
                 
                 draw = ImageDraw.Draw(preview_img)
                 draw.rectangle([safe_ax, safe_ay, safe_ax + safe_aw, safe_ay + safe_ah], outline="red", width=5)
-                
-                # ZMĚNA: Používáme width='stretch' namísto use_container_width=True
                 st.image(preview_img, width="stretch", caption=f"Aktuální podklad ({img_w}x{img_h} px)")
+
+            # --- ERGONOMICKÉ UMÍSTĚNÍ SLIDERŮ PŘÍMO POD OBRAZEM ---
+            st.markdown("### 💡 Hardwarové nastavení osvitu kamery")
+            st.slider("Čas expozice (μs)", 1000, 200000, 20000, step=500, key="exp_slider_val")
+            st.slider("Zesílení obrazu (Gain dB)", 0.0, 24.0, 0.0, step=0.5, key="gain_slider_val")
 
         # --- REFRESH PRO ŽIVÉ VIDEO ---
         if st.session_state.get("master_live_stream_toggle") and st.session_state.setup_image_buffer is not None:

@@ -30,10 +30,6 @@ def get_camera():
 def capture_live_frame(exposure_time=None, gain=None):
     """
     Zachytí jeden živý snímek z Basler kamery a volitelně nastaví parametry senzoru.
-    
-    Parametry:
-    :param exposure_time: Čas expozice v mikrosekundách (float/int)
-    :param gain: Zesílení obrazu v dB (float/int)
     """
     cam = get_camera()
     if cam and cam.IsGrabbing():
@@ -47,7 +43,6 @@ def capture_live_frame(exposure_time=None, gain=None):
                 cam.GainAuto.SetValue("Off")
                 cam.Gain.SetValue(float(gain))
             
-            # Vytažení snímku z bufferu kamery s timeoutem 2000 ms
             grab_result = cam.RetrieveResult(2000, pylon.TimeoutHandling_Return)
             if grab_result.GrabSucceeded():
                 img = Image.fromarray(grab_result.Array).convert("RGB")
