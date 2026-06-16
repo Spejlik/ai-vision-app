@@ -27,14 +27,19 @@ def get_camera():
             return None
     return _camera
 
-def capture_live_frame(exposure_time=None, gain=None):
+def capture_live_frame(*args, **kwargs):
     """
-    Zachytí jeden živý snímek z Basler kamery a volitelně nastaví parametry senzoru.
+    Univerzální průmyslové zachycení snímku z Basler kamery.
+    Bezpečně parsuje exposure_time a gain z jakékoliv verze volání skriptu.
     """
+    # Vytáhnutí hodnot z klíčových slov nebo pozičních argumentů
+    exposure_time = kwargs.get('exposure_time', args[0] if len(args) > 0 else None)
+    gain = kwargs.get('gain', args[1] if len(args) > 1 else None)
+    
     cam = get_camera()
     if cam and cam.IsGrabbing():
         try:
-            # Vypnutí automatického řízení jasu pro manuální konfiguraci
+            # Manuální konfigurace registrů čipu
             if exposure_time is not None:
                 cam.ExposureAuto.SetValue("Off")
                 cam.ExposureTime.SetValue(float(exposure_time))
@@ -50,5 +55,5 @@ def capture_live_frame(exposure_time=None, gain=None):
                 return img, "OK"
             grab_result.Release()
         except Exception as e:
-            return None, f"Chyba nastavení hardwaru kamery: {e}"
+            return None, f"Chyba registrů kamery: {e}"
     return None, "Kamera negrebuje nebo vypršel timeout."

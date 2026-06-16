@@ -337,14 +337,13 @@ with tab2:
         with col_img:
             live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")
             
-            # Inicializace prázdného místa pro dynamické prvky jasu, abychom je mohli předat do funkce níže
-            # v průběhu lineárního vykreslování Streamlitu.
             if live_stream_active:
-                # Načtení hodnot ze sliderů (definovaných níže pod obrazem, Streamlit si je v session pamatuje)
+                # Bezpečné vytáhnutí hodnot ze session_state sliderů definovaných níže
                 exp_val = st.session_state.get("exp_slider_val", 20000)
                 gain_val = st.session_state.get("gain_slider_val", 0.0)
                 
-                live_full_img, error_msg = camera_manager.capture_live_frame(exposure_time=exp_val, gain=gain_val)
+                # Voláme bez klíčových slov – čistě jako poziční argumenty (1. čas, 2. gain)
+                live_full_img, error_msg = camera_manager.capture_live_frame(exp_val, gain_val)
                 if live_full_img:
                     st.session_state.setup_image_buffer = live_full_img
                 else:
@@ -378,7 +377,7 @@ with tab2:
                 draw.rectangle([safe_ax, safe_ay, safe_ax + safe_aw, safe_ay + safe_ah], outline="red", width=5)
                 st.image(preview_img, width="stretch", caption=f"Aktuální podklad ({img_w}x{img_h} px)")
 
-            # --- ERGONOMICKÉ UMÍSTĚNÍ SLIDERŮ PŘÍMO POD OBRAZEM ---
+            # --- SLIDERY PŘÍMO POD OBRAZEM ---
             st.markdown("### 💡 Hardwarové nastavení osvitu kamery")
             st.slider("Čas expozice (μs)", 1000, 200000, 20000, step=500, key="exp_slider_val")
             st.slider("Zesílení obrazu (Gain dB)", 0.0, 24.0, 0.0, step=0.5, key="gain_slider_val")
