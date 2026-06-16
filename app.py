@@ -109,8 +109,12 @@ with tab1:
                 is_active = (st.session_state.current_run_position == pos)
                 if st.button(f"Pozice {pos}", key=f"run_pos_{pos}", type="primary" if is_active else "secondary", use_container_width=True):
                     st.session_state.current_run_position = pos
-                    # 🍏 AUTOMATICKÝ ELVAC REFRESH: Při přepnutí pozice okamžitě nahrajeme její PFS konfigurační soubor
-                    success, msg = camera_manager.load_camera_features_from_pfs(active_p, pos)
+                    
+                    # 🍏 Bezpečné získání názvu aktivního projektu ze session_state
+                    proj_name = st.session_state.get("active_project", "Default_Project")
+                    
+                    # Načtení PFS konfigurace
+                    success, msg = camera_manager.load_camera_features_from_pfs(proj_name, pos)
                     if not success:
                         st.toast(f"ℹ️ {msg}", icon="ℹ️")
                     else:
@@ -386,10 +390,13 @@ with tab2:
             st.slider("Čas expozice (μs)", 1000, 200000, 20000, step=500, key="exp_slider_val")
             st.slider("Zesílení obrazu (Gain dB)", 0.0, 24.0, 0.0, step=0.5, key="gain_slider_val")
             
-            # 💾 NOVÉ ELVAC TLAČÍTKO PRO PEVNÉ ULOŽENÍ PFS PROFILU POZICE
+            # 💾 OPRAVENÉ ELVAC TLAČÍTKO PRO PEVNÉ ULOŽENÍ PFS PROFILU
             current_setup_pos = st.session_state.get("current_run_position", 1)
             if st.button(f"💾 ULOŽIT TUTO KONFIGURACI JAKO PFS PRO POZICI {current_setup_pos}", type="secondary", use_container_width=True):
-                success, path_or_err = camera_manager.save_camera_features_to_pfs(active_p, current_setup_pos)
+                # 🍏 Bezpečné získání názvu aktivního projektu ze session_state
+                proj_name = st.session_state.get("active_project", "Default_Project")
+                
+                success, path_or_err = camera_manager.save_camera_features_to_pfs(proj_name, current_setup_pos)
                 if success:
                     st.success(f"🎉 Průmyslový PFS profil pro Pozici {current_setup_pos} úspěšně vytvořen a uložen!")
                 else:
@@ -423,8 +430,12 @@ with tab3:
             is_active = (st.session_state.current_position == pos)
             if st.button(f"Pozice {pos}", key=f"run_pos_{pos}", type="primary" if is_active else "secondary", use_container_width=True):
                     st.session_state.current_run_position = pos
-                    # 🍏 AUTOMATICKÝ ELVAC REFRESH: Při přepnutí pozice okamžitě nahrajeme její PFS konfigurační soubor
-                    success, msg = camera_manager.load_camera_features_from_pfs(active_p, pos)
+                    
+                    # 🍏 Bezpečné získání názvu aktivního projektu ze session_state
+                    proj_name = st.session_state.get("active_project", "Default_Project")
+                    
+                    # Načtení PFS konfigurace
+                    success, msg = camera_manager.load_camera_features_from_pfs(proj_name, pos)
                     if not success:
                         st.toast(f"ℹ️ {msg}", icon="ℹ️")
                     else:
