@@ -9,6 +9,10 @@ import glob
 import numpy as np
 from PIL import Image, ImageDraw
 
+# ---  VYNUCENÝ RELOAD PRO ZAMEZENÍ CACHOVÁNÍ STARÉHO HARDWAROVÉHO KÓDU ---
+import importlib
+importlib.reload(camera_manager)
+
 # --- JEDNORÁZOVÁ PRŮMYSLOVÁ POJISTKA PRO ROZŠÍŘENÍ DATABÁZE (ELVAC STANDARD) ---
 def check_database_structure():
     import sqlite3
