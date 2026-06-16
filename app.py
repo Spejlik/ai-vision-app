@@ -12,33 +12,25 @@ from PIL import Image, ImageDraw
 # --- ODSTRANĚNÍ CACHE HARDWAROVÉHO MODULU Z RAM ---
 import importlib
 importlib.reload(camera_manager)
-# ---  VYNUCENÝ RELOAD PRO ZAMEZENÍ CACHOVÁNÍ STARÉHO HARDWAROVÉHO KÓDU ---
-import importlib
 importlib.reload(camera_manager)
 
 # --- JEDNORÁZOVÁ PRŮMYSLOVÁ POJISTKA PRO ROZŠÍŘENÍ DATABÁZE (ELVAC STANDARD) ---
 def check_database_structure():
     import sqlite3
     try:
-        # Připojíme se k naší lokální SQL databázi
         conn = sqlite3.connect("vision_system.db")
         cursor = conn.cursor()
-        # Pokusíme se přidat sloupec pro číslo pozice sekvence lisu
         cursor.execute("ALTER TABLE rois ADD COLUMN position_num INTEGER DEFAULT 1")
         conn.commit()
         conn.close()
         print("📊 Databáze úspěšně rozšířena o sloupec position_num.")
     except Exception:
-        # Pokud sloupec už existuje, SQLite vyhodí chybu a kód bezpečně pokračuje dál
         pass
 
-# Spustíme kontrolu hned při startu aplikace
 check_database_structure()
 
 # 1. GLOBÁLNÍ KONFIGURACE A CESTY
 st.set_page_config(layout="wide", page_title="Vision System Terminal")
-
-# Definice základní průmyslové cesty k obrázkům na disku C:
 BASE_IMAGE_DIR = "C:/Image"
 
 # 2. INICIALIZACE DATABÁZE
@@ -51,7 +43,6 @@ if 'active_project' not in st.session_state:
 if 'selected_master_id' not in st.session_state:
     st.session_state.selected_master_id = None
 
-# CSS pro profesionální průmyslový vzhled
 st.markdown("""
     <style>
         .block-container { padding-top: 1rem; }
@@ -95,30 +86,25 @@ with tab1:
     if st.session_state.active_project:
         active_p = st.session_state.active_project
         
-        # --- HORNÍ LIŠTA: VOLBA POZICE SEKVENCE (ELVAC STANDARD) ---
         if "current_run_position" not in st.session_state:
             st.session_state.current_run_position = 1
             
         avail_pos = st.session_state.get("available_positions", [1, 2])
         
-        # Vodorovný panel pro výběr aktuálního kroku sekvence v TAB 1
         run_pos_cols = st.columns(len(avail_pos) + 2)
         with run_pos_cols[0]:
             st.markdown("<p style='padding-top:25px; font-weight:bold; margin:0;'>📍 Krok sekvence:</p>", unsafe_allow_html=True)
             
         for idx, pos in enumerate(avail_pos):
             with run_pos_cols[idx + 1]:
-                st.write("") # Zarovnání
+                st.write("") 
                 is_active = (st.session_state.current_run_position == pos)
                 
-                # 🍏 OPRAVA KLÍČE PRO TAB 1 (přidán prefix run_tab_pos_)
                 if st.button(f"Pozice {pos}", key=f"run_tab_pos_{pos}", type="primary" if is_active else "secondary", use_container_width=True):
                     st.session_state.current_run_position = pos
-                    
-                    # Bezpečné získání názvu aktivního projektu ze session_state
                     proj_name = st.session_state.get("active_project", "Default_Project")
                     
-                    # Načtení PFS konfigurace
+                    # Správné volání načtení hardwarového PFS profilu z camera_manageru
                     success, msg = camera_manager.load_camera_features_from_pfs(proj_name, pos)
                     if not success:
                         st.toast(f"ℹ️ {msg}", icon="ℹ️")
@@ -128,7 +114,6 @@ with tab1:
                     
         st.divider()
 
-        # Načtení masterů a zón filtrovaných podle AKTIVNÍ pozice sekvence
         all_masters = database.get_all_masters(active_p)
         all_active_rois = []
         
@@ -136,12 +121,10 @@ with tab1:
             for m in all_masters:
                 rois = database.get_rois(m[0], active_p)
                 for r in rois:
-                    # Filtrujeme zóny, které patří do aktuálně zvolené pozice (index 10 nebo session state)
                     r_pos = r[10] if len(r) > 10 else 1
                     if r_pos == st.session_state.current_run_position:
                         all_active_rois.append((m, r))
 
-        # HLAVNÍ ROZVRŽENÍ 2:1 (Mřížka kamer vlevo vs. Výsledky a PLC vpravo)
         col_run_1, col_run_2 = st.columns([2.2, 1])
         
         with col_run_1:
@@ -153,12 +136,10 @@ with tab1:
             if not all_active_rois:
                 st.info(f"ℹ️ Pro Pozici {st.session_state.current_run_position} nejsou v tomto kroku sekvence definovány žádné zóny.")
             else:
-                # Vytvoření čisté průmyslové mřížky 3x3 nebo 3x2
                 roi_cols = st.columns(3)
                 for i, (m, r) in enumerate(all_active_rois):
                     r_id, r_name = r[0], r[3]
                     with roi_cols[i % 3]:
-                        # Použijeme tmavé průmyslové ohraničení kontejneru
                         with st.container(border=True):
                             roi_placeholders[r_id] = st.empty()
 
@@ -170,16 +151,13 @@ with tab1:
             st.markdown("**🛡️ Stav jednotlivých kontrol:**")
             control_placeholders = {}
             for i, (m, r) in enumerate(all_active_rois):
-                r_name = r[3]
                 control_placeholders[r[0]] = st.empty()
                 
-        # --- VYHODNOCOVACÍ SMYČKA ZA BĚHU (PROPOJENÍ MOXA -> KAMERA -> AI) ---
         current_outputs = {i: False for i in range(1, 9)}
         
         if run_engine:
             import communication_manager
             
-            # 1. Inicializace Modbus manažera z haly (pokud ještě neběží)
             if "lis_modbus" not in st.session_state:
                 st.session_state.lis_modbus = communication_manager.LisModbusManager(ip_address="10.42.0.167")
                 if st.session_state.lis_modbus.connect():
@@ -187,10 +165,7 @@ with tab1:
                 else:
                     st.toast("⚠️ Moxa neodpovídá. Systém běží v simulačním režimu.", icon="ℹ️")
 
-            # Maximální počet kroků sekvence podle nadefinovaných pozic
             max_pos_count = len(st.session_state.get("available_positions", [1, 2]))
-            
-            # 2. Kontrola triggeru z lisu (náběžná hrana z registru 0x08)
             is_triggered, target_pos = st.session_state.lis_modbus.check_trigger_and_sequence(max_pos_count)
             
             if is_triggered:
@@ -199,26 +174,20 @@ with tab1:
                 
                 is_entire_mold_ok = True
                 
-                # Projedeme zóny přiřazené k této konkrétní pozici lisu
                 for m, r in all_active_rois:
                     m_path = m[3]
                     r_id, r_name, r_nok = r[0], r[3], r[8]
-                    r_tolerance = r[9] if len(r) > 9 else 20
                     
-                    # Zachycení reálného snímku z Basler kamery přes tvůj camera_manager
                     live_full_img, pylon_camera_name = camera_manager.capture_live_frame()
                     
                     if live_full_img is not None:
-                        # Uložení surového snímku z kamery do historie (Unsorted) pro pozdější učení
                         timestamp = int(time.time())
                         ulozeny_raw_soubor = f"C:/Image/Unsorted/{active_p}/basler_{pylon_camera_name}_{timestamp}.jpg"
                         os.makedirs(os.path.dirname(ulozeny_raw_soubor), exist_ok=True)
                         live_full_img.save(ulozeny_raw_soubor, "JPEG", quality=95)
                         
-                        # Zápis do SQLite historie jako 'Neroztříděno'
                         database.save_to_history(active_p, r_name, ulozeny_raw_soubor, "Neroztříděno")
                         
-                        # Ořez zóny (ROI) pro vyhodnocení AI
                         try:
                             live_crop = live_full_img.crop((r[4], r[5], r[4]+r[6], r[5]+r[7]))
                             live_roi_img = live_crop.resize((500, 500), Image.Resampling.LANCZOS)
@@ -228,7 +197,6 @@ with tab1:
                         pylon_camera_name = "Chyba Kamery"
                         live_roi_img = Image.new('RGB', (500, 500), color=(30, 30, 30))
                     
-                    # Spuštění AI modelu na oříznutou zónu
                     model_path = f"models/model_ai_{active_p}_{r_name}.pth"
                     universal_model_path = f"models/model_ai_{active_p}_Univerzalni_Sit.pth"
                     active_model = model_path if os.path.exists(model_path) else (universal_model_path if os.path.exists(universal_model_path) else None)
@@ -238,7 +206,6 @@ with tab1:
                         status_text = "OK" if is_zone_ok else "NOK"
                         caption_str = f"✨ AI Jistota: {int(ai_confidence * 100)}%"
                     else:
-                        # Fallback na pixelovou odchylku, pokud model ještě není naučený
                         is_zone_ok = True
                         status_text = "OK (Bez AI)"
                         caption_str = "📐 Čeká na model"
@@ -247,7 +214,6 @@ with tab1:
                         current_outputs[r_nok] = True
                         is_entire_mold_ok = False
                     
-                    # Vykreslení výsledku do mřížky Streamlitu (Zelená / Červená)
                     zone_color = "#00FF00" if is_zone_ok else "#FF4B4B"
                     roi_square = live_roi_img.copy()
                     draw_sq = ImageDraw.Draw(roi_square)
@@ -263,28 +229,23 @@ with tab1:
                     roi_placeholders[r_id].markdown(html_label, unsafe_allow_html=True)
                     roi_placeholders[r_id].image(roi_square, use_container_width=True, caption=caption_str)
                     
-                    # Aktualizace pravého sloupce (Seznam kontrol)
                     if is_zone_ok:
                         control_placeholders[r_id].markdown(f"🍏 **Kontrola {r_name}** — `OK`", unsafe_allow_html=True)
                     else:
                         control_placeholders[r_id].markdown(f"🍎 <span style='color:#FF4B4B;'>**Kontrola {r_name}** — `NOK (Výstup {r_nok})`</span>", unsafe_allow_html=True)
 
-                # Zápis finálního výsledku zpět do lisu přes Modbus (Moxa)
                 if st.session_state.lis_modbus.client and st.session_state.lis_modbus.client.is_socket_open():
                     stav_pro_moxu = 1 if is_entire_mold_ok else 2
                     st.session_state.lis_modbus.client.write_single_register(address=0, value=stav_pro_moxu)
                 
-                # Aktualizace velkého statusu (OK/NOK banner)
                 if is_entire_mold_ok:
                     global_status_placeholder.markdown("<div style='background-color:#007D2F; color:white; padding:30px; border-radius:8px; text-align:center; font-size:55px; font-weight:bold;'>OK</div>", unsafe_allow_html=True)
                 else:
                     global_status_placeholder.markdown("<div style='background-color:#C80000; color:white; padding:30px; border-radius:8px; text-align:center; font-size:55px; font-weight:bold;'>NOK</div>", unsafe_allow_html=True)
             
-            # Krátká pauza smyčky, aby nedošlo k přetížení CPU
             time.sleep(0.1)
             st.rerun()
         else:
-            # KLIDOVÝ STAV - Pokud je přepínač vypnutý, odpojíme klienta lisu a vypíšeme status
             if "lis_modbus" in st.session_state:
                 st.session_state.lis_modbus.close()
                 del st.session_state.lis_modbus
@@ -340,20 +301,15 @@ with tab2:
                     square_img.save(filename)
                     
                     database.add_master(active_p, m_id_name, filename, ax, ay, aw, ah)
-                    st.success(f"Master {m_id_name} byl úspěšně uložen pro offline přípravu!")
+                    st.success(f"Master {m_id_name} byl úspěšně uložen!")
                     st.rerun()
                 else:
-                    st.error("❌ Pro uložení musíte zadat název a mít načtený/nahraný obrázek!")
-            
-            # ⚠️ ZDE KÓD V LEVÉM SLOUPCI KONČÍ. VŠECHNY STARÉ SLIDERY EXPOZICE ODPOVEDAJÍCÍ EXP_VAL ZDE SMAŽ!
+                    st.error("❌ Pro uložení musíte zadat název a mít načtený obrázek!")
 
         with col_img:
-            # Přepínač živého streamu
             live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")
             
             if live_stream_active:
-                # 🍏 ČISTÉ ELVAC VOLÁNÍ: Veškerá hardwarová magie je delegována do manageru, 
-                # což zabrání kolizím a okamžitě uvolní zaseknutou sběrnici!
                 live_full_img, error_msg = camera_manager.capture_live_frame()
                 if live_full_img:
                     st.session_state.setup_image_buffer = live_full_img
@@ -361,7 +317,6 @@ with tab2:
                     st.error(f"❌ {error_msg}")
             else:
                 sim_dir = os.path.join(BASE_IMAGE_DIR, "OK", active_p)
-                
                 if "Složka OK" in source_type:
                     images = []
                     if os.path.exists(sim_dir):
@@ -375,7 +330,6 @@ with tab2:
                             st.warning(f"Složka '{sim_dir}' je prázdná. Použita nouzová plocha.")
                             st.session_state.setup_image_buffer = Image.new('RGB', (1920, 1080), color=(75, 105, 130))
 
-            # VYKRESLENÍ OBRAZU
             if st.session_state.setup_image_buffer is not None:
                 preview_img = st.session_state.setup_image_buffer.copy()
                 img_w, img_h = preview_img.size
@@ -387,13 +341,10 @@ with tab2:
                 
                 draw = ImageDraw.Draw(preview_img)
                 draw.rectangle([safe_ax, safe_ay, safe_ax + safe_aw, safe_ay + safe_ah], outline="red", width=5)
-                st.image(preview_img, width="stretch", caption=f"Aktuální podklad ({img_w}x{img_h} px)")
+                st.image(preview_img, use_container_width=True, caption=f"Aktuální podklad ({img_w}x{img_h} px)")
 
-            # --- HARDWAROVÉ SLIDERY (SYNCHRONIZOVÁNO PROTI BLIKÁNÍ SÍTĚ 50Hz) ---
+            # --- HARDWAROVÉ SLIDERY (ANTI-FLICKER 50Hz) ---
             st.markdown("### 💡 Hardwarové nastavení osvitu kamery")
-            
-            # 🍏 ANTI-FLICKER ELVAC FIX: Nastavením výchozí hodnoty na 40000 a kroku (step) na 20000 
-            # donutíme kameru exponovat přesně v násobcích 50Hz sítě, což okamžitě zastaví vlnění jasu!
             st.slider(
                 "Elektronická uzávěrka (Anti-Flicker 50Hz takty)", 
                 min_value=20000, 
@@ -402,52 +353,20 @@ with tab2:
                 step=20000, 
                 key="exp_slider_val"
             )
-            
             st.slider("Zesílení obrazu (Gain Raw index)", 0, 18, 3, step=1, key="gain_slider_val")
             
-            # 🍏 Profi průmyslový zkrácený formát popisku podle přání (např. 281 P1)
-            st.text_input("📝 Označení konfigurace (např. Číslo_P1):", 
-                          value="281_P1", 
-                          key="pfs_custom_description")
+            st.text_input("📝 Označení konfigurace (např. Číslo_P1):", value="281_P1", key="pfs_custom_description")
 
-            # 💾 JEDNORÁZOVÝ ZÁPIS A UKLÁDÁNÍ PFS
+            # 💾 SPRÁVNÝ ZÁPIS A UKLÁDÁNÍ PFS DO CAMERA_MANAGERU
             current_setup_pos = st.session_state.get("current_run_position", 1)
             if st.button(f"💾 ULOŽIT TUTO KONFIGURACI JAKO PFS PRO POZICI {current_setup_pos}", type="primary", use_container_width=True):
                 proj_name = st.session_state.get("active_project", "Default_Project")
                 
                 raw_desc = st.session_state.pfs_custom_description.strip().replace(" ", "_")
                 clean_desc = "".join([c for c in raw_desc if c.isalnum() or c in ["_", "-"]])
-                custom_pos_identifier = f"{current_setup_pos}_{clean_desc}"
+                custom_pos_identifier = f"{clean_desc}"
                 
-                cam = camera_manager.get_camera()
-                if cam:
-                    try:
-                        nodemap = cam.GetNodeMap()
-                        
-                        # Vypnutí automatiky
-                        for name in ["ExposureAuto", "GainAuto"]:
-                            node = nodemap.GetNode(name)
-                            if node: node.SetValue("Off")
-                            
-                        # 🍏 NATIVNÍ ZÁPIS EXPOZICE DO 5MPX
-                        exp_node = nodemap.GetNode("ExposureTime") or nodemap.GetNode("ExposureTimeAbs")
-                        if exp_node:
-                            exp_node.SetValue(float(st.session_state.exp_slider_val))
-                        else:
-                            exp_raw = nodemap.GetNode("ExposureTimeRaw")
-                            if exp_raw:
-                                exp_raw.SetValue(int(st.session_state.exp_slider_val))
-                        
-                        # 🍏 NATIVNÍ ZÁPIS CELOČÍSELNÉHO GAINU (0-18) - ODSTRANÍ ŽLUTÉ BANNERY
-                        gain_node = nodemap.GetNode("GainRaw") or nodemap.GetNode("Gain")
-                        if gain_node:
-                            # Vynutíme typ int, což C++ wrapper okamžitě akceptuje
-                            gain_node.SetValue(int(st.session_state.gain_slider_val))
-                            
-                    except Exception as e_direct:
-                        st.warning(f"⚠️ Částečný zápis registrů: {e_direct}")
-                
-                # Export do PFS souboru pozice
+                # Volání bezpečné ukladací metody z camera_manageru
                 success, path_or_err = camera_manager.save_camera_features_to_pfs(proj_name, custom_pos_identifier)
                 if success:
                     st.session_state[f"pfs_desc_pos_{current_setup_pos}"] = st.session_state.pfs_custom_description
@@ -455,8 +374,7 @@ with tab2:
                     st.rerun()
                 else:
                     st.error(f"❌ Selhalo vytvoření PFS souboru: {path_or_err}")
-    
-        # --- REFRESH PRO ŽIVÉ VIDEO ---
+        
         if st.session_state.get("master_live_stream_toggle") and st.session_state.setup_image_buffer is not None:
             time.sleep(0.08)
             st.rerun()
@@ -465,8 +383,6 @@ with tab2:
 with tab3:
     active_p = st.session_state.active_project
     st.info(f"🏗️ Nastavení zón pro projekt: **{active_p}**")
-    
-    # --- VODOROVNÝ PÁS POZIC PODLE ELVACU ---
     st.write("---")
     st.markdown("### 🗺️ Vyberte pozici pro úpravu (Sekvence lisu)")
     
@@ -475,22 +391,16 @@ with tab3:
     if "current_position" not in st.session_state:
         st.session_state.current_position = 1
 
-    # Vykreslení tlačítek vedle sebe v TAB 3
     pos_count = len(st.session_state.available_positions)
     cols = st.columns(pos_count + 1)
     
     for i, pos in enumerate(st.session_state.available_positions):
         with cols[i]:
             is_active = (st.session_state.current_position == pos)
-            
-            # 🍏 OPRAVA KLÍČE PRO TAB 3 (přidán prefix zone_tab_pos_)
             if st.button(f" Pozice {pos}", key=f"zone_tab_pos_{pos}", type="primary" if is_active else "secondary", use_container_width=True):
                 st.session_state.current_position = pos
-                
-                # Bezpečné získání názvu aktivního projektu ze session_state
                 proj_name = st.session_state.get("active_project", "Default_Project")
                 
-                # Načtení PFS konfigurace
                 success, msg = camera_manager.load_camera_features_from_pfs(proj_name, pos)
                 if not success:
                     st.toast(f"ℹ️ {msg}", icon="ℹ️")
@@ -620,4 +530,4 @@ with tab3:
 with tab4:
     st.subheader("🔌 Nastavení komunikace (Modbus TCP / Moxa)")
     st.text_input("IP Adresa Moxa I/O modulu", value="192.168.1.200")
-    st.button("🔄 Testovat připojení hardwaru", width="stretch")
+    st.button("🔄 Testovat připojení hardwaru", use_container_width=True)

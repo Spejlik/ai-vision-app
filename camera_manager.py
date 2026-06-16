@@ -35,16 +35,42 @@ def get_camera():
         cam = pylon.InstantCamera(tl_factory.CreateDevice(devices[0]))
         cam.Open()
         
-        # Odpojení linkového triggeru lisu hned při startu
+        # Inicializace registrů a odpojení linkového triggeru lisu hned při startu
         try:
             nodemap = cam.GetNodeMap()
+            
             t_mode = nodemap.GetNode("TriggerMode")
             if t_mode is not None:
                 t_mode.SetValue("Off")
+                
             e_mode = nodemap.GetNode("ExposureMode")
             if e_mode is not None: e_mode.SetValue("Timed")
+                
             fr_en = nodemap.GetNode("AcquisitionFrameRateEnable")
             if fr_en is not None: fr_en.SetValue(False)
+
+            # --- 🍏 HARDWAROVÝ ANTI-FLICKER FILTR 50Hz (ELVAC STANDARD) ---
+            # Vyhlazuje kmitání zářivek v hale lisu přímo na procesoru kamery
+            try:
+                flicker_sel = nodemap.GetNode("AntiFlickerSelector") or nodemap.GetNode("LightSourceSelector")
+                if flicker_sel is not None:
+                    symbolics = flicker_sel.GetSymbolics()
+                    if "Frequency50Hz" in symbolics:
+                        flicker_sel.SetValue("Frequency50Hz")
+                    elif "Hz50" in symbolics:
+                        flicker_sel.SetValue("Hz50")
+                    elif "Lighting50Hz" in symbolics:
+                        flicker_sel.SetValue("Lighting50Hz")
+            except:
+                pass
+
+            try:
+                flicker_mode = nodemap.GetNode("AntiFlickerMode")
+                if flicker_mode is not None:
+                    flicker_mode.SetValue("On")
+            except:
+                pass
+
         except Exception as e_init_reg:
             print(f"ℹ️ Inicializace registrů: {e_init_reg}")
 
@@ -59,7 +85,7 @@ def get_camera():
             
         cam.StartGrabbingMax(30, pylon.GrabStrategy_LatestImageOnly)
         _GLOBAL_CAMERA_INSTANCE = cam
-        print("✅ [HARDWARE] Kamera je úspěšně uzamčena a běží v režimu Free Run.")
+        print("✅ [HARDWARE] Kamera je úspěšně uzamčena a běží v režimu Free Run s 50Hz filtrem.")
         return _GLOBAL_CAMERA_INSTANCE
     except Exception as e:
         print(f"❌ [HARDWARE] Selhalo navázání spojení s kamerou: {e}")
@@ -73,8 +99,8 @@ def capture_live_frame(*args, **kwargs):
     """
     global _last_valid_img
     
-    exposure_raw_val = st.session_state.get("exp_slider_val", 30000)
-    gain_raw_val = st.session_state.get("gain_slider_val", 12)
+    exposure_raw_val = st.session_state.get("exp_slider_val", 40000)
+    gain_raw_val = st.session_state.get("gain_slider_val", 3)
     
     cam = get_camera()
     if cam is not None and cam.IsOpen():
@@ -115,27 +141,56 @@ def capture_live_frame(*args, **kwargs):
     return None, "Čekání na uvolnění sběrnice kamery..."
 
 def save_camera_features_to_pfs(project_name, position_num):
+    """
+    Uloží aktuální hardwarovou mapu registru včetně aktivního linkového triggeru do PFS.
+    """
     try:
         cam = get_camera()
         if cam:
+            nodemap = cam.GetNodeMap()
+            
+            # --- POJISTKA PRO AUTOMATICKÝ BĚH LINKY ---
+            # Do souboru PFS uložíme stav TriggerMode=On, aby lis po zavedení profilu mohl sám samofotit
+            try:
+                t_mode = nodemap.GetNode("TriggerMode")
+                if t_mode is not None:
+                    t_mode.SetValue("On")
+            except:
+                pass
+                
             os.makedirs("profiles", exist_ok=True)
             pfs_path = f"profiles/{project_name}_pos_{position_num}.pfs"
-            pylon.FeaturePersistence.Save(pfs_path, cam.GetNodeMap())
+            pylon.FeaturePersistence.Save(pfs_path, nodemap)
+            
+            # Po uložení ihned vrátíme Free Run (Off) pro plynulý náhled inženýra
+            try:
+                if t_mode is not None:
+                    t_mode.SetValue("Off")
+            except:
+                pass
+                
             return True, pfs_path
     except Exception as e:
         return False, str(e)
     return False, "Kamera není inicializována."
 
 def load_camera_features_from_pfs(project_name, position_num):
+    """
+    Načte konfiguraci ze souboru PFS a přenastaví uzly kamery.
+    """
     cam = get_camera()
     if cam:
         pfs_path = f"profiles/{project_name}_pos_{position_num}.pfs"
         if os.path.exists(pfs_path):
             try:
                 is_grabbing = cam.IsGrabbing()
-                if is_grabbing: cam.StopGrabbing()
+                if is_grabbing: 
+                    cam.StopGrabbing()
+                
                 pylon.FeaturePersistence.Load(pfs_path, cam.GetNodeMap(), True)
-                if is_grabbing: cam.StartGrabbingMax(30, pylon.GrabStrategy_LatestImageOnly)
+                
+                if is_grabbing: 
+                    cam.StartGrabbingMax(30, pylon.GrabStrategy_LatestImageOnly)
                 return True, "PFS načteno"
             except Exception as e:
                 return False, str(e)
