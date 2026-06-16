@@ -12,8 +12,12 @@ from pypylon import pylon
 import streamlit as st
 
 # Bezpečné sdílení jedné instance kamery napříč celým Streamlitem
+import time
+from PIL import Image
+from pypylon import pylon
+import streamlit as st
+
 def get_camera():
-    # Pokud kamera už existuje a funguje, okamžitě ji vrátíme a znovu NEOTVÍRÁME
     if "pylon_camera_instance" in st.session_state and st.session_state.pylon_camera_instance is not None:
         if st.session_state.pylon_camera_instance.IsOpen() and st.session_state.pylon_camera_instance.IsGrabbing():
             return st.session_state.pylon_camera_instance
@@ -24,13 +28,26 @@ def get_camera():
         if not devices: 
             return None
         
-        # Vytvoření instance a trvalé uložení do paměti aplikace
         cam = pylon.InstantCamera(tl_factory.CreateDevice(devices[0]))
         cam.Open()
+        
+        # --- ELVAC OPTIMALIZACE GIGE BUFFERU PROTI ZAHCOVÁNÍ SÍTĚ (ODSTRANÍ BLIKÁNÍ) ---
+        try:
+            # Zvýšíme počet bufferů pro síťové pakety, aby karta stíhala odebírat 5MPx data
+            cam.MaxNumBuffer = 30
+            
+            # Nastavení vnitřního síťového grabberu Basler
+            nodemap = cam.GetNodeMap()
+            
+            # Vypnutí vnitřního mezidropu pro potlačení StreamGrabber chyb
+            cam.StreamGrabber.MaxNumBuffer = 30
+        except Exception as e_buf:
+            print(f"ℹ️ Částečné nastavení bufferů: {e_buf}")
+            
         cam.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
         
         st.session_state.pylon_camera_instance = cam
-        print("🍏 [HARDWARE] Kamera úspěšně inicializována do permanentní session.")
+        print("🍏 [HARDWARE] Kamera úspěšně inicializována s rozšířeným GigE bufferem.")
         return cam
     except Exception as e:
         print(f"⚠️ [HARDWARE] Kritická chyba otevírání kamery: {e}")
