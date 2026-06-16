@@ -389,6 +389,9 @@ with tab2:
                 else:
                     st.error(f"❌ {error_msg}")
             else:
+                        if st.session_state.setup_image_buffer is None:
+                            st.warning(f"Složka '{sim_dir}' je prázdná. Použita nouzová plocha.")
+                            st.session_state.setup_image_buffer = Image.new('RGB', (1920, 1080), color=(75, 105, 130))
 
             # VYKRESLENÍ OBRAZU
             if st.session_state.setup_image_buffer is not None:
