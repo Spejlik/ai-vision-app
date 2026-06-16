@@ -613,7 +613,8 @@ with tab5:
                         btn_col1, btn_col2 = st.columns(2)
                         
                         with btn_col1:
-                            if st.button("🍏 OK", key=f"btn_ok_{r_id}", use_container_width=True):
+                            # 🍏 OPRAVA: Přidán _idx pro absolutní unikátnost klíče
+                            if st.button("🍏 OK", key=f"btn_ok_{r_id}_{idx}", use_container_width=True):
                                 target_dir = f"C:/Image/OK/{active_p}"
                                 os.makedirs(target_dir, exist_ok=True)
                                 target_path = os.path.join(target_dir, os.path.basename(r_path))
@@ -631,7 +632,8 @@ with tab5:
                                 st.rerun()
                                 
                         with btn_col2:
-                            if st.button("🍎 NOK", key=f"btn_nok_{r_id}", use_container_width=True):
+                            # 🍏 OPRAVA: Přidán _idx pro absolutní unikátnost klíče
+                            if st.button("🍎 NOK", key=f"btn_nok_{r_id}_{idx}", use_container_width=True):
                                 target_dir = f"C:/Image/NOK/{active_p}"
                                 os.makedirs(target_dir, exist_ok=True)
                                 target_path = os.path.join(target_dir, os.path.basename(r_path))
