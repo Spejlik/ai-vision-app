@@ -40,13 +40,23 @@ def get_camera():
         cam = pylon.InstantCamera(tl_factory.CreateDevice(devices[0]))
         cam.Open()
         
-        # --- ELVAC BEZPEČNÁ ALOKACE SÍTĚ BEZ ZÁPISU DO REGISTRŮ ---
-        # Metoda StartGrabbingMax natvrdo alokuje 30 bufferů v C++ paměti Pylonu,
-        # což spolehlivě zabrání chybě 'Payload data discarded' a ukončí blikání.
+        # --- ELVAC OPTIMALIZACE GIGE PŘENOSU ---
+        try:
+            # Bezpečné získání uzlové mapy síťového grabberu
+            grabber_nodemap = cam.GetStreamGrabberNodeMap()
+            
+            # Zvýšíme počet interních bufferů přímo v ovladači na maximum (30)
+            max_buffers = grabber_nodemap.GetNode("MaxNumBuffer")
+            if max_buffers is not None:
+                max_buffers.SetValue(30)
+        except Exception as e_grabber:
+            print(f"ℹ️ Specifické nastavení grabberu přeskočeno: {e_grabber}")
+        
+        # Spuštění grabování s alokací paměťového poolu v C++
         cam.StartGrabbingMax(30, pylon.GrabStrategy_LatestImageOnly)
         
         st.session_state.pylon_camera_instance = cam
-        print("🍏 [HARDWARE] Kamera úspěšně inicializována pomocí StartGrabbingMax(30).")
+        print("🍏 [HARDWARE] Kamera úspěšně inicializována přes GetStreamGrabberNodeMap.")
         return cam
     except Exception as e:
         print(f"⚠️ [HARDWARE] Kritická chyba otevírání kamery: {e}")
