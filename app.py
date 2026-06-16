@@ -386,36 +386,60 @@ with tab2:
                 draw.rectangle([safe_ax, safe_ay, safe_ax + safe_aw, safe_ay + safe_ah], outline="red", width=5)
                 st.image(preview_img, width="stretch", caption=f"Aktuální podklad ({img_w}x{img_h} px)")
 
-            # --- SLIDERY PŘÍMO POD OBRAZEM ---
+            # --- SLIDERY PŘÍMO POD OBRAZEM (OPRAVENO PRO STARŠÍ 5MPX ČIPY) ---
             st.markdown("### 💡 Hardwarové nastavení osvitu kamery")
-            st.slider("Čas expozice (μs)", 1000, 200000, 20000, step=500, key="exp_slider_val")
-            st.slider("Zesílení obrazu (Gain dB)", 0.0, 24.0, 0.0, step=0.5, key="gain_slider_val")
             
-            # 💾 JEDNORÁZOVÝ ZÁPIS A UKLÁDÁNÍ PFS PRO DANOU POZICI
+            # Expozice jako celé číslo v krocích po 1000 μs
+            st.slider("Čas expozice (μs)", 1000, 200000, 30000, step=1000, key="exp_slider_val")
+            
+            # 🍏 KLÍČOVÁ ZMĚNA: Gain jako čisté celé číslo (0 až 18) podle Elvac standardu pro 5MPx
+            st.slider("Zesílení obrazu (Gain Raw index)", 0, 18, 12, step=1, key="gain_slider_val")
+            
+            st.text_input("📝 Vlastní popis / poznámka k této konfiguraci pozice:", 
+                          value="Zakladni nastaveni jasu", 
+                          key="pfs_custom_description")
+
+            # 💾 JEDNORÁZOVÝ ZÁPIS A UKLÁDÁNÍ PFS
             current_setup_pos = st.session_state.get("current_run_position", 1)
-            if st.button(f"💾 ULOŽIT TUTO KONFIGURACI JAKO PFS PRO POZICI {current_setup_pos}", type="secondary", use_container_width=True):
+            if st.button(f"💾 ULOŽIT TUTO KONFIGURACI JAKO PFS PRO POZICI {current_setup_pos}", type="primary", use_container_width=True):
                 proj_name = st.session_state.get("active_project", "Default_Project")
-                cam = camera_manager.get_camera()
                 
+                raw_desc = st.session_state.pfs_custom_description.strip().replace(" ", "_")
+                clean_desc = "".join([c for c in raw_desc if c.isalnum() or c in ["_", "-"]])
+                custom_pos_identifier = f"{current_setup_pos}_{clean_desc}"
+                
+                cam = camera_manager.get_camera()
                 if cam:
                     try:
                         nodemap = cam.GetNodeMap()
-                        for name, val in [("ExposureAuto", "Off"), ("GainAuto", "Off")]:
-                            node = nodemap.GetNode(name)
-                            if node: node.SetValue(val)
-                            
-                        exp_node = nodemap.GetNode("ExposureTime") or nodemap.GetNode("ExposureTimeAbs")
-                        if exp_node: exp_node.SetValue(float(st.session_state.exp_slider_val))
                         
-                        gain_node = nodemap.GetNode("Gain") or nodemap.GetNode("GainRaw")
+                        # Vypnutí automatiky
+                        for name in ["ExposureAuto", "GainAuto"]:
+                            node = nodemap.GetNode(name)
+                            if node: node.SetValue("Off")
+                            
+                        # 🍏 NATIVNÍ ZÁPIS EXPOZICE DO 5MPX
+                        exp_node = nodemap.GetNode("ExposureTime") or nodemap.GetNode("ExposureTimeAbs")
+                        if exp_node:
+                            exp_node.SetValue(float(st.session_state.exp_slider_val))
+                        else:
+                            exp_raw = nodemap.GetNode("ExposureTimeRaw")
+                            if exp_raw:
+                                exp_raw.SetValue(int(st.session_state.exp_slider_val))
+                        
+                        # 🍏 NATIVNÍ ZÁPIS CELOČÍSELNÉHO GAINU (0-18) - ODSTRANÍ ŽLUTÉ BANNERY
+                        gain_node = nodemap.GetNode("GainRaw") or nodemap.GetNode("Gain")
                         if gain_node:
-                            val_to_set = int(st.session_state.gain_slider_val) if "Raw" in gain_node.GetNode().GetName() else float(st.session_state.gain_slider_val)
-                            gain_node.SetValue(val_to_set)
+                            # Vynutíme typ int, což C++ wrapper okamžitě akceptuje
+                            gain_node.SetValue(int(st.session_state.gain_slider_val))
+                            
                     except Exception as e_direct:
                         st.warning(f"⚠️ Částečný zápis registrů: {e_direct}")
                 
-                success, path_or_err = camera_manager.save_camera_features_to_pfs(proj_name, current_setup_pos)
+                # Export do PFS souboru pozice
+                success, path_or_err = camera_manager.save_camera_features_to_pfs(proj_name, custom_pos_identifier)
                 if success:
+                    st.session_state[f"pfs_desc_pos_{current_setup_pos}"] = st.session_state.pfs_custom_description
                     st.success(f"🎉 Průmyslový PFS profil pro Pozici {current_setup_pos} úspěšně vytvořen!")
                     st.rerun()
                 else:
