@@ -32,8 +32,8 @@ def get_camera():
 
 def capture_live_frame(*args, **kwargs):
     """
-    Robustní zachycení snímku z Basler kamery podle průmyslového standardu.
-    Odebere veškeré auto-regulace jasu, které by mohly manuální Gain přepisovat.
+    Robustní zachycení snímku z Basler kamery.
+    Natvrdo vypíná GainAuto zjištěný sondou přímo na IPC stanici.
     """
     exposure_time = kwargs.get('exposure_time', args[0] if len(args) > 0 else None)
     gain = kwargs.get('gain', args[1] if len(args) > 1 else None)
@@ -43,23 +43,20 @@ def capture_live_frame(*args, **kwargs):
         try:
             nodemap = cam.GetNodeMap()
 
-            # --- 1. ODSTAVENÍ VEŠKERÝCH INTERNÍCH AUTOMATIK (ELVAC STANDARD) ---
-            # Vypnutí automatického jasu (brání skokovému vracení Gainu)
-            if nodemap.GetNode("ExposureAuto") is not None:
-                cam.ExposureAuto.SetValue("Off")
-            if nodemap.GetNode("GainAuto") is not None:
-                cam.GainAuto.SetValue("Off")
-                
-            # Průmyslový zámek: Vypnutí Auto Function ROI (pokud ji kamera má aktivní)
+            # --- 1. KOMPLETNÍ VYPNUTÍ AUTOMATIKY PODLE SONDY ---
             try:
-                if nodemap.GetNode("AutoFunctionROISelector") is not None:
-                    cam.AutoFunctionROISelector.SetValue("ROI1")
-                    if nodemap.GetNode("AutoFunctionROIBrightnessAutoFunctionInvolvement") is not None:
-                        cam.AutoFunctionROIBrightnessAutoFunctionInvolvement.SetValue("Off")
-            except:
-                pass
+                # Vypnutí automatické expozice
+                if nodemap.GetNode("ExposureAuto") is not None:
+                    cam.ExposureAuto.SetValue("Off")
+                
+                # VTR natvrdo vypneme GainAuto, které sonda našla jako 'Continuous'
+                if nodemap.GetNode("GainAuto") is not None:
+                    # Streamlit/Pypylon vyžaduje přesný string
+                    cam.GainAuto.SetValue("Off")
+            except Exception as e_auto:
+                print(f"⚠️ Selhalo odpojení automatických smyček: {e_auto}")
 
-            # --- 2. HARDWAROVÝ ZÁPIS EXPOZICE ---
+            # --- 2. ZÁPIS EXPOZICE ---
             if exposure_time is not None:
                 try:
                     if nodemap.GetNode("ExposureTime") is not None:
@@ -67,30 +64,21 @@ def capture_live_frame(*args, **kwargs):
                 except Exception as e_exp:
                     print(f"❌ Nelze nastavit ExposureTime: {e_exp}")
 
-            # --- 3. HARDWAROVÝ ZÁPIS GAINU S DEFINITIVNÍM ODEMČENÍM ---
+            # --- 3. ZÁPIS MANUÁLNÍHO GAINU ---
             if gain is not None:
                 try:
-                    # Elvac standard: Nejprve nasměrovat Selector na celou matrici "All"
+                    # Ověříme GainSelector
                     if nodemap.GetNode("GainSelector") is not None:
-                        # Zkusíme nastavit "All", případně "AnalogAll" nebo "DigitalAll"
-                        symbolics = cam.GainSelector.GetSymbolics()
-                        if "All" in symbolics:
-                            cam.GainSelector.SetValue("All")
-                        elif "AnalogAll" in symbolics:
-                            cam.GainSelector.SetValue("AnalogAll")
-
-                    # Zápis do hlavního registru jasu
+                        cam.GainSelector.SetValue("All")
+                    
+                    # Zapíšeme hodnotu ze slideru
                     if nodemap.GetNode("Gain") is not None:
                         val_to_set = max(cam.Gain.GetMin(), min(cam.Gain.GetMax(), float(gain)))
                         cam.Gain.SetValue(val_to_set)
-                    elif nodemap.GetNode("GainRaw") is not None:
-                        val_to_set = max(cam.GainRaw.GetMin(), min(cam.GainRaw.GetMax(), int(round(float(gain)))))
-                        cam.GainRaw.SetValue(val_to_set)
-                        
                 except Exception as e_gain:
-                    print(f"❌ Nelze aplikovat manuální Gain: {e_gain}")
+                    print(f"❌ Nelze aplikovat hodnotu Gainu: {e_gain}")
         
-            # --- 4. VYTAŽENÍ SNÍMKU Z KAMERY ---
+            # --- 4. ZÍSKÁNÍ SNÍMKU ---
             grab_result = cam.RetrieveResult(2000, pylon.TimeoutHandling_Return)
             if grab_result.GrabSucceeded():
                 img = Image.fromarray(grab_result.Array).convert("RGB")
