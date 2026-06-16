@@ -650,4 +650,63 @@ with tab5:
                                 time.sleep(0.1)
                                 st.rerun()
                 
-                displayed_count += 1    
+                displayed_count += 1
+
+# --- SEPARÁTOR PRO ZPĚTNOU KONTROLU DATASETU ---
+        st.markdown("---")
+        st.subheader("📂 Kontrola a revize již roztříděného datasetu")
+        st.info("Zde si můžete zkontrolovat snímky v trénovacích složkách a případně změnit jejich stav (např. z OK na NOK).")
+        
+        # Přepínač mezi složkami, které chceme revidovat
+        rev_folder = st.radio("Vyberte složku ke kontrole:", ["Zobrazit složku OK", "Zobrazit složku NOK"], horizontal=True)
+        target_status = "OK" if "Zobrazit složku OK" in rev_folder else "NOK"
+        opp_status = "NOK" if target_status == "OK" else "OK"
+        opp_color = "🍎 Změnit na NOK" if target_status == "OK" else "🍏 Změnit na OK"
+        
+        # Vytažení již roztříděných dat z SQL
+        conn = sqlite3.connect("vision_system.db")
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT id, {c_roi}, {c_path} FROM history WHERE {c_proj}=? AND status=? ORDER BY id DESC", (active_p, target_status))
+        reviewed_records = cursor.fetchall()
+        conn.close()
+        
+        if not reviewed_records:
+            st.caption(f"Složka {target_status} je momentálně prázdná.")
+        else:
+            st.markdown(f"**Vzorky ve složce {target_status} ({len(reviewed_records)}x):**")
+            
+            # Vykreslení mřížky pro revizi (max 8 snímků pro přehlednost)
+            rev_cols = st.columns(4)
+            for r_idx, r_rec in enumerate(reviewed_records[:8]):
+                rev_id, rev_zone, rev_path = r_rec[0], r_rec[1], r_rec[2]
+                
+                with rev_cols[r_idx % 4]:
+                    with st.container(border=True):
+                        st.caption(f"📍 {rev_zone}")
+                        
+                        if os.path.exists(rev_path):
+                            st.image(rev_path, use_container_width=True)
+                        else:
+                            st.caption("⚠️ Soubor byl přesunut/smazán")
+                            
+                        # Tlačítko pro okamžitou změnu klasifikace (přeřazení)
+                        if st.button(opp_color, key=f"rev_flip_{rev_id}_{r_idx}", use_container_width=True):
+                            # 1. Definice nové složky na disku C:
+                            new_dir = f"C:/Image/{opp_status}/{active_p}"
+                            os.makedirs(new_dir, exist_ok=True)
+                            new_path = os.path.join(new_dir, os.path.basename(rev_path))
+                            
+                            # 2. Fyzický přesun souboru na disku do druhé složky
+                            if os.path.exists(rev_path):
+                                os.rename(rev_path, new_path)
+                                
+                            # 3. Aktualizace stavu a nové cesty v SQL
+                            conn = sqlite3.connect("vision_system.db")
+                            cursor = conn.cursor()
+                            cursor.execute(f"UPDATE history SET status=?, {c_path}=? WHERE id=?", (opp_status, new_path, rev_id))
+                            conn.commit()
+                            conn.close()
+                            
+                            st.toast(f"Přesunuto do složky {opp_status}", icon="🔄")
+                            time.sleep(0.1)
+                            st.rerun()                
