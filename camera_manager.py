@@ -30,24 +30,40 @@ def get_camera():
 def capture_live_frame(*args, **kwargs):
     """
     Univerzální průmyslové zachycení snímku z Basler kamery.
-    Bezpečně parsuje exposure_time a gain z jakékoliv verze volání skriptu.
+    Bezpečně parsuje parametry a zapisuje je pouze do existujících uzlů.
     """
-    # Vytáhnutí hodnot z klíčových slov nebo pozičních argumentů
     exposure_time = kwargs.get('exposure_time', args[0] if len(args) > 0 else None)
     gain = kwargs.get('gain', args[1] if len(args) > 1 else None)
     
     cam = get_camera()
     if cam and cam.IsGrabbing():
         try:
-            # Manuální konfigurace registrů čipu
-            if exposure_time is not None:
-                cam.ExposureAuto.SetValue("Off")
-                cam.ExposureTime.SetValue(float(exposure_time))
+            # --- BEZPEČNÝ ZÁPIS EXPOZICE ---
+            if exposure_time is not None and hasattr(cam, 'ExposureTime'):
+                try:
+                    if hasattr(cam, 'ExposureAuto') and cam.ExposureAuto.GetNode().IsValid():
+                        cam.ExposureAuto.SetValue("Off")
+                    cam.ExposureTime.SetValue(float(exposure_time))
+                except Exception as e_exp:
+                    print(f"⚠️ Nepodařilo se zapsat ExposureTime: {e_exp}")
                 
+            # --- BEZPEČNÝ ZÁPIS GAINU S KONTROLOU EXISTENCE UZLU ---
             if gain is not None:
-                cam.GainAuto.SetValue("Off")
-                cam.Gain.SetValue(float(gain))
+                # Ověření standardního názvu 'Gain'
+                if hasattr(cam, 'Gain') and cam.Gain.GetNode().IsValid():
+                    try:
+                        if hasattr(cam, 'GainAuto') and cam.GainAuto.GetNode().IsValid():
+                            cam.GainAuto.SetValue("Off")
+                        cam.Gain.SetValue(float(gain))
+                    except Exception as e_gain:
+                        print(f"⚠️ Nepodařilo se zapsat Gain: {e_gain}")
+                # Fallback pro starší typy kamer používající 'GainRaw'
+                elif hasattr(cam, 'GainRaw') and cam.GainRaw.GetNode().IsValid():
+                    try:
+                        cam.GainRaw.SetValue(int(gain))
+                    except: pass
             
+            # Samotné zachycení snímku z čipu
             grab_result = cam.RetrieveResult(2000, pylon.TimeoutHandling_Return)
             if grab_result.GrabSucceeded():
                 img = Image.fromarray(grab_result.Array).convert("RGB")
