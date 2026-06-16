@@ -348,8 +348,6 @@ with tab2:
             # ⚠️ ZDE KÓD V LEVÉM SLOUPCI KONČÍ. VŠECHNY STARÉ SLIDERY EXPOZICE ODPOVEDAJÍCÍ EXP_VAL ZDE SMAŽ!
 
         with col_img:
-            live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")
-            
             if live_stream_active:
                 # --- 🍏 NATVRDO VYNUCENÝ ELVAC ZÁPIS PŘÍMO VE STREAMU ---
                 cam = camera_manager.get_camera()
@@ -389,6 +387,18 @@ with tab2:
                 else:
                     st.error(f"❌ {error_msg}")
             else:
+                # 🍏 OPRAVA SCOPE PROMĚNNÉ: sim_dir definujeme globálně pro celou offline větev
+                sim_dir = os.path.join(BASE_IMAGE_DIR, "OK", active_p)
+                
+                if "Složka OK" in source_type:
+                    images = []
+                    if os.path.exists(sim_dir):
+                        for ext in ["*.jpg", "*.jpeg", "*.png", "*.JPG", "*.PNG"]:
+                            images.extend(glob.glob(os.path.join(sim_dir, ext)))
+                    
+                    if images:
+                        st.session_state.setup_image_buffer = Image.open(images[0]).convert("RGB")
+                    else:
                         if st.session_state.setup_image_buffer is None:
                             st.warning(f"Složka '{sim_dir}' je prázdná. Použita nouzová plocha.")
                             st.session_state.setup_image_buffer = Image.new('RGB', (1920, 1080), color=(75, 105, 130))
