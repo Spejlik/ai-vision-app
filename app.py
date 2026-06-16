@@ -519,4 +519,5 @@ with tab3:
 # --- TAB 4: I/O ---
 with tab4:
     st.subheader("🔌 Nastavení komunikace (Modbus TCP / Moxa)")
-    st.text_input("IP Adresa Moxa I/O modulu", value="192
+    st.text_input("IP Adresa Moxa I/O modulu", value="192.168.1.200")
+    st.button("🔄 Testovat připojení hardwaru", width="stretch")
