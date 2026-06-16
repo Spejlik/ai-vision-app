@@ -327,18 +327,17 @@ with tab2:
                     st.error("❌ Pro uložení musíte zadat název a mít načtený/nahraný obrázek!")
 
         with col_img:
-            # Vytáhneme stream úplně nahoru – bude vidět VŽDY
+            # Nový přepínač streamu, který tam bude svítit VŽDY
             live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")
             
             if live_stream_active:
-                # Pokud zapneš stream, natvrdo se zeptáme Basler kamery přes camera_manager
                 live_full_img, error_msg = camera_manager.capture_live_frame()
                 if live_full_img:
                     st.session_state.setup_image_buffer = live_full_img
                 else:
                     st.error(f"❌ {error_msg}")
             else:
-                # Pokud je stream vypnutý, pokusíme se načíst nouzový simulační obrázek z disku
+                # Pokud stream neběží, podíváme se do složky OK
                 if "Složka OK" in source_type:
                     sim_dir = os.path.join(BASE_IMAGE_DIR, "OK", active_p)
                     images = []
@@ -347,20 +346,17 @@ with tab2:
                             images.extend(glob.glob(os.path.join(sim_dir, ext)))
                     
                     if images:
-                        # Pokud ve složce něco je, vezmeme první obrázek
                         st.session_state.setup_image_buffer = Image.open(images[0]).convert("RGB")
                     else:
-                        # Pokud je složka prázdná, vytvoříme nouzové šedé pozadí (1920x1080)
                         if st.session_state.setup_image_buffer is None:
                             st.warning(f"Složka '{sim_dir}' je prázdná. Použita nouzová plocha.")
                             st.session_state.setup_image_buffer = Image.new('RGB', (1920, 1080), color=(75, 105, 130))
 
-            # VYKRESLENÍ OBRÁZKU A ZAMĚŘOVAČE (Pokud v bufferu něco máme)
+            # VYKRESLENÍ - Upraveno pro moderní verzi Streamlitu (rok 2026)
             if st.session_state.setup_image_buffer is not None:
                 preview_img = st.session_state.setup_image_buffer.copy()
                 img_w, img_h = preview_img.size
                 
-                # Bezpečné ořezy podle sliderů
                 safe_ax = min(ax, img_w - 10)
                 safe_ay = min(ay, img_h - 10)
                 safe_aw = min(aw, img_w - safe_ax)
@@ -368,7 +364,9 @@ with tab2:
                 
                 draw = ImageDraw.Draw(preview_img)
                 draw.rectangle([safe_ax, safe_ay, safe_ax + safe_aw, safe_ay + safe_ah], outline="red", width=5)
-                st.image(preview_img, use_container_width=True, caption=f"Aktuální podklad ({img_w}x{img_h} px)")
+                
+                # ZMĚNA: Používáme width='stretch' namísto use_container_width=True
+                st.image(preview_img, width="stretch", caption=f"Aktuální podklad ({img_w}x{img_h} px)")
 
         # --- REFRESH PRO ŽIVÉ VIDEO ---
         if st.session_state.get("master_live_stream_toggle") and st.session_state.setup_image_buffer is not None:
