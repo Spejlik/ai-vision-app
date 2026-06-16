@@ -30,12 +30,17 @@ def get_camera():
             return None
     return _camera
 
+# Na úplný začátek souboru (pod importy) přidej tyto proměnné pro hlídání změny:
+_last_exposure = None
+_last_gain = None
+
 def capture_live_frame(*args, **kwargs):
     """
-    Robustní zachycení snímku z Basler kamery podle standardu Elvac.
-    Před zápisem kritických registrů bezpečně pozastaví grabbing, 
-    aby hardware nevracel Gain zpět do automatiky.
+    Robustní zachycení snímku z Basler kamery.
+    Zapisuje do hardwaru POUZE při reálné změně slideru, což eliminuje problikávání.
     """
+    global _last_exposure, _last_gain
+    
     exposure_time = kwargs.get('exposure_time', args[0] if len(args) > 0 else None)
     gain = kwargs.get('gain', args[1] if len(args) > 1 else None)
     
@@ -44,45 +49,45 @@ def capture_live_frame(*args, **kwargs):
         try:
             nodemap = cam.GetNodeMap()
             
-            # --- KLÍČOVÝ KROK: PŘERUŠENÍ STREAMU PRO ZÁPIS REGISTRŮ ---
-            is_grabbing_before = cam.IsGrabbing()
-            if is_grabbing_before:
-                cam.StopGrabbing()
+            # Zjistíme, zda operátor pohnul některým ze sliderů
+            exposure_changed = exposure_time is not None and float(exposure_time) != _last_exposure
+            gain_changed = gain is not None and float(gain) != _last_gain
 
-            # --- 1. ODSTAVENÍ AUTOMATIKY ---
-            try:
-                if nodemap.GetNode("ExposureAuto") is not None:
-                    cam.ExposureAuto.SetValue("Off")
-                if nodemap.GetNode("GainAuto") is not None:
-                    cam.GainAuto.SetValue("Off")
-            except Exception as e_auto:
-                print(f"⚠️ Selhalo nastavení automatických smyček: {e_auto}")
-
-            # --- 2. ZÁPIS HARDWAROVÉ EXPOZICE ---
-            if exposure_time is not None:
+            # --- POKUD DOŠLO KE ZMĚNĚ, ZAPÍŠEME REGISTRY (JINAK BĚŽÍ ČISTÝ STREAM) ---
+            if exposure_changed or gain_changed:
                 try:
-                    if nodemap.GetNode("ExposureTime") is not None:
-                        cam.ExposureTime.SetValue(float(exposure_time))
-                except Exception as e_exp:
-                    print(f"❌ Nelze nastavit ExposureTime: {e_exp}")
-
-            # --- 3. ZÁPIS HARDWAROVÉHO GAINU ---
-            if gain is not None:
-                try:
-                    if nodemap.GetNode("GainSelector") is not None:
-                        cam.GainSelector.SetValue("All")
+                    # 1. Dočasně zastavíme grabování pro klidný zápis do čipu
+                    if cam.IsGrabbing():
+                        cam.StopGrabbing()
                     
-                    if nodemap.GetNode("Gain") is not None:
-                        val_to_set = max(cam.Gain.GetMin(), min(cam.Gain.GetMax(), float(gain)))
-                        cam.Gain.SetValue(val_to_set)
-                except Exception as e_gain:
-                    print(f"❌ Nelze aplikovat Gain: {e_gain}")
+                    # 2. Vypnutí linkové automatiky
+                    if nodemap.GetNode("ExposureAuto") is not None:
+                        cam.ExposureAuto.SetValue("Off")
+                    if nodemap.GetNode("GainAuto") is not None:
+                        cam.GainAuto.SetValue("Off")
+                    
+                    # 3. Zápis Expozice (pokud se změnila)
+                    if exposure_changed and nodemap.GetNode("ExposureTime") is not None:
+                        cam.ExposureTime.SetValue(float(exposure_time))
+                        _last_exposure = float(exposure_time)
+                        
+                    # 4. Zápis Gainu (pokud se změnil)
+                    if gain_changed:
+                        if nodemap.GetNode("GainSelector") is not None:
+                            cam.GainSelector.SetValue("All")
+                        if nodemap.GetNode("Gain") is not None:
+                            val_to_set = max(cam.Gain.GetMin(), min(cam.Gain.GetMax(), float(gain)))
+                            cam.Gain.SetValue(val_to_set)
+                            _last_gain = float(gain)
 
-            # --- 4. OPĚTOVNÉ NASTARTOVÁNÍ STREAMU ---
-            if is_grabbing_before:
-                cam.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
-            
-            # --- 5. SAMOTNÉ SEJMUTÍ SNÍMKU ---
+                except Exception as e_reg:
+                    print(f"⚠️ Chyba při zápisu registru: {e_reg}")
+                finally:
+                    # 5. Vždy stream znovu nahodíme
+                    if not cam.IsGrabbing():
+                        cam.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
+
+            # --- SAMOTNÉ SEJMUTÍ SNÍMKU (BĚŽÍ MAXIMÁLNÍ RYCHLOSTÍ) ---
             if cam.IsGrabbing():
                 grab_result = cam.RetrieveResult(2000, pylon.TimeoutHandling_Return)
                 if grab_result.GrabSucceeded():
@@ -92,9 +97,10 @@ def capture_live_frame(*args, **kwargs):
                 grab_result.Release()
                 
         except Exception as e:
-            # V případě havárie se pokusíme kameru nechat běžet
-            try: cam.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
+            # Sychr pro případ nečekaného pádu
+            try: 
+                if not cam.IsGrabbing(): cam.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
             except: pass
-            return None, f"Chyba registrů kamery: {e}"
+            return None, f"Chyba lupu kamery: {e}"
             
     return None, "Kamera negrebuje nebo vypršel timeout."
