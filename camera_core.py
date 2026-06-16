@@ -24,13 +24,23 @@ class BaslerHardwareCore:
             self.camera.Open()
             self.camera_name = self.camera.GetDeviceInfo().GetModelName()
             
-            # Výchozí stabilizační registry proti blikání 50Hz sítě
             nodemap = self.camera.GetNodeMap()
-            for node_name, value in [("TriggerMode", "Off"), ("ExposureMode", "Timed"), ("AcquisitionFrameRateEnable", False)]:
-                node = nodemap.GetNode(node_name)
-                if node: node.SetValue(value)
             
-            # Aktivace nativního anti-flickeru
+            # --- 🍏 NATVRDO RUČNÍ VYPNUTÍ TRIGGERU (ELVAC STANDARD) ---
+            # Vypneme jakýkoliv linkový nebo softwarový trigger, aby kamera běžela v čistém Free Run
+            t_mode = nodemap.GetNode("TriggerMode")
+            if t_mode is not None:
+                t_mode.SetValue("Off")
+                
+            e_mode = nodemap.GetNode("ExposureMode")
+            if e_mode is not None: 
+                e_mode.SetValue("Timed")
+                
+            fr_en = nodemap.GetNode("AcquisitionFrameRateEnable")
+            if fr_en is not None: 
+                fr_en.SetValue(False)
+            
+            # Aktivace nativního anti-flickeru proti blikání haly lisu
             try:
                 flicker_sel = nodemap.GetNode("AntiFlickerSelector") or nodemap.GetNode("LightSourceSelector")
                 if flicker_sel and "Frequency50Hz" in flicker_sel.GetSymbolics():
@@ -38,9 +48,10 @@ class BaslerHardwareCore:
             except:
                 pass
 
-            self.camera.StartGrabbingMax(30, pylon.GrabStrategy_LatestImageOnly)
+            # 🍏 ZMĚNA: StartGrabbing namísto StartGrabbingMax – nekonečný proud snímků bez omezení!
+            self.camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
             self.is_running = True
-            print(f"✅ [CORE] Kamera {self.camera_name} úspěšně uzamčena a spuštěna.")
+            print(f"✅ [CORE] Kamera {self.camera_name} úspěšně uzamčena v NEKONEČNÉM Free Run režimu.")
             return True
         except Exception as e:
             print(f"❌ [CORE] Selhala hardwarová inicializace: {e}")
@@ -54,15 +65,17 @@ class BaslerHardwareCore:
         while self.is_running:
             try:
                 if self.camera and self.camera.IsGrabbing():
-                    grab_result = self.camera.RetrieveResult(100, pylon.TimeoutHandling_Return)
+                    grab_result = self.camera.RetrieveResult(200, pylon.TimeoutHandling_Return)
                     if grab_result and grab_result.GrabSucceeded():
                         img = Image.fromarray(grab_result.Array).convert("RGB")
                         with self.lock:
                             self.last_frame = img
                         grab_result.Release()
+                    elif grab_result:
+                        grab_result.Release()
             except Exception as e:
                 print(f"⚠️ [CORE] Vynechaný frame nebo chyba sběrnice: {e}")
-            time.sleep(0.02)
+            time.sleep(0.03)  # Stabilní diagnostický takt ~30 FPS
 
     def get_latest_image(self):
         with self.lock:
