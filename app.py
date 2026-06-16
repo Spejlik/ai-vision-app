@@ -187,7 +187,7 @@ with tab1:
                     r_tolerance = r[9] if len(r) > 9 else 20
                     
                     # Zachycení reálného snímku z Basler kamery přes tvůj camera_manager
-                    live_full_img, pylon_camera_name = camera_manager.capture_live_frame(0)
+                    live_full_img, pylon_camera_name = camera_manager.capture_live_frame()
                     
                     if live_full_img is not None:
                         # Uložení surového snímku z kamery do historie (Unsorted) pro pozdější učení
@@ -349,11 +349,11 @@ with tab2:
                 
                 draw = ImageDraw.Draw(preview_img)
                 draw.rectangle([safe_ax, safe_ay, safe_ax + safe_aw, safe_ay + safe_ah], outline="red", width=5)
-                st.image(preview_img, use_container_width=True)
+                st.image(preview_img, use_container_width=True, caption=f"Aktuální podklad ({img_w}x{img_h} px)")
 
-        # OBNOVA STRÁNKY (pouze pokud je stream aktivní a máme buffer)
+        # --- JEDINÁ BEZPEČNÁ AUTOMATICKÁ OBNOVA STRÁNKY PRO LIVE STREAM ---
         if st.session_state.get("master_live_stream_toggle") and st.session_state.setup_image_buffer is not None:
-            time.sleep(0.05)
+            time.sleep(0.1)  # 100ms pauza uleví procesoru notebooku
             st.rerun()
 
         st.write("---")
@@ -373,13 +373,6 @@ with tab2:
                         st.session_state.setup_image_buffer = None
                         st.success("Master smazán!")
                         st.rerun()
-                        # --- BEZPEČNÁ OBNOVA STRÁNKY PRO VIDEO ---
-        if "Simulovat z kamery" in source_type and st.session_state.get("master_live_stream_toggle", False):
-            if st.session_state.setup_image_buffer is not None:
-                time.sleep(0.05)
-                st.rerun()
-            else:
-                st.warning("⚠️ Stream pozastaven kvůli chybě kamery.")
 
 # --- TAB 3: ZÓNY ---
 with tab3:
@@ -469,7 +462,6 @@ with tab3:
                 ztol = st.slider("Tolerance odchylky", 1, 100, 20)
                 
                 if st.button("💾 ULOŽIT NOVOU ZÓNU", type="primary", use_container_width=True):
-                    # Použijeme stávající uložení a v database.py pak zajistíme uložení position_num
                     database.save_roi(m_id, active_p, zn, zx, zy, zw, zh, nok_val, ztol, st.session_state.current_position)
                     st.success(f"Zóna {zn} úspěšně uložena do Pozice {st.session_state.current_position}!")
                     time.sleep(0.4)
@@ -483,7 +475,7 @@ with tab3:
                         with del_col2:
                             if st.button("🗑️", key=f"del_roi_{r[0]}"):
                                 database.delete_roi(r[0])
-                                st.rerun()
+                                r.rerun()
 
             with c_viz:
                 draw = ImageDraw.Draw(img_roi)
@@ -509,11 +501,10 @@ with tab3:
                         count_nok += len(glob.glob(os.path.join(nok_dir_check, ext)))
                 
                 if count_ok < 4 or count_nok < 4:
-                    st.warning(f"⚠️ **Nedostatečné množství dat:** V adresáři `C:/Image/` pro projekt `{active_p}` máte pouze **{count_ok}x OK** a **{count_nok}x NOK** snímků. (Vyžadováno aspoň 4x OK a 4x NOK).")
+                    st.warning(f"⚠️ **Nedostatečné množství dat:** V adresáři `C:/Image/` pro projekt `{active_p}` máte pouze **{count_ok}x OK** and **{count_nok}x NOK** snímků. (Vyžadováno aspoň 4x OK a 4x NOK).")
                 else:
                     st.info(f"📊 **Množství dat:** Pro učení projektu `{active_p}` je k dispozici **{count_ok}x OK** a **{count_nok}x NOK** reálných vzorků.")
                 
-                # Odstraněno blokování tlačítka, teď půjde spustit vždy
                 if st.button(f"🚀 SPUSTIT UČENÍ PRO PROJEKT: {active_p}", use_container_width=True):
                     with st.spinner("Učení neuronové sítě běží..."):
                         progress_bar = st.progress(0.0)
@@ -522,7 +513,6 @@ with tab3:
                             progress_bar.progress(pct)
                             status_text.text(msg)
                         
-                        # Změna: Posíláme prázdný název zóny, aby si ai_engine načetl čistě celou složku z disku
                         success, result_msg = ai_engine.train_ai_model(active_p, "", update_progress)
                         if success: st.success(f"🎉 Úspěšně naučeno! {result_msg}")
                         else: st.error(f"❌ Chyba: {result_msg}")
@@ -541,10 +531,8 @@ with tab5:
     if not active_p:
         st.warning("⚠️ Nejdříve vyberte nebo vytvořte projekt v levém panelu.")
     else:
-        # --- FILTRY (NÁVRAT ROLETEK NAHORU) ---
         f_col1, f_col2, f_col3 = st.columns(3)
         with f_col1:
-            # Projekt předvybereme podle sidebar výběru, ale dá se přepnout
             history_projects = database.get_unique_projects_from_history() if hasattr(database, 'get_unique_projects_from_history') else []
             project_options = list(set(["Vše", active_p] + history_projects))
             proj_f = st.selectbox("Aktivní projekt (Lis):", project_options, index=project_options.index(active_p) if active_p in project_options else 0)
@@ -557,7 +545,6 @@ with tab5:
 
         st.write("")
 
-        # HROMADNÝ IMPORT ZE SOUBORŮ
         with st.expander("📥 Hromadný import testovacích fotek ze souborů (Příprava offline)", expanded=False):
             st.write(f"Vyberte jednu nebo více fotek z disku/flashky. Systém je vloží do historie aktivního projektu: **{active_p}**")
             uploaded_hist_files = st.file_uploader(
@@ -594,7 +581,6 @@ with tab5:
         
         st.divider()
         
-        # NAČTENÍ DAT PODLE VYBRANÝCH FILTRŮ
         hist_data = database.get_history(proj_f, status_f, roi_f)
         
         if not hist_data:
@@ -602,7 +588,6 @@ with tab5:
         else:
             st.write(f"🔍 Počet nalezených snímků podle filtrů: **{len(hist_data)}**")
             
-            # VÝPOČET STRÁNKOVÁNÍ
             ITEMS_PER_PAGE = 12
             total_items = len(hist_data)
             total_pages = max(1, (total_items + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE)
@@ -617,7 +602,6 @@ with tab5:
             end_idx = start_idx + ITEMS_PER_PAGE
             page_items = hist_data[start_idx:end_idx]
             
-            # Vykreslení mřížky fotek
             h_cols = st.columns(3)
             for idx, row in enumerate(page_items):
                 with h_cols[idx % 3]:
@@ -626,7 +610,6 @@ with tab5:
                         if os.path.exists(row[3]):
                             st.image(row[3], use_container_width=True)
                             
-                            # Tlačítka se zobrazují pouze pokud třídíme Neroztříděné vzorky
                             if status_f == "Neroztříděno" or row[4] == "Neroztříděno":
                                 b_ok, b_nok = st.columns(2)
                                 with b_ok:
@@ -656,7 +639,6 @@ with tab5:
                         else: 
                             st.error("Snímek smazán nebo přesunut.")
             
-            # --- ROZŠÍŘENÉ OVLÁDÁNÍ STRÁNEK (RYCHLÉ SKOKY ZAČÁTEK/KONEC) ---
             st.write("")
             p_col1, p_col2, p_col3, p_col4, p_col5 = st.columns([1, 1.5, 2, 1.5, 1])
             
