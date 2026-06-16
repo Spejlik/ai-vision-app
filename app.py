@@ -389,12 +389,21 @@ with tab2:
                 draw.rectangle([safe_ax, safe_ay, safe_ax + safe_aw, safe_ay + safe_ah], outline="red", width=5)
                 st.image(preview_img, width="stretch", caption=f"Aktuální podklad ({img_w}x{img_h} px)")
 
-            # --- HARDWAROVÉ SLIDERY (NAVÝŠENÉ PRO MAXIMÁLNÍ SVĚTLOST CCD ČIPU) ---
+            # --- HARDWAROVÉ SLIDERY (SYNCHRONIZOVÁNO PROTI BLIKÁNÍ SÍTĚ 50Hz) ---
             st.markdown("### 💡 Hardwarové nastavení osvitu kamery")
             
-            # Navýšení maximálního limitu registru expozice pro extrémní prosvětlení
-            st.slider("Elektronická uzávěrka (ExposureTimeRaw index)", 1000, 150000, 60000, step=2000, key="exp_slider_val")
-            st.slider("Zesílení obrazu (Gain Raw index)", 0, 18, 15, step=1, key="gain_slider_val")
+            # 🍏 ANTI-FLICKER ELVAC FIX: Nastavením výchozí hodnoty na 40000 a kroku (step) na 20000 
+            # donutíme kameru exponovat přesně v násobcích 50Hz sítě, což okamžitě zastaví vlnění jasu!
+            st.slider(
+                "Elektronická uzávěrka (Anti-Flicker 50Hz takty)", 
+                min_value=20000, 
+                max_value=160000, 
+                value=40000, 
+                step=20000, 
+                key="exp_slider_val"
+            )
+            
+            st.slider("Zesílení obrazu (Gain Raw index)", 0, 18, 3, step=1, key="gain_slider_val")
             
             # 🍏 Profi průmyslový zkrácený formát popisku podle přání (např. 281 P1)
             st.text_input("📝 Označení konfigurace (např. Číslo_P1):", 
