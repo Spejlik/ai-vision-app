@@ -348,12 +348,9 @@ with tab2:
             live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")
             
             if live_stream_active:
-                # 🍏 OPRAVA OD ELVACU: Taháme hodnoty přímo ze session_state sliderů pod obrazem
-                exp_live = st.session_state.get("exp_slider_val", 20000)
-                gain_live = st.session_state.get("gain_slider_val", 0.0)
-                
-                # Předáme tyto živé hodnoty do kamery pro každý snímek
-                live_full_img, error_msg = camera_manager.capture_live_frame(exp_live, gain_live)
+                # 🍏 ELVAC STANDARD: Voláme bez argumentů. Kamera jede čistě podle PFS profilu, 
+                # což okamžitě zastaví červené křížky v konzoli a stabilizuje obraz.
+                live_full_img, error_msg = camera_manager.capture_live_frame()
                 if live_full_img:
                     st.session_state.setup_image_buffer = live_full_img
                 else:
@@ -392,15 +389,38 @@ with tab2:
             st.slider("Čas expozice (μs)", 1000, 200000, 20000, step=500, key="exp_slider_val")
             st.slider("Zesílení obrazu (Gain dB)", 0.0, 24.0, 0.0, step=0.5, key="gain_slider_val")
             
-            # 💾 OPRAVENÉ ELVAC TLAČÍTKO PRO PEVNÉ ULOŽENÍ PFS PROFILU
+            # 💾 FINÁLNÍ TLAČÍTKO PRO JEDNORÁZOVÝ ZÁPIS A ULOŽENÍ
             current_setup_pos = st.session_state.get("current_run_position", 1)
             if st.button(f"💾 ULOŽIT TUTO KONFIGURACI JAKO PFS PRO POZICI {current_setup_pos}", type="secondary", use_container_width=True):
-                # 🍏 Bezpečné získání názvu aktivního projektu ze session_state
                 proj_name = st.session_state.get("active_project", "Default_Project")
+                cam = camera_manager.get_camera()
                 
+                if cam:
+                    try:
+                        nodemap = cam.GetNodeMap()
+                        # Jednorázově vypneme automatiku a propíšeme slidery před exportem do PFS
+                        for name, val in [("ExposureAuto", "Off"), ("GainAuto", "Off")]:
+                            node = nodemap.GetNode(name)
+                            if node: node.SetValue(val)
+                            
+                        # Zápis expozice
+                        exp_node = nodemap.GetNode("ExposureTime") or nodemap.GetNode("ExposureTimeAbs")
+                        if exp_node: exp_node.SetValue(float(st.session_state.exp_slider_val))
+                        
+                        # Zápis gainu
+                        gain_node = nodemap.GetNode("Gain") or nodemap.GetNode("GainRaw")
+                        if gain_node: 
+                            # Pokud je to celočíselný GainRaw (0-255), přepočítáme ho, jinak float
+                            val_to_set = int(st.session_state.gain_slider_val) if "Raw" in gain_node.GetNode().GetName() else float(st.session_state.gain_slider_val)
+                            gain_node.SetValue(val_to_set)
+                    except Exception as e_direct:
+                        st.warning(f"⚠️ Částečný zápis registrů: {e_direct}")
+                
+                # Následný okamžitý export kompletního nastavení do PFS souboru pozice
                 success, path_or_err = camera_manager.save_camera_features_to_pfs(proj_name, current_setup_pos)
                 if success:
-                    st.success(f"🎉 Průmyslový PFS profil pro Pozici {current_setup_pos} úspěšně vytvořen a uložen!")
+                    st.success(f"🎉 Průmyslový PFS profil pro Pozici {current_setup_pos} úspěšně vytvořen!")
+                    st.rerun()
                 else:
                     st.error(f"❌ Selhalo vytvoření PFS souboru: {path_or_err}")
     
