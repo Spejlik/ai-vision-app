@@ -367,7 +367,7 @@ with tab2:
                 custom_pos_identifier = f"{clean_desc}"
                 
                 # Volání bezpečné ukladací metody z camera_manageru
-                success, path_or_err = camera_manager.save_camera_features_to_pfs(proj_name, custom_pos_identifier)
+                success, path_or_err = camera_manager.save_camera_features_to_pfs(proj_name, current_setup_pos)
                 if success:
                     st.session_state[f"pfs_desc_pos_{current_setup_pos}"] = st.session_state.pfs_custom_description
                     st.success(f"🎉 Průmyslový PFS profil pro Pozici {current_setup_pos} úspěšně vytvořen!")
@@ -375,8 +375,8 @@ with tab2:
                 else:
                     st.error(f"❌ Selhalo vytvoření PFS souboru: {path_or_err}")
         
-        if st.session_state.get("master_live_stream_toggle") and st.session_state.setup_image_buffer is not None:
-            time.sleep(0.08)
+        if st.session_state.get("master_live_stream_toggle"):
+            time.sleep(0.04)  # Cílíme na stabilních ~25 FPS pro plynulé video bez pulzování
             st.rerun()
 
 # --- TAB 3: ZÓNY ---
