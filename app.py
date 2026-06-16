@@ -348,8 +348,11 @@ with tab2:
             # ⚠️ ZDE KÓD V LEVÉM SLOUPCI KONČÍ. VŠECHNY STARÉ SLIDERY EXPOZICE ODPOVEDAJÍCÍ EXP_VAL ZDE SMAŽ!
 
         with col_img:
+            # 🍏 DEKLARACE PROMENNE (Opravuje NameError: live_stream_active)
+            live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")
+            
             if live_stream_active:
-                # --- 🍏 NATVRDO VYNUCENÝ ELVAC ZÁPIS PŘÍMO VE STREAMU ---
+                # --- NATVRDO VYNUCENÝ ELVAC ZÁPIS PŘÍMO VE STREAMU ---
                 cam = camera_manager.get_camera()
                 if cam and cam.IsOpen():
                     try:
@@ -387,7 +390,7 @@ with tab2:
                 else:
                     st.error(f"❌ {error_msg}")
             else:
-                # 🍏 OPRAVA SCOPE PROMĚNNÉ: sim_dir definujeme globálně pro celou offline větev
+                # 🍏 DEFINICE PROMENNE PRO OFFLINE VETEV (Opravuje NameError: sim_dir)
                 sim_dir = os.path.join(BASE_IMAGE_DIR, "OK", active_p)
                 
                 if "Složka OK" in source_type:
