@@ -348,49 +348,18 @@ with tab2:
             # ⚠️ ZDE KÓD V LEVÉM SLOUPCI KONČÍ. VŠECHNY STARÉ SLIDERY EXPOZICE ODPOVEDAJÍCÍ EXP_VAL ZDE SMAŽ!
 
         with col_img:
-            # 🍏 DEKLARACE PROMENNE (Opravuje NameError: live_stream_active)
+            # Přepínač živého streamu
             live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")
             
             if live_stream_active:
-                # --- NATVRDO VYNUCENÝ ELVAC ZÁPIS PŘÍMO VE STREAMU ---
-                cam = camera_manager.get_camera()
-                if cam and cam.IsOpen():
-                    try:
-                        nodemap = cam.GetNodeMap()
-                        
-                        # 1. Odpojíme PLC trigger naživo v app.py
-                        t_mode = nodemap.GetNode("TriggerMode")
-                        if t_mode is not None and t_mode.GetValue() != "Off":
-                            t_mode.SetValue("Off")
-                            
-                        # 2. Vynutíme časovou základnu Timed
-                        e_mode = nodemap.GetNode("ExposureMode")
-                        if e_mode is not None: e_mode.SetValue("Timed")
-                        
-                        # 3. Vypneme limit snímkové frekvence lisu
-                        fr_en = nodemap.GetNode("AcquisitionFrameRateEnable")
-                        if fr_en is not None: fr_en.SetValue(False)
-                        
-                        # 4. Zapíšeme hodnotu z aktuálního slideru uzávěrky
-                        exp_node = nodemap.GetNode("ExposureTimeRaw")
-                        if exp_node is not None:
-                            exp_node.SetValue(int(st.session_state.exp_slider_val))
-                            
-                        # 5. Zapíšeme hodnotu z aktuálního slideru zisku
-                        gain_node = nodemap.GetNode("GainRaw") or nodemap.GetNode("GainAll")
-                        if gain_node is not None:
-                            gain_node.SetValue(int(st.session_state.gain_slider_val))
-                    except Exception as e_direct_live:
-                        pass
-                
-                # Stažení snímku
+                # 🍏 ČISTÉ ELVAC VOLÁNÍ: Veškerá hardwarová magie je delegována do manageru, 
+                # což zabrání kolizím a okamžitě uvolní zaseknutou sběrnici!
                 live_full_img, error_msg = camera_manager.capture_live_frame()
                 if live_full_img:
                     st.session_state.setup_image_buffer = live_full_img
                 else:
                     st.error(f"❌ {error_msg}")
             else:
-                # 🍏 DEFINICE PROMENNE PRO OFFLINE VETEV (Opravuje NameError: sim_dir)
                 sim_dir = os.path.join(BASE_IMAGE_DIR, "OK", active_p)
                 
                 if "Složka OK" in source_type:

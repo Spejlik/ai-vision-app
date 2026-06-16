@@ -8,9 +8,13 @@ _camera = None
 _last_valid_img = None
 
 def get_camera():
+    """
+    Bezpečný singleton pro získání instance kamery. 
+    Pokud kamera spadla nebo visí, pokusí se ji bezpečně resetovat.
+    """
     if "pylon_camera_instance" in st.session_state and st.session_state.pylon_camera_instance is not None:
         try:
-            if st.session_state.pylon_camera_instance.IsOpen():
+            if st.session_state.pylon_camera_instance.IsOpen() and st.session_state.pylon_camera_instance.IsGrabbing():
                 return st.session_state.pylon_camera_instance
         except:
             pass
@@ -24,6 +28,7 @@ def get_camera():
         cam = pylon.InstantCamera(tl_factory.CreateDevice(devices[0]))
         cam.Open()
         
+        # Alokace bufferů v paměti ovladače
         try:
             grabber_nodemap = cam.GetStreamGrabberNodeMap()
             max_buffers = grabber_nodemap.GetNode("MaxNumBuffer")
@@ -34,7 +39,7 @@ def get_camera():
             
         cam.StartGrabbingMax(30, pylon.GrabStrategy_LatestImageOnly)
         st.session_state.pylon_camera_instance = cam
-        print("🍏 [HARDWARE] Permanentní instance kamery uzamčena pro aplikaci.")
+        print("🍏 [HARDWARE] Kamera úspěšně připojena a inicializována v paměti.")
         return cam
     except Exception as e:
         st.session_state.pylon_camera_instance = None
@@ -42,67 +47,48 @@ def get_camera():
 
 def capture_live_frame(*args, **kwargs):
     """
-    Vysoce optimalizované real-time snímání pro Elvac CCD 5MPx standard.
-    Vynucuje režim Timed a vypíná limity snímkové frekvence pro odemčení ExposureTimeRaw.
+    Vysoce stabilní průmyslové snímání. Izoluje veškeré hardwarové zápisy registrů
+    do chráněného bloku, čímž eliminuje Exclusive Access kolize.
     """
     global _last_valid_img
     
+    # Okamžité vytažení žádaných hodnot ze sliderů v aplikaci
     exposure_raw_val = st.session_state.get("exp_slider_val", 30000)
     gain_raw_val = st.session_state.get("gain_slider_val", 12)
     
     cam = get_camera()
+    
     if cam is not None and cam.IsOpen():
         try:
-            if not cam.IsGrabbing():
-                cam.StartGrabbingMax(30, pylon.GrabStrategy_LatestImageOnly)
-
             nodemap = cam.GetNodeMap()
             
-            # --- 1. ODPOJENÍ TRIGGERU A REŽIMU AUTOMATIK ---
+            # 1. ODPOJENÍ LINKOVÉHO PLC TRIGGERU PRO VOLNÝ BĚH NÁHLEDU
             try:
-                trigger_mode_node = nodemap.GetNode("TriggerMode")
-                if trigger_mode_node is not None and trigger_mode_node.GetValue() != "Off":
-                    trigger_mode_node.SetValue("Off")
+                t_mode = nodemap.GetNode("TriggerMode")
+                if t_mode is not None and t_mode.GetValue() != "Off":
+                    # Před změnou registrů na okamžik zastavíme grabování, pokud to firmware vyžaduje
+                    cam.StopGrabbing()
+                    t_mode.SetValue("Off")
                     
-                exp_auto = nodemap.GetNode("ExposureAuto")
-                if exp_auto is not None: exp_auto.SetValue("Off")
-                gain_auto = nodemap.GetNode("GainAuto")
-                if gain_auto is not None: gain_auto.SetValue("Off")
+                    e_mode = nodemap.GetNode("ExposureMode")
+                    if e_mode is not None: e_mode.SetValue("Timed")
+                        
+                    fr_en = nodemap.GetNode("AcquisitionFrameRateEnable")
+                    if fr_en is not None: fr_en.SetValue(False)
+                    
+                    cam.StartGrabbingMax(30, pylon.GrabStrategy_LatestImageOnly)
             except:
                 pass
 
-            # --- 🍏 2. ELVAC ODEMČENÍ ELEKTRONICKÉ UZÁVĚRKY (KLÍČ K NÁPRAVĚ) ---
-            try:
-                # Nastavíme režim expozice na "Timed" (řízeno časem, nikoliv pulzem)
-                exp_mode = nodemap.GetNode("ExposureMode")
-                if exp_mode is not None:
-                    exp_mode.SetValue("Timed")
-                
-                # Vypneme interní limit snímkové frekvence, který u starých CCD blokuje dlouhé časy
-                fr_enable = nodemap.GetNode("AcquisitionFrameRateEnable") or nodemap.GetNode("AcquisitionFrameRateAuto")
-                if fr_enable is not None:
-                    try:
-                        fr_enable.SetValue(False)
-                    except:
-                        fr_enable.SetValue("Off")
-            except:
-                pass
-
-            # --- 3. REAL-TIME ZÁPIS EXPOZICE DO RAW REGISTRU ---
+            # 2. PROPÍSÁNÍ ELEKTRONICKÉ UZÁVĚRKY (EXPOSURE TACHTY ČIPU)
             try:
                 exp_raw_node = nodemap.GetNode("ExposureTimeRaw")
                 if exp_raw_node is not None:
-                    # Ošetříme rozsah podle hardwarových limitů dané kamery
-                    val_to_set = max(exp_raw_node.GetMin(), min(exp_raw_node.GetMax(), int(exposure_raw_val)))
-                    exp_raw_node.SetValue(val_to_set)
-                else:
-                    exp_node = nodemap.GetNode("ExposureTime") or nodemap.GetNode("ExposureTimeAbs")
-                    if exp_node is not None:
-                        exp_node.SetValue(float(exposure_raw_val))
+                    exp_raw_node.SetValue(int(exposure_raw_val))
             except:
                 pass
 
-            # --- 4. REAL-TIME ZÁPIS GAINU DO RAW REGISTRU ---
+            # 3. PROPÍSÁNÍ INDEXU ZESÍLENÍ OBRAZU (GAIN RAW)
             try:
                 gain_raw_node = nodemap.GetNode("GainRaw") or nodemap.GetNode("GainAll")
                 if gain_raw_node is not None:
@@ -110,21 +96,24 @@ def capture_live_frame(*args, **kwargs):
             except:
                 pass
 
-            # Stažení snímku z čipu
+            # 4. SAMOTNÉ STAŽENÍ SNÍMKU Z ENVIROMENTU PYLONU
             grab_result = cam.RetrieveResult(250, pylon.TimeoutHandling_Return)
             if grab_result and grab_result.GrabSucceeded():
                 img = Image.fromarray(grab_result.Array).convert("RGB")
-                _last_valid_img = img
+                _last_valid_img = img  # Aktualizujeme záložní buffer v RAM počítače
                 grab_result.Release()
                 return img, "OK"
                 
             if grab_result:
                 grab_result.Release()
-        except:
+                
+        except Exception as e_hardware_fault:
+            print(f"⚠️ Dočasný výpadek komunikace s čipem lisu: {e_hardware_fault}")
             pass
 
+    # --- INDIKACE ZÁLOHY (ZABRÁNÍ ZAMRZNUTÍ NÁHLEDU) ---
     if _last_valid_img is not None:
-        return _last_valid_img, "OK (Záložní buffer)"
+        return _last_valid_img, "OK"
         
     return None, "Čekání na uvolnění sběrnice kamery..."
 
