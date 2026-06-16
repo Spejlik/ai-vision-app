@@ -44,15 +44,17 @@ def get_camera():
 
 def capture_live_frame(*args, **kwargs):
     """
-    Vysoce stabilní snímání pro 5MPx starší Basler čipy.
-    Řeší synchronizaci parametrů přímo ze session state aplikace.
+    Vysoce stabilní snímání pro 5MPx starší Basler čipy (SFNC v1).
+    Ověřuje alternativní registry GainAll / Gain / GainRaw pro starší firmware.
     """
     global _last_exposure, _last_gain, _last_valid_img
     
-    exposure_time = st.session_state.get("exp_slider_val", 20000)
-    gain = st.session_state.get("gain_slider_val", 0.0)
+    # Načtení živých hodnot ze sliderů
+    exposure_time = st.session_state.get("exp_slider_val", 30000)
+    gain = st.session_state.get("gain_slider_val", 12)
     
     cam = get_camera()
+    
     if cam is None or not cam.IsOpen():
         if _last_valid_img is not None:
             return _last_valid_img, "OK (Záložní buffer)"
@@ -68,52 +70,61 @@ def capture_live_frame(*args, **kwargs):
         gain_changed = _last_gain is None or float(gain) != _last_gain
 
         if exp_changed or gain_changed:
-            # Tichá deaktivace automatik
+            # Vypnutí automatik (bezpečně)
             for auto_node in ["ExposureAuto", "GainAuto"]:
                 try:
                     node = nodemap.GetNode(auto_node)
                     if node: node.SetValue("Off")
                 except: pass
 
-            # Bezpečný zápis expozice
+            # --- 🍏 1. NEPRŮSTŘELNÝ ZÁPIS EXPOZICE ---
             if exp_changed:
                 try:
-                    exp_node = nodemap.GetNode("ExposureTime") or nodemap.GetNode("ExposureTimeAbs")
+                    exp_node = nodemap.GetNode("ExposureTime") or nodemap.GetNode("ExposureTimeAbs") or nodemap.GetNode("ExposureTimeRaw")
                     if exp_node is not None:
-                        exp_node.SetValue(max(exp_node.GetMin(), min(exp_node.GetMax(), float(exposure_time))))
-                    else:
-                        exp_raw = nodemap.GetNode("ExposureTimeRaw")
-                        if exp_raw is not None:
-                            exp_raw.SetValue(max(exp_raw.GetMin(), min(exp_raw.GetMax(), int(round(float(exposure_time))))))
+                        # Zkusíme nastavit jako float, pokud selže, tak jako int
+                        try:
+                            exp_node.SetValue(float(exposure_time))
+                        except:
+                            exp_node.SetValue(int(round(float(exposure_time))))
                     _last_exposure = float(exposure_time)
                 except:
                     pass
 
-            # Bezpečný zápis zisku (Gain)
+            # --- 🍏 2. ELVAC ROZŠÍŘENÝ ZÁPIS GAINU (ZISKU) ---
             if gain_changed:
-                try:
-                    gain_node = nodemap.GetNode("Gain") or nodemap.GetNode("GainAll")
-                    if gain_node is not None:
-                        # Vyhodnocení typu uzlu (či celočíselný index nebo float)
-                        if "Raw" in gain_node.GetNode().GetName() or gain_node.GetNode().GetType() == 1:
-                            gain_node.SetValue(int(round(float(gain))))
-                        else:
-                            gain_node.SetValue(max(gain_node.GetMin(), min(gain_node.GetMax(), float(gain))))
-                    else:
-                        gain_raw = nodemap.GetNode("GainRaw")
-                        if gain_raw is not None:
-                            gain_raw.SetValue(max(gain_raw.GetMin(), min(gain_raw.GetMax(), int(round(float(gain))))))
+                gain_written = False
+                # Projdeme postupně všechny možné názvy registru, které starší 5MPx čipy používají
+                for gain_name in ["GainAll", "Gain", "GainRaw"]:
+                    try:
+                        g_node = nodemap.GetNode(gain_name)
+                        if g_node is not None:
+                            # Podle typu uzlu určíme, zda zapsat Int nebo Float
+                            node_type = g_node.GetPrincipalInterfaceType() if hasattr(g_node, 'GetPrincipalInterfaceType') else None
+                            
+                            if node_type == pylon.intfIInteger or "Raw" in gain_name:
+                                g_node.SetValue(int(round(float(gain))))
+                            else:
+                                g_node.SetValue(max(g_node.GetMin(), min(g_node.GetMax(), float(gain))))
+                            
+                            gain_written = True
+                            break # Jakmile se jeden zápis povede, končíme smyčku
+                    except:
+                        continue
+                
+                if gain_written:
                     _last_gain = float(gain)
-                except:
-                    pass
+                else:
+                    print("⚠️ Žádný z uzlů [GainAll, Gain, GainRaw] nebyl v této kameře nalezen.")
 
-        # Vytažení snímku z čipu
+        # Stažení snímku z kamery
         grab_result = cam.RetrieveResult(250, pylon.TimeoutHandling_Return)
         if grab_result and grab_result.GrabSucceeded():
             img = Image.fromarray(grab_result.Array).convert("RGB")
             _last_valid_img = img
             grab_result.Release()
             return img, "OK"
+        
         if grab_result:
             grab_result.Release()
             
