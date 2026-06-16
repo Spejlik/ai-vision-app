@@ -24,6 +24,22 @@ def get_camera():
         cam = pylon.InstantCamera(tl_factory.CreateDevice(devices[0]))
         cam.Open()
         
+        nodemap = cam.GetNodeMap()
+        
+        # --- 🍏 ELVAC KLÍČOVÁ OPRAVA: VYPNUTÍ EXTERNÍHO PLC TRIGGERU PRO LADĚNÍ ---
+        # Přepne kameru z linkového režimu do Free Run, aby začala poslouchat slidery
+        try:
+            trigger_selector = nodemap.GetNode("TriggerSelector")
+            if trigger_selector is not None:
+                trigger_selector.SetValue("FrameStart")
+                
+            trigger_mode = nodemap.GetNode("TriggerMode")
+            if trigger_mode is not None:
+                trigger_mode.SetValue("Off")
+                print("🔓 [HARDWARE] Externí PLC trigger odpojen. Kamera přepnuta do Free Run.")
+        except Exception as e_trig:
+            print(f"ℹ️ Nastavení triggeru přeskočeno: {e_trig}")
+        
         try:
             grabber_nodemap = cam.GetStreamGrabberNodeMap()
             max_buffers = grabber_nodemap.GetNode("MaxNumBuffer")
@@ -34,7 +50,7 @@ def get_camera():
             
         cam.StartGrabbingMax(30, pylon.GrabStrategy_LatestImageOnly)
         st.session_state.pylon_camera_instance = cam
-        print("🍏 [HARDWARE]Permanentní instance kamery uzamčena pro živý stream.")
+        print("🍏 [HARDWARE] Permanentní instance kamery uzamčena pro živý stream.")
         return cam
     except Exception as e:
         st.session_state.pylon_camera_instance = None
