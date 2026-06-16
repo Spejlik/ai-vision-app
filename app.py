@@ -9,6 +9,9 @@ import glob
 import numpy as np
 from PIL import Image, ImageDraw
 
+# --- ODSTRANĚNÍ CACHE HARDWAROVÉHO MODULU Z RAM ---
+import importlib
+importlib.reload(camera_manager)
 # ---  VYNUCENÝ RELOAD PRO ZAMEZENÍ CACHOVÁNÍ STARÉHO HARDWAROVÉHO KÓDU ---
 import importlib
 importlib.reload(camera_manager)
