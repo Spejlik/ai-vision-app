@@ -28,12 +28,18 @@ def get_camera():
     return _camera
 
 def capture_live_frame(exposure_time=None, gain=None):
+    """
+    Zachytí jeden živý snímek z Basler kamery a volitelně nastaví parametry senzoru.
+    
+    Parametry:
+    :param exposure_time: Čas expozice v mikrosekundách (float/int)
+    :param gain: Zesílení obrazu v dB (float/int)
+    """
     cam = get_camera()
     if cam and cam.IsGrabbing():
         try:
-            # --- ZÁPIS EXPOZICE DO HARDWARU KAMERY ---
+            # Vypnutí automatického řízení jasu pro manuální konfiguraci
             if exposure_time is not None:
-                # Vypneme automatiku, aby nás neposlouchala, a zapíšeme hodnotu
                 cam.ExposureAuto.SetValue("Off")
                 cam.ExposureTime.SetValue(float(exposure_time))
                 
@@ -41,7 +47,7 @@ def capture_live_frame(exposure_time=None, gain=None):
                 cam.GainAuto.SetValue("Off")
                 cam.Gain.SetValue(float(gain))
             
-            # Čekáme na snímek (timeout 2s)
+            # Vytažení snímku z bufferu kamery s timeoutem 2000 ms
             grab_result = cam.RetrieveResult(2000, pylon.TimeoutHandling_Return)
             if grab_result.GrabSucceeded():
                 img = Image.fromarray(grab_result.Array).convert("RGB")
@@ -49,5 +55,5 @@ def capture_live_frame(exposure_time=None, gain=None):
                 return img, "OK"
             grab_result.Release()
         except Exception as e:
-            return None, f"Chyba nastavení parametrů: {e}"
-    return None, "Kamera neběží / Timeout"
+            return None, f"Chyba nastavení hardwaru kamery: {e}"
+    return None, "Kamera negrebuje nebo vypršel timeout."

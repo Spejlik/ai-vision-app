@@ -304,12 +304,13 @@ with tab2:
             aw = st.slider("Šířka výřezu", 10, 2000, 500)
             ah = st.slider("Výška výřezu", 10, 2000, 500)
             # --- NOVÉ OVLÁDÁNÍ EXPOZICE PRO VALEO TERMINÁL ---
+            # --- OVLÁDÁNÍ EXPOZICE A GAINU (HARDWARE) ---
             st.divider()
             st.markdown("### 💡 Hardwarové nastavení obrazu")
             
-            # Hodnoty 1000 až 500000 mikrosekund (1ms až 500ms) podle typu objektivu
+            # Rozsah 1 000 μs (1 ms) až 200 000 μs (200 ms) pro průmyslové aplikace
             exp_val = st.slider("Čas expozice (μs)", 1000, 200000, 20000, step=500)
-            gain_val = st.slider("Zesílení obrazu (Gain)", 0.0, 24.0, 0.0, step=0.5)
+            gain_val = st.slider("Zesílení obrazu (Gain dB)", 0.0, 24.0, 0.0, step=0.5)
 
             if st.button("💾 ULOŽIT MASTER", type="primary", use_container_width=True):
                 if m_id_name and st.session_state.setup_image_buffer:
@@ -337,7 +338,7 @@ with tab2:
             live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")
             
             if live_stream_active:
-                # ZMĚNA: Posíláme hodnoty z nových sliderů přímo do funkce kamery
+                # Předání nastavených hodnot ze sliderů do camera_manageru
                 live_full_img, error_msg = camera_manager.capture_live_frame(exposure_time=exp_val, gain=gain_val)
                 if live_full_img:
                     st.session_state.setup_image_buffer = live_full_img
