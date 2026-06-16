@@ -568,25 +568,76 @@ with tab5:
 
     st.divider()
 
-    # --- ZOBRAZENÍ TABULKY HISTORIE ---
+    ## --- INTERAKTIVNÍ TŘÍDĚNÍ SNÍMKŮ PRO UČENÍ (ELVAC STANDARD) ---
     active_p = st.session_state.get("active_project")
     if active_p:
-        # Vytáhneme data z databáze přes tvůj modul database.py
-        history_records = database.get_history(active_p) if hasattr(database, "get_history") else []
+        # Načteme pouze snímky, které jsou ve stavu 'Neroztříděno'
+        import sqlite3
+        conn = sqlite3.connect("vision_system.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, zone_name, file_path, status FROM history WHERE project_name=? AND status='Neroztříděno' ORDER BY id DESC", (active_p,))
+        unassigned_records = cursor.fetchall()
+        conn.close()
         
-        if not history_records:
-            st.info("⏳ V databázi zatím nejsou žádné záznamy. Historie se plní automaticky při triggeru z lisu.")
+        if not unassigned_records:
+            st.info("⏳ Všechny snímky jsou roztříděny. Dataset pro AI je připraven!")
         else:
-            # Vykreslení uložených snímků v mřížce
+            st.markdown(f"### 📥 Snímky čekající na roztřídění ({len(unassigned_records)}x)")
+            
             h_cols = st.columns(4)
-            for idx, record in enumerate(history_records[:20]): # Ukážeme posledních 20 snímků
-                # Předpokládaná struktura: (id, project, zone_name, file_path, status, timestamp)
-                r_zone, r_path, r_status = record[2], record[3], record[4]
+            for idx, record in enumerate(unassigned_records[:12]): # Zobrazíme maximálně 12 snímků najednou pro plynulost UI
+                r_id, r_zone, r_path, r_status = record[0], record[1], record[2], record[3]
+                
                 with h_cols[idx % 4]:
                     with st.container(border=True):
-                        st.markdown(f"**{r_zone}**")
+                        st.caption(f"📍 Zdroj: {r_zone}")
+                        
                         if os.path.exists(r_path):
                             st.image(r_path, use_container_width=True)
                         else:
-                            st.caption("❌ Soubor na disku C: chybí")
-                        st.caption(f"Stav: `{r_status}`")    
+                            st.caption("❌ Soubor nenalezen")
+                        
+                        # Vodorovná tlačítka pro bleskové třídění operátorem
+                        btn_col1, btn_col2 = st.columns(2)
+                        
+                        with btn_col1:
+                            if st.button("🍏 OK", key=f"btn_ok_{r_id}", use_container_width=True):
+                                # 1. Definice nové cesty pro dobrý vzorek
+                                target_dir = f"C:/Image/OK/{active_p}"
+                                os.makedirs(target_dir, exist_ok=True)
+                                target_path = os.path.join(target_dir, os.path.basename(r_path))
+                                
+                                # 2. Fyzický přesun souboru na disku
+                                if os.path.exists(r_path):
+                                    os.rename(r_path, target_path)
+                                
+                                # 3. Zápis nového stavu do SQL databáze
+                                conn = sqlite3.connect("vision_system.db")
+                                cursor = conn.cursor()
+                                cursor.execute("UPDATE history SET status='OK', file_path=? WHERE id=?", (target_path, r_id))
+                                conn.commit()
+                                conn.close()
+                                st.toast(f"Uloženo do složky OK", icon="✅")
+                                time.sleep(0.1)
+                                st.rerun()
+                                
+                        with btn_col2:
+                            if st.button("🍎 NOK", key=f"btn_nok_{r_id}", use_container_width=True):
+                                # 1. Definice nové cesty pro zmetek (chybový vzorek)
+                                target_dir = f"C:/Image/NOK/{active_p}"
+                                os.makedirs(target_dir, exist_ok=True)
+                                target_path = os.path.join(target_dir, os.path.basename(r_path))
+                                
+                                # 2. Fyzický přesun souboru na disku
+                                if os.path.exists(r_path):
+                                    os.rename(r_path, target_path)
+                                
+                                # 3. Zápis nového stavu do SQL databáze
+                                conn = sqlite3.connect("vision_system.db")
+                                cursor = conn.cursor()
+                                cursor.execute("UPDATE history SET status='NOK', file_path=? WHERE id=?", (target_path, r_id))
+                                conn.commit()
+                                conn.close()
+                                st.toast(f"Uloženo do složky NOK", icon="🚨")
+                                time.sleep(0.1)
+                                st.rerun()    
