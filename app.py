@@ -568,15 +568,25 @@ with tab5:
 
     st.divider()
 
-    # --- INTERAKTIVNÍ TŘÍDĚNÍ SNÍMKŮ PRO UČENÍ (ELVAC STANDARD) ---
+    # --- INTERAKTIVNÍ TŘÍDĚNÍ SNÍMKŮ PRO UČENÍ (UNIVERZÁLNÍ MAPOVÁNÍ) ---
     active_p = st.session_state.get("active_project")
     if active_p:
         import sqlite3
         conn = sqlite3.connect("vision_system.db")
         cursor = conn.cursor()
         
-        # 🍏 OPRAVA: Změněno zone_name -> roi_name, file_path -> img_path
-        cursor.execute("SELECT id, roi_name, img_path, status FROM history WHERE project_name=? AND status='Neroztříděno' ORDER BY id DESC", (active_p,))
+        # 🍏 DYNAMICKÁ KONTROLA STRUKTURY (Zjistíme, jak se sloupce opravdu jmenují)
+        cursor.execute("PRAGMA table_info(history)")
+        columns = [col[1] for col in cursor.fetchall()]
+        
+        # Najdeme správný sloupec pro název zóny (roi_name / zone_name)
+        c_roi = "roi_name" if "roi_name" in columns else ("zone_name" if "zone_name" in columns else columns[2])
+        # Najdeme správný sloupec pro cestu k souboru (image_path / img_path / file_path / path)
+        c_path = "image_path" if "image_path" in columns else ("img_path" if "img_path" in columns else ("file_path" if "file_path" in columns else "path"))
+        
+        # Spustíme dotaz s dynamicky zjištěnými sloupci
+        query = f"SELECT id, {c_roi}, {c_path}, status FROM history WHERE project_name=? AND status='Neroztříděno' ORDER BY id DESC"
+        cursor.execute(query, (active_p,))
         unassigned_records = cursor.fetchall()
         conn.close()
         
@@ -587,7 +597,6 @@ with tab5:
             
             h_cols = st.columns(4)
             for idx, record in enumerate(unassigned_records[:12]):
-                # 🍏 OPRAVA: Mapování z databáze (id, roi_name, img_path, status)
                 r_id, r_zone, r_path, r_status = record[0], record[1], record[2], record[3]
                 
                 with h_cols[idx % 4]:
@@ -610,10 +619,9 @@ with tab5:
                                 if os.path.exists(r_path):
                                     os.rename(r_path, target_path)
                                 
-                                # 🍏 OPRAVA: Změněno file_path -> img_path v UPDATE dotazu
                                 conn = sqlite3.connect("vision_system.db")
                                 cursor = conn.cursor()
-                                cursor.execute("UPDATE history SET status='OK', img_path=? WHERE id=?", (target_path, r_id))
+                                cursor.execute(f"UPDATE history SET status='OK', {c_path}=? WHERE id=?", (target_path, r_id))
                                 conn.commit()
                                 conn.close()
                                 st.toast(f"Uloženo do složky OK", icon="✅")
@@ -629,10 +637,9 @@ with tab5:
                                 if os.path.exists(r_path):
                                     os.rename(r_path, target_path)
                                 
-                                # 🍏 OPRAVA: Změněno file_path -> img_path v UPDATE dotazu
                                 conn = sqlite3.connect("vision_system.db")
                                 cursor = conn.cursor()
-                                cursor.execute("UPDATE history SET status='NOK', img_path=? WHERE id=?", (target_path, r_id))
+                                cursor.execute(f"UPDATE history SET status='NOK', {c_path}=? WHERE id=?", (target_path, r_id))
                                 conn.commit()
                                 conn.close()
                                 st.toast(f"Uloženo do složky NOK", icon="🚨")
