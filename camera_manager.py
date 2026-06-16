@@ -4,31 +4,51 @@ from PIL import Image
 from pypylon import pylon
 import streamlit as st
 
-_camera = None
+# 🍏 GLOBÁLNÍ INSTANCE NA ÚROVNI PAMĚTI PYTHON MODULU (ZABRÁNÍ NEKONEČNÉ RE-INICIALIZACI)
+_GLOBAL_CAMERA_INSTANCE = None
 _last_valid_img = None
 
 def get_camera():
     """
-    Bezpečný singleton pro získání instance kamery. 
-    Pokud kamera spadla nebo visí, pokusí se ji bezpečně resetovat.
+    Robustní průmyslový Singleton. Inicializuje kameru pouze jednou 
+    za celou dobu běhu OS a drží ji trvale otevřenou.
     """
-    if "pylon_camera_instance" in st.session_state and st.session_state.pylon_camera_instance is not None:
+    global _GLOBAL_CAMERA_INSTANCE
+    
+    # Pokud instance v RAM existuje a fyzicky žije, okamžitě ji vrátíme
+    if _GLOBAL_CAMERA_INSTANCE is not None:
         try:
-            if st.session_state.pylon_camera_instance.IsOpen() and st.session_state.pylon_camera_instance.IsGrabbing():
-                return st.session_state.pylon_camera_instance
+            if _GLOBAL_CAMERA_INSTANCE.IsOpen() and _GLOBAL_CAMERA_INSTANCE.IsGrabbing():
+                return _GLOBAL_CAMERA_INSTANCE
         except:
             pass
 
     try:
+        print("🚀 [HARDWARE] Fyzická inicializace 5MPx CCD Basler kamery...")
         tl_factory = pylon.TlFactory.GetInstance()
         devices = tl_factory.EnumerateDevices()
         if not devices: 
+            print("❌ [HARDWARE] Žádná GigE kamera nebyla v síti nalezena!")
             return None
         
+        # Vytvoření a trvalé otevření komunikačního kanálu
         cam = pylon.InstantCamera(tl_factory.CreateDevice(devices[0]))
         cam.Open()
         
-        # Alokace bufferů v paměti ovladače
+        # Odpojení linkového triggeru lisu hned při startu
+        try:
+            nodemap = cam.GetNodeMap()
+            t_mode = nodemap.GetNode("TriggerMode")
+            if t_mode is not None:
+                t_mode.SetValue("Off")
+            e_mode = nodemap.GetNode("ExposureMode")
+            if e_mode is not None: e_mode.SetValue("Timed")
+            fr_en = nodemap.GetNode("AcquisitionFrameRateEnable")
+            if fr_en is not None: fr_en.SetValue(False)
+        except Exception as e_init_reg:
+            print(f"ℹ️ Inicializace registrů: {e_init_reg}")
+
+        # Nastavení transportních vyrovnávacích pamětí
         try:
             grabber_nodemap = cam.GetStreamGrabberNodeMap()
             max_buffers = grabber_nodemap.GetNode("MaxNumBuffer")
@@ -38,49 +58,30 @@ def get_camera():
             pass
             
         cam.StartGrabbingMax(30, pylon.GrabStrategy_LatestImageOnly)
-        st.session_state.pylon_camera_instance = cam
-        print("🍏 [HARDWARE] Kamera úspěšně připojena a inicializována v paměti.")
-        return cam
+        _GLOBAL_CAMERA_INSTANCE = cam
+        print("✅ [HARDWARE] Kamera je úspěšně uzamčena a běží v režimu Free Run.")
+        return _GLOBAL_CAMERA_INSTANCE
     except Exception as e:
-        st.session_state.pylon_camera_instance = None
+        print(f"❌ [HARDWARE] Selhalo navázání spojení s kamerou: {e}")
+        _GLOBAL_CAMERA_INSTANCE = None
         return None
 
 def capture_live_frame(*args, **kwargs):
     """
-    Vysoce stabilní průmyslové snímání. Izoluje veškeré hardwarové zápisy registrů
-    do chráněného bloku, čímž eliminuje Exclusive Access kolize.
+    Vysoce plynulé snímání frame-by-frame. 
+    Natvrdo cpe hodnoty sliderů do stabilní instance registru.
     """
     global _last_valid_img
     
-    # Okamžité vytažení žádaných hodnot ze sliderů v aplikaci
     exposure_raw_val = st.session_state.get("exp_slider_val", 30000)
     gain_raw_val = st.session_state.get("gain_slider_val", 12)
     
     cam = get_camera()
-    
     if cam is not None and cam.IsOpen():
         try:
             nodemap = cam.GetNodeMap()
             
-            # 1. ODPOJENÍ LINKOVÉHO PLC TRIGGERU PRO VOLNÝ BĚH NÁHLEDU
-            try:
-                t_mode = nodemap.GetNode("TriggerMode")
-                if t_mode is not None and t_mode.GetValue() != "Off":
-                    # Před změnou registrů na okamžik zastavíme grabování, pokud to firmware vyžaduje
-                    cam.StopGrabbing()
-                    t_mode.SetValue("Off")
-                    
-                    e_mode = nodemap.GetNode("ExposureMode")
-                    if e_mode is not None: e_mode.SetValue("Timed")
-                        
-                    fr_en = nodemap.GetNode("AcquisitionFrameRateEnable")
-                    if fr_en is not None: fr_en.SetValue(False)
-                    
-                    cam.StartGrabbingMax(30, pylon.GrabStrategy_LatestImageOnly)
-            except:
-                pass
-
-            # 2. PROPÍSÁNÍ ELEKTRONICKÉ UZÁVĚRKY (EXPOSURE TACHTY ČIPU)
+            # --- AGRESIVNÍ REAL-TIME ZÁPIS PARAMETRŮ ---
             try:
                 exp_raw_node = nodemap.GetNode("ExposureTimeRaw")
                 if exp_raw_node is not None:
@@ -88,7 +89,6 @@ def capture_live_frame(*args, **kwargs):
             except:
                 pass
 
-            # 3. PROPÍSÁNÍ INDEXU ZESÍLENÍ OBRAZU (GAIN RAW)
             try:
                 gain_raw_node = nodemap.GetNode("GainRaw") or nodemap.GetNode("GainAll")
                 if gain_raw_node is not None:
@@ -96,46 +96,47 @@ def capture_live_frame(*args, **kwargs):
             except:
                 pass
 
-            # 4. SAMOTNÉ STAŽENÍ SNÍMKU Z ENVIROMENTU PYLONU
-            grab_result = cam.RetrieveResult(250, pylon.TimeoutHandling_Return)
+            # Stažení obrazových dat
+            grab_result = cam.RetrieveResult(150, pylon.TimeoutHandling_Return)
             if grab_result and grab_result.GrabSucceeded():
                 img = Image.fromarray(grab_result.Array).convert("RGB")
-                _last_valid_img = img  # Aktualizujeme záložní buffer v RAM počítače
+                _last_valid_img = img
                 grab_result.Release()
                 return img, "OK"
                 
             if grab_result:
                 grab_result.Release()
-                
-        except Exception as e_hardware_fault:
-            print(f"⚠️ Dočasný výpadek komunikace s čipem lisu: {e_hardware_fault}")
+        except:
             pass
 
-    # --- INDIKACE ZÁLOHY (ZABRÁNÍ ZAMRZNUTÍ NÁHLEDU) ---
     if _last_valid_img is not None:
         return _last_valid_img, "OK"
         
     return None, "Čekání na uvolnění sběrnice kamery..."
 
 def save_camera_features_to_pfs(project_name, position_num):
-    cam = get_camera()
-    if cam:
-        try:
-            nodemap = cam.GetNodeMap()
-            
-            # --- 🍏 ELVAC POJISTKA: Ukládáme se ZAPNUTÝM triggerem pro linkový cyklus lisu ---
-            try:
-                trigger_mode_node = nodemap.GetNode("TriggerMode")
-                if trigger_mode_node is not None:
-                    trigger_mode_node.SetValue("On")
-            except:
-                pass
-                
+    try:
+        cam = get_camera()
+        if cam:
             os.makedirs("profiles", exist_ok=True)
             pfs_path = f"profiles/{project_name}_pos_{position_num}.pfs"
-            pylon.FeaturePersistence.Save(pfs_path, nodemap)
-            print(f"💾 PFS soubor exportován se zapnutým linkovým triggerem: {pfs_path}")
+            pylon.FeaturePersistence.Save(pfs_path, cam.GetNodeMap())
             return True, pfs_path
-        except Exception as e:
-            return False, str(e)
-    return False, "Kamera není inicializována."    
+    except Exception as e:
+        return False, str(e)
+    return False, "Kamera není inicializována."
+
+def load_camera_features_from_pfs(project_name, position_num):
+    cam = get_camera()
+    if cam:
+        pfs_path = f"profiles/{project_name}_pos_{position_num}.pfs"
+        if os.path.exists(pfs_path):
+            try:
+                is_grabbing = cam.IsGrabbing()
+                if is_grabbing: cam.StopGrabbing()
+                pylon.FeaturePersistence.Load(pfs_path, cam.GetNodeMap(), True)
+                if is_grabbing: cam.StartGrabbingMax(30, pylon.GrabStrategy_LatestImageOnly)
+                return True, "PFS načteno"
+            except Exception as e:
+                return False, str(e)
+    return False, "Profil neexistuje"
