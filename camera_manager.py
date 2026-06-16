@@ -30,77 +30,84 @@ def get_camera():
             return None
     return _camera
 
-# Na úplný začátek souboru (pod importy) přidej tyto proměnné pro hlídání změny:
-_last_exposure = None
-_last_gain = None
-
 def capture_live_frame(*args, **kwargs):
     """
-    Robustní zachycení snímku z Basler kamery.
-    Zapisuje do hardwaru POUZE při reálné změně slideru, což eliminuje problikávání.
+    Robustní zachycení snímku z 5MPx Basler kamery – SFNC v1/v2 hybridní standard.
+    Natvrdo odstaví automatiku a zapíše parametry bez chyb v genicam_wrap.
     """
-    global _last_exposure, _last_gain
-    
     exposure_time = kwargs.get('exposure_time', args[0] if len(args) > 0 else None)
     gain = kwargs.get('gain', args[1] if len(args) > 1 else None)
     
     cam = get_camera()
-    if cam:
+    if cam and cam.IsGrabbing():
         try:
             nodemap = cam.GetNodeMap()
-            
-            # Zjistíme, zda operátor pohnul některým ze sliderů
-            exposure_changed = exposure_time is not None and float(exposure_time) != _last_exposure
-            gain_changed = gain is not None and float(gain) != _last_gain
 
-            # --- POKUD DOŠLO KE ZMĚNĚ, ZAPÍŠEME REGISTRY (JINAK BĚŽÍ ČISTÝ STREAM) ---
-            if exposure_changed or gain_changed:
+            # --- 1. ODSTAVENÍ AUTOMATIKY (STARŠÍ OVLÁDÁNÍ 5MPX ČIPŮ) ---
+            try:
+                # Nastavení módu expozice na časový (Timed)
+                exp_mode = nodemap.GetNode("ExposureMode")
+                if exp_mode is not None and exp_mode.IsValid():
+                    exp_mode.SetValue("Timed")
+
+                # Vypnutí automatické expozice (SFNC v1/v2 sychr)
+                exp_auto = nodemap.GetNode("ExposureAuto")
+                if exp_auto is not None and exp_auto.IsValid():
+                    exp_auto.SetValue("Off")
+
+                # Vypnutí automatického Gainu
+                gain_auto = nodemap.GetNode("GainAuto")
+                if gain_auto is not None and gain_auto.IsValid():
+                    gain_auto.SetValue("Off")
+            except Exception as e_auto:
+                print(f"⚠️ Selhalo nastavení režimu automatiky: {e_auto}")
+
+            # --- 2. ZÁPIS ČASU EXPOZICE ---
+            if exposure_time is not None:
                 try:
-                    # 1. Dočasně zastavíme grabování pro klidný zápis do čipu
-                    if cam.IsGrabbing():
-                        cam.StopGrabbing()
-                    
-                    # 2. Vypnutí linkové automatiky
-                    if nodemap.GetNode("ExposureAuto") is not None:
-                        cam.ExposureAuto.SetValue("Off")
-                    if nodemap.GetNode("GainAuto") is not None:
-                        cam.GainAuto.SetValue("Off")
-                    
-                    # 3. Zápis Expozice (pokud se změnila)
-                    if exposure_changed and nodemap.GetNode("ExposureTime") is not None:
-                        cam.ExposureTime.SetValue(float(exposure_time))
-                        _last_exposure = float(exposure_time)
-                        
-                    # 4. Zápis Gainu (pokud se změnil)
-                    if gain_changed:
-                        if nodemap.GetNode("GainSelector") is not None:
-                            cam.GainSelector.SetValue("All")
-                        if nodemap.GetNode("Gain") is not None:
-                            val_to_set = max(cam.Gain.GetMin(), min(cam.Gain.GetMax(), float(gain)))
-                            cam.Gain.SetValue(val_to_set)
-                            _last_gain = float(gain)
+                    exp_time_node = nodemap.GetNode("ExposureTime")
+                    if exp_time_node is not None and exp_time_node.IsValid():
+                        val = max(exp_time_node.GetMin(), min(exp_time_node.GetMax(), float(exposure_time)))
+                        exp_time_node.SetValue(val)
+                    else:
+                        exp_time_raw = nodemap.GetNode("ExposureTimeRaw")
+                        if exp_time_raw is not None and exp_time_raw.IsValid():
+                            val = max(exp_time_raw.GetMin(), min(exp_time_raw.GetMax(), int(round(float(exposure_time)))))
+                            exp_time_raw.SetValue(val)
+                except Exception as e_exp:
+                    print(f"❌ Chyba zápisu expozice: {e_exp}")
 
-                except Exception as e_reg:
-                    print(f"⚠️ Chyba při zápisu registru: {e_reg}")
-                finally:
-                    # 5. Vždy stream znovu nahodíme
-                    if not cam.IsGrabbing():
-                        cam.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
+            # --- 3. ZÁPIS GAINU (ZESÍLENÍ) ---
+            if gain is not None:
+                try:
+                    # Nastavení selektoru (u 5MPx modelů často nepovinné, ale sychr)
+                    gain_sel = nodemap.GetNode("GainSelector")
+                    if gain_sel is not None and gain_sel.IsValid():
+                        if "All" in gain_sel.GetSymbolics():
+                            gain_sel.SetValue("All")
 
-            # --- SAMOTNÉ SEJMUTÍ SNÍMKU (BĚŽÍ MAXIMÁLNÍ RYCHLOSTÍ) ---
-            if cam.IsGrabbing():
-                grab_result = cam.RetrieveResult(2000, pylon.TimeoutHandling_Return)
-                if grab_result.GrabSucceeded():
-                    img = Image.fromarray(grab_result.Array).convert("RGB")
-                    grab_result.Release()
-                    return img, "OK"
+                    # Zápis do hlavního uzlu jasu
+                    gain_node = nodemap.GetNode("Gain")
+                    if gain_node is not None and gain_node.IsValid():
+                        val = max(gain_node.GetMin(), min(gain_node.GetMax(), float(gain)))
+                        gain_node.SetValue(val)
+                    else:
+                        gain_raw = nodemap.GetNode("GainRaw")
+                        if gain_raw is not None and gain_raw.IsValid():
+                            val = max(gain_raw.GetMin(), min(cam.GainRaw.GetMax(), int(round(float(gain)))))
+                            gain_raw.SetValue(val)
+                except Exception as e_gain:
+                    print(f"❌ Chyba zápisu zisku: {e_gain}")
+        
+            # --- 4. VYTAŽENÍ SNÍMKU Z BUFFERU ČIPU ---
+            grab_result = cam.RetrieveResult(2000, pylon.TimeoutHandling_Return)
+            if grab_result.GrabSucceeded():
+                img = Image.fromarray(grab_result.Array).convert("RGB")
                 grab_result.Release()
-                
-        except Exception as e:
-            # Sychr pro případ nečekaného pádu
-            try: 
-                if not cam.IsGrabbing(): cam.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
-            except: pass
-            return None, f"Chyba lupu kamery: {e}"
+                return img, "OK"
+            grab_result.Release()
             
-    return None, "Kamera negrebuje nebo vypršel timeout."
+        except Exception as e:
+            return None, f"Chyba bufferu kamery: {e}"
+            
+    return None, "Kamera negrebuje."
