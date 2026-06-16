@@ -214,9 +214,24 @@ with tab1:
                         pylon_camera_name = "Chyba Kamery"
                         live_roi_img = Image.new('RGB', (500, 500), color=(30, 30, 30))
                     
-                    model_path = f"models/model_ai_{active_p}_{r_name}.pth"
-                    universal_model_path = f"models/model_ai_{active_p}_Univerzalni_Sit.pth"
-                    active_model = model_path if os.path.exists(model_path) else (universal_model_path if os.path.exists(universal_model_path) else None)
+                    # 🍏 DYNAMICKÉ NAČTENÍ PŘIŘAZENÉHO MODELU PODLE REGISTRU PRO DANÝ PROJEKT
+                    active_model = None
+                    try:
+                        conn_inf = sqlite3.connect("vision_system.db")
+                        cur_inf = conn_inf.cursor()
+                        cur_inf.execute("SELECT model_name FROM model_registry WHERE project_name=? ORDER BY id DESC LIMIT 1", (active_p,))
+                        row_m = cur_inf.fetchone()
+                        conn_inf.close()
+                        if row_m and os.path.exists(f"models/{row_m[0]}"):
+                            active_model = f"models/{row_m[0]}"
+                    except Exception:
+                        pass
+                    
+                    # Fallback na starý název nebo univerzální síť, pokud v registru nic není
+                    if not active_model:
+                        model_path = f"models/model_ai_{active_p}_{r_name}.pth"
+                        universal_model_path = f"models/model_ai_{active_p}_Univerzalni_Sit.pth"
+                        active_model = model_path if os.path.exists(model_path) else (universal_model_path if os.path.exists(universal_model_path) else None)
                     
                     if active_model:
                         is_zone_ok, ai_confidence = ai_engine.predict_with_ai(active_model, live_roi_img)
@@ -522,6 +537,28 @@ with tab3:
                 st.divider()
                 st.markdown("### 🧠 Řízení sítě projektu")
                 
+                # 1. Zjistíme dostupné již naučené sítě na disku pro možnost znovupoužití
+                os.makedirs("models", exist_ok=True)
+                existing_models = [os.path.basename(f) for f in glob.glob("models/*.pth")]
+                model_options = ["✨ Trénovat zcela novou síť"] + existing_models
+                
+                selected_model_option = st.selectbox(
+                    "🔗 Použít stávající neuronovou síť (např. z jiné formy/projektu):",
+                    options=model_options,
+                    key=f"model_reuse_select_{zn}"
+                )
+                
+                # 2. Vlastní pojmenování sítě
+                default_custom_name = f"model_ai_{active_p}_{zn.replace(' ', '_')}"
+                custom_model_name = st.text_input(
+                    "📝 Vlastní název pro ukládanou neuronovou síť (bez přípony .pth):",
+                    value=default_custom_name,
+                    key=f"custom_model_name_input_{zn}"
+                ).strip()
+                
+                # Zajištění čistého názvu souboru bez nepovolených znaků
+                clean_model_filename = "".join([c for c in custom_model_name if c.isalnum() or c in ["_", "-"]]) + ".pth"
+
                 ok_dir_check = os.path.join("C:/Image", "OK", active_p)
                 nok_dir_check = os.path.join("C:/Image", "NOK", active_p)
                 
@@ -538,37 +575,62 @@ with tab3:
                     st.warning(f"⚠️ **Nedostatečné množství dat:** V adresáři `C:/Image/` pro projekt `{active_p}` máte pouze **{count_ok}x OK** a **{count_nok}x NOK** snímků. (Vyžadováno aspoň 4x OK a 4x NOK).")
                 else:
                     st.info(f"📊 **Množství dat:** Pro učení projektu `{active_p}` je k dispozici **{count_ok}x OK** a **{count_nok}x NOK** reálných vzorků.")
-                
-                if st.button(f"🚀 SPUSTIT UČENÍ PRO PROJEKT: {active_p}", use_container_width=True):
-                    with st.spinner("Učení neuronové sítě běží..."):
-                        progress_bar = st.progress(0.0)
-                        status_text = st.empty()
-                        def update_progress(pct, msg):
-                            progress_bar.progress(pct)
-                            status_text.text(msg)
-                        
-                        success, result_msg = ai_engine.train_ai_model(active_p, "", update_progress)
-                        if success: 
-                            st.success(f"🎉 Úspěšně naučeno! {result_msg}")
-                            
-                            # 🍏 ČÁST 1: AUTOMATICKÝ SQL ZÁPIS DO STRUKTURY PO TRÉNOVÁNÍ
-                            try:
-                                import datetime
-                                current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                                conn_reg = sqlite3.connect("vision_system.db")
-                                cur_reg = conn_reg.cursor()
-                                cur_reg.execute("""
-                                    INSERT INTO model_registry (project_name, model_name, accuracy, created_at, engineering_notes)
-                                    VALUES (?, ?, ?, ?, ?)
-                                """, (active_p, f"model_ai_{active_p}_{zn}.pth", "100%", current_time, "Výchozí trénování z čistého datasetu."))
-                                conn_reg.commit()
-                                conn_reg.close()
-                            except Exception as db_err:
-                                print(f"⚠️ Chyba zápisu modelu do registru: {db_err}")
-                        else: 
-                            st.error(f"❌ Chyba: {result_msg}")
 
-                # 🍏 ČÁST 2: ELVAC INTERAKTIVNÍ REGISTR MODELŮ S DYNAMICKOU KONTROLOU SLOUPCŮ
+                # TLAČÍTKO 1: Nalinkování stávajícího modelu
+                if selected_model_option != "✨ Trénovat zcela novou síť":
+                    if st.button(f"🔗 PROPOJIT ZÓNU SE STÁVAJÍCÍ SÍTÍ: {selected_model_option}", use_container_width=True, type="secondary"):
+                        import datetime
+                        current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        
+                        # Zapíšeme vazbu přímo do registru modelů
+                        conn_reg = sqlite3.connect("vision_system.db")
+                        cur_reg = conn_reg.cursor()
+                        cur_reg.execute("""
+                            INSERT INTO model_registry (project_name, model_name, accuracy, created_at, engineering_notes)
+                            VALUES (?, ?, ?, ?, ?)
+                        """, (active_p, selected_model_option, "Kopie / Link", current_time, f"Převzatý model ze sdílené klapky. Zdrojový soubor: {selected_model_option}"))
+                        conn_reg.commit()
+                        conn_reg.close()
+                        
+                        st.success(f"✅ Zóna úspěšně propojena se stávající sítí {selected_model_option}!")
+                        time.sleep(0.5)
+                        st.rerun()
+
+                # TLAČÍTKO 2: Spuštění nového učení s vlastním názvem
+                else:
+                    if st.button(f"🚀 SPUSTIT UČENÍ S NÁZVEM: {clean_model_filename}", use_container_width=True, type="primary"):
+                        with st.spinner("Učení neuronové sítě běží..."):
+                            progress_bar = st.progress(0.0)
+                            status_text = st.empty()
+                            def update_progress(pct, msg):
+                                progress_bar.progress(pct)
+                                status_text.text(msg)
+                            
+                            # Spustíme učení, předáme náš vlastní čistý název souboru
+                            success, result_msg = ai_engine.train_ai_model(active_p, clean_model_filename, update_progress)
+                            if success: 
+                                st.success(f"🎉 Úspěšně naučeno! {result_msg}")
+                                
+                                try:
+                                    import datetime
+                                    current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                    conn_reg = sqlite3.connect("vision_system.db")
+                                    cur_reg = conn_reg.cursor()
+                                    cur_reg.execute("""
+                                        INSERT INTO model_registry (project_name, model_name, accuracy, created_at, engineering_notes)
+                                        VALUES (?, ?, ?, ?, ?)
+                                    """, (active_p, clean_model_filename, "100%", current_time, "Výchozí trénování s vlastním pojmenováním sítě."))
+                                    conn_reg.commit()
+                                    conn_reg.close()
+                                except Exception as db_err:
+                                    print(f"⚠️ Chyba zápisu modelu do registru: {db_err}")
+                                    
+                                time.sleep(0.5)
+                                st.rerun()
+                            else: 
+                                st.error(f"❌ Chyba: {result_msg}")
+
+                # 🍏 ČÁST 2: INTERAKTIVNÍ REGISTR MODELŮ S DYNAMICKOU KONTROLOU SLOUPCŮ
                 st.markdown("---")
                 st.subheader("🧠 Přehled a správa naučených neuronových sítí")
                 
