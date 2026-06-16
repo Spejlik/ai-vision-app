@@ -47,12 +47,12 @@ def get_camera():
 
 def capture_live_frame(*args, **kwargs):
     """
-    Vysoce stabilní snímání. Bere hodnoty sliderů přímo ze session_state Streamlitu.
-    Zápis provádí pouze při skutečné změně polohy slideru operátorem.
+    Vysoce stabilní snímání pro 5MPx starší Basler čipy.
+    Izoluje zápisy jednotlivých registrů, aby chybějící automatika nezablokovala změnu jasu.
     """
     global _last_exposure, _last_gain, _last_valid_img
     
-    # 🍏 OPRAVA VALEO/ELVAC: Taháme hodnoty přímo ze session state sliderů pod obrazem
+    # Načtení živých hodnot ze sliderů ve Streamlitu
     exposure_time = st.session_state.get("exp_slider_val", 20000)
     gain = st.session_state.get("gain_slider_val", 0.0)
     
@@ -69,40 +69,59 @@ def capture_live_frame(*args, **kwargs):
 
         nodemap = cam.GetNodeMap()
         
-        # Srovnáváme přímo s float hodnotami vytaženými ze Streamlitu
         exp_changed = _last_exposure is None or float(exposure_time) != _last_exposure
         gain_changed = _last_gain is None or float(gain) != _last_gain
 
         if exp_changed or gain_changed:
+            # --- 1. ODSTAVENÍ REŽIMŮ AUTOMATIKY (IZOLOVANĚ V TRY-EXCEPT) ---
+            try:
+                exp_mode = nodemap.GetNode("ExposureMode")
+                if exp_mode is not None: exp_mode.SetValue("Timed")
+            except: pass
+
             try:
                 exp_auto = nodemap.GetNode("ExposureAuto")
                 if exp_auto is not None: exp_auto.SetValue("Off")
+            except: pass
+
+            try:
                 gain_auto = nodemap.GetNode("GainAuto")
                 if gain_auto is not None: gain_auto.SetValue("Off")
+            except: pass
 
-                if exp_changed:
+            # --- 2. SAMOSTATNÝ ZÁPIS EXPOZICE ---
+            if exp_changed:
+                try:
                     exp_node = nodemap.GetNode("ExposureTime") or nodemap.GetNode("ExposureTimeAbs")
-                    if exp_node:
+                    if exp_node is not None:
                         exp_node.SetValue(max(exp_node.GetMin(), min(exp_node.GetMax(), float(exposure_time))))
                     else:
                         exp_raw = nodemap.GetNode("ExposureTimeRaw")
                         if exp_raw is not None:
-                            exp_raw.SetValue(max(exp_raw.GetMin(), min(exp_raw.GetMax(), int(round(float(exposure_time))))))
+                            # Starší 5MPx čipy berou expozici jako int
+                            val_int = int(round(float(exposure_time)))
+                            exp_raw.SetValue(max(exp_raw.GetMin(), min(exp_raw.GetMax(), val_int)))
                     _last_exposure = float(exposure_time)
+                except Exception as e_exp:
+                    print(f"❌ Nelze propsat expozici: {e_exp}")
 
-                if gain_changed:
+            # --- 3. SAMOSTATNÝ ZÁPIS GAINU (ZESÍLENÍ) ---
+            if gain_changed:
+                try:
                     gain_node = nodemap.GetNode("Gain") or nodemap.GetNode("GainAll")
-                    if gain_node:
+                    if gain_node is not None:
                         gain_node.SetValue(max(gain_node.GetMin(), min(gain_node.GetMax(), float(gain))))
                     else:
                         gain_raw = nodemap.GetNode("GainRaw")
                         if gain_raw is not None:
-                            gain_raw.SetValue(max(gain_raw.GetMin(), min(gain_raw.GetMax(), int(round(float(gain))))))
+                            # 🍏 KLÍČOVÁ OPRAVA PRO 5MPx ELVAC: GainRaw vyžaduje celé číslo (0-255)
+                            val_raw = int(round(float(gain)))
+                            gain_raw.SetValue(max(gain_raw.GetMin(), min(gain_raw.GetMax(), val_raw)))
                     _last_gain = float(gain)
-            except Exception as e_reg:
-                print(f"⚠️ Nepodařilo se propsat změnu registru: {e_reg}")
+                except Exception as e_gain:
+                    print(f"❌ Nelze propsat Gain: {e_gain}")
 
-        # Bezpečné vytažení snímku
+        # Bezpečné vytažení snímku z bufferu
         grab_result = cam.RetrieveResult(250, pylon.TimeoutHandling_Return)
         if grab_result and grab_result.GrabSucceeded():
             img = Image.fromarray(grab_result.Array).convert("RGB")
