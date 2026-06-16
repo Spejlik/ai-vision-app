@@ -27,10 +27,20 @@ def get_camera():
             return None
     return _camera
 
-def capture_live_frame():
+def capture_live_frame(exposure_time=None, gain=None):
     cam = get_camera()
     if cam and cam.IsGrabbing():
         try:
+            # --- ZÁPIS EXPOZICE DO HARDWARU KAMERY ---
+            if exposure_time is not None:
+                # Vypneme automatiku, aby nás neposlouchala, a zapíšeme hodnotu
+                cam.ExposureAuto.SetValue("Off")
+                cam.ExposureTime.SetValue(float(exposure_time))
+                
+            if gain is not None:
+                cam.GainAuto.SetValue("Off")
+                cam.Gain.SetValue(float(gain))
+            
             # Čekáme na snímek (timeout 2s)
             grab_result = cam.RetrieveResult(2000, pylon.TimeoutHandling_Return)
             if grab_result.GrabSucceeded():
@@ -38,6 +48,6 @@ def capture_live_frame():
                 grab_result.Release()
                 return img, "OK"
             grab_result.Release()
-        except:
-            pass
+        except Exception as e:
+            return None, f"Chyba nastavení parametrů: {e}"
     return None, "Kamera neběží / Timeout"
