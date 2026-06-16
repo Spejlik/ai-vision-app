@@ -8,6 +8,23 @@ import ai_engine
 import glob
 import numpy as np
 from PIL import Image, ImageDraw
+import sqlite3
+
+# Inicializace tabulky modelů při startu aplikace
+conn = sqlite3.connect("vision_system.db")
+cursor = conn.cursor()
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS model_registry (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_name TEXT,
+    model_name TEXT,
+    accuracy TEXT,
+    created_at TEXT,
+    engineering_notes TEXT
+)
+""")
+conn.commit()
+conn.close()
 
 # --- ODSTRANĚNÍ CACHE HARDWAROVÉHO MODULU Z RAM ---
 import importlib
@@ -245,19 +262,19 @@ with tab1:
             
             time.sleep(0.1)
             st.rerun()
-        else:
-            if "lis_modbus" in st.session_state:
-                st.session_state.lis_modbus.close()
-                del st.session_state.lis_modbus
-                
-            global_status_placeholder.markdown("""
-                <div style='background-color:#333333; color:#888888; padding:25px; border-radius:8px; text-align:center; font-size:35px; font-weight:bold;'>
-                    ČEKÁ NA LIS
-                </div>
-            """, unsafe_allow_html=True)
+    else:
+        if "lis_modbus" in st.session_state:
+            st.session_state.lis_modbus.close()
+            del st.session_state.lis_modbus
             
-            for m, r in all_active_rois:
-                roi_placeholders[r[0]].info(f"⏳ Zóna {r[3]} připravena...")
+        global_status_placeholder.markdown("""
+            <div style='background-color:#333333; color:#888888; padding:25px; border-radius:8px; text-align:center; font-size:35px; font-weight:bold;'>
+                ČEKÁ NA LIS
+            </div>
+        """, unsafe_allow_html=True)
+        
+        for m, r in all_active_rois:
+            roi_placeholders[r[0]].info(f"⏳ Zóna {r[3]} připravena...")
 
 # --- TAB 2: MASTER ---
 with tab2:
@@ -284,7 +301,7 @@ with tab2:
             aw = st.slider("Šířka výřezu", 10, 2000, 500)
             ah = st.slider("Výška výřezu", 10, 2000, 500)
 
-            if st.button("💾 ULOŽIT MASTER", type="primary", width="stretch"):
+            if st.button("💾 ULOŽIT MASTER", type="primary", use_container_width=True):
                 if m_id_name and st.session_state.setup_image_buffer:
                     if not os.path.exists("masters"):
                         os.makedirs("masters")
@@ -313,7 +330,7 @@ with tab2:
             if live_stream_active:
                 # Nejdříve propíšeme hodnoty ze sliderů UI do registrů běžící kamery
                 camera_manager.set_hardware_parameters(
-                    st.session_state.get("exp_slider_val", 40000),
+                    st.session_state.get("exp_slider_val", 40005),
                     st.session_state.get("gain_slider_val", 3)
                 )
                 
@@ -531,8 +548,70 @@ with tab3:
                             status_text.text(msg)
                         
                         success, result_msg = ai_engine.train_ai_model(active_p, "", update_progress)
-                        if success: st.success(f"🎉 Úspěšně naučeno! {result_msg}")
-                        else: st.error(f"❌ Chyba: {result_msg}")
+                        if success: 
+                            st.success(f"🎉 Úspěšně naučeno! {result_msg}")
+                            
+                            # 🍏 ČÁST 1: AUTOMATICKÝ SQL ZÁPIS DO STRUKTURY PO TRÉNOVÁNÍ
+                            try:
+                                import datetime
+                                current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                conn_reg = sqlite3.connect("vision_system.db")
+                                cur_reg = conn_reg.cursor()
+                                cur_reg.execute("""
+                                    INSERT INTO model_registry (project_name, model_name, accuracy, created_at, engineering_notes)
+                                    VALUES (?, ?, ?, ?, ?)
+                                """, (active_p, f"model_ai_{active_p}_{zn}.pth", "100%", current_time, "Výchozí trénování z čistého datasetu."))
+                                conn_reg.commit()
+                                conn_reg.close()
+                            except Exception as db_err:
+                                print(f"⚠️ Chyba zápisu modelu do registru: {db_err}")
+                        else: 
+                            st.error(f"❌ Chyba: {result_msg}")
+
+                # 🍏 ČÁST 2: ELVAC INTERAKTIVNÍ REGISTR MODELŮ S DYNAMICKOU KONTROLOU SLOUPCŮ
+                st.markdown("---")
+                st.subheader("🧠 Přehled a správa naučených neuronových sítí")
+                
+                conn_view = sqlite3.connect("vision_system.db")
+                cur_view = conn_view.cursor()
+                cur_view.execute("PRAGMA table_info(model_registry)")
+                cols_m = [c[1] for c in cur_view.fetchall()]
+                c_proj_m = "project_name" if "project_name" in cols_m else "project"
+                
+                cur_view.execute(f"SELECT id, model_name, created_at, accuracy, engineering_notes FROM model_registry WHERE {c_proj_m}=? ORDER BY id DESC", (active_p,))
+                saved_models = cur_view.fetchall()
+                conn_view.close()
+                
+                if not saved_models:
+                    st.caption("ℹ️ V tomto projektu zatím nebyly uloženy žádné verze neuronových sítí.")
+                else:
+                    for m_id, m_name, m_date, m_acc, m_notes in saved_models:
+                        with st.container(border=True):
+                            col_info, col_notes = st.columns([2, 3])
+                            
+                            with col_info:
+                                st.markdown(f"🤖 **Název:** `{m_name}`")
+                                st.caption(f"📅 Vytvořeno: {m_date}")
+                                st.markdown(f"🎯 Přesnost: :green[{m_acc}]")
+                                
+                            with col_notes:
+                                note_key = f"note_{m_id}_{active_p}"
+                                new_note = st.text_input(
+                                    "Inženýrská poznámka k verzi:", 
+                                    value=m_notes, 
+                                    key=note_key,
+                                    label_visibility="collapsed" if m_notes else "visible"
+                                )
+                                
+                                if new_note != m_notes:
+                                    conn_up = sqlite3.connect("vision_system.db")
+                                    cur_up = conn_up.cursor()
+                                    cur_up.execute("UPDATE model_registry SET engineering_notes=? WHERE id=?", (new_note, m_id))
+                                    conn_up.commit()
+                                    conn_up.close()
+                                    st.toast("Poznámka k síti byla aktualizována", icon="💾")
+                                    time.sleep(0.1)
+                                    st.rerun()
 
 # --- TAB 4: I/O ---
 with tab4:
@@ -545,7 +624,7 @@ with tab5:
     st.subheader("📜 Historie kontrol a snímků")
     
     # 🍏 SIMULAČNÍ TLAČÍTKO PRO RUČNÍ TEST U DISKU
-    if st.button("📸 VYFOTIT A ULOŽIT TESTOVACÍ SNÍMEK DO HISTORIE", type="primary"):
+    if st.button("📸 VYFOTIT A ULOŽIT TESTOVACÍ SNÍMEK DO HISTORIE", type="primary", key="manual_capture_tab5"):
         import camera_manager
         live_full_img, pylon_camera_name = camera_manager.capture_live_frame()
         
@@ -634,7 +713,6 @@ with tab5:
                                 st.rerun()
                                 
                         with btn_col2:
-                            # 🍏 OPRAVENO: Tlačítko NOK je zde pouze JEDNOU
                             if st.button("🍎 NOK", key=f"btn_nok_{r_id}_{idx}", use_container_width=True):
                                 target_dir = f"C:/Image/NOK/{active_p}"
                                 os.makedirs(target_dir, exist_ok=True)
@@ -655,10 +733,10 @@ with tab5:
 # --- SEPARÁTOR PRO ZPĚTNOU KONTROLU DATASETU ---
         st.markdown("---")
         st.subheader("📂 Kontrola a revize již roztříděného datasetu")
-        st.info("Zde si můžete zkontrolovat snímky v trénovacích složkách a případně změnit jejich stav (např. z OK na NOK).")
+        st.info("Zde si můžete zkontrolovat snímky v trénovacích složkách a případně změnit their stav (např. z OK na NOK).")
         
         # Přepínač mezi složkami, které chceme revidovat
-        rev_folder = st.radio("Vyberte složku ke kontrole:", ["Zobrazit složku OK", "Zobrazit složku NOK"], horizontal=True)
+        rev_folder = st.radio("Vyberte složku ke kontrole:", ["Zobrazit složku OK", "Zobrazit složku NOK"], horizontal=True, key="rev_folder_select")
         target_status = "OK" if "Zobrazit složku OK" in rev_folder else "NOK"
         opp_status = "NOK" if target_status == "OK" else "OK"
         opp_color = "🍎 Změnit na NOK" if target_status == "OK" else "🍏 Změnit na OK"
@@ -709,4 +787,4 @@ with tab5:
                             
                             st.toast(f"Přesunuto do složky {opp_status}", icon="🔄")
                             time.sleep(0.1)
-                            st.rerun()                
+                            st.rerun()
