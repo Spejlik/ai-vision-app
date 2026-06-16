@@ -575,7 +575,7 @@ with tab5:
         import sqlite3
         conn = sqlite3.connect("vision_system.db")
         cursor = conn.cursor()
-        cursor.execute("SELECT id, zone_name, file_path, status FROM history WHERE project_name=? AND status='Neroztříděno' ORDER BY id DESC", (active_p,))
+        cursor.execute("SELECT id, roi_name, file_path, status FROM history WHERE project_name=? AND status='Neroztříděno' ORDER BY id DESC", (active_p,))
         unassigned_records = cursor.fetchall()
         conn.close()
         
