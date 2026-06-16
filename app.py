@@ -332,12 +332,12 @@ with tab2:
             live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")
             
             if live_stream_active:
-                # Bezpečné vytáhnutí hodnot ze session_state sliderů definovaných níže
-                exp_val = st.session_state.get("exp_slider_val", 20000)
-                gain_val = st.session_state.get("gain_slider_val", 0.0)
+                # 🍏 OPRAVA OD ELVACU: Taháme hodnoty přímo ze session_state sliderů pod obrazem
+                exp_live = st.session_state.get("exp_slider_val", 20000)
+                gain_live = st.session_state.get("gain_slider_val", 0.0)
                 
-                # Voláme bez klíčových slov – čistě jako poziční argumenty (1. čas, 2. gain)
-                live_full_img, error_msg = camera_manager.capture_live_frame(exp_val, gain_val)
+                # Předáme tyto živé hodnoty do kamery pro každý snímek
+                live_full_img, error_msg = camera_manager.capture_live_frame(exp_live, gain_live)
                 if live_full_img:
                     st.session_state.setup_image_buffer = live_full_img
                 else:
