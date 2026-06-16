@@ -33,51 +33,58 @@ def get_camera():
 def capture_live_frame(*args, **kwargs):
     """
     Robustní zachycení snímku z Basler kamery.
-    Zápis do registrů je plně izolován, aby chybějící uzel (Node) neshodil stream.
+    Kompletně vypíná hardwarové automatiky lisu, aby nedocházelo k přepisování Gainu.
     """
     exposure_time = kwargs.get('exposure_time', args[0] if len(args) > 0 else None)
     gain = kwargs.get('gain', args[1] if len(args) > 1 else None)
     
     cam = get_camera()
     if cam and cam.IsGrabbing():
-        # --- IZOLOVANÝ BLOK PRO HARDWAROVÝ ZÁPIS GAINU (OPRAVA PRO VALEO KAMERU) ---
-        # --- ROZŠÍŘENÝ HARDWAROVÝ ZÁPIS GAINU S ODEMČENÍM SELECTORU ---
-        if gain is not None:
-            try:
-                nodemap = cam.GetNodeMap()
-                gain_auto_node = nodemap.GetNode("GainAuto")
-                gain_selector_node = nodemap.GetNode("GainSelector")
-                gain_node = nodemap.GetNode("Gain")
-                gain_raw_node = nodemap.GetNode("GainRaw")
-
-                # 1. Vypnutí automatiky lisu
-                if gain_auto_node is not None and gain_auto_node.IsValid():
-                    gain_auto_node.SetValue("Off")
-
-                # 2. ODEMČENÍ REGISTRU: Nastavení selectoru na hlavní kanál (All / Analog)
-                if gain_selector_node is not None and gain_selector_node.IsValid():
-                    try:
-                        # V průmyslu se standardně používá "All", u starších čipů "AnalogAll"
-                        if "All" in gain_selector_node.GetSymbolics():
-                            gain_selector_node.SetValue("All")
-                    except:
-                        pass
-
-                # 3. Zápis samotné hodnoty do float registru
-                if gain_node is not None and gain_node.IsValid():
-                    val_to_set = max(gain_node.GetMin(), min(gain_node.GetMax(), float(gain)))
-                    gain_node.SetValue(val_to_set)
-                    
-                # 4. Fallback pro starší celočíselné registry
-                elif gain_raw_node is not None and gain_raw_node.IsValid():
-                    val_to_set = max(gain_raw_node.GetMin(), min(gain_raw_node.GetMax(), int(round(float(gain)))))
-                    gain_raw_node.SetValue(val_to_set)
-                    
-            except Exception as e_gain:
-                print(f"❌ Nelze odemknout hardwarový Gain: {e_gain}")
-        
-        # --- SAMOTNÉ ZÍSKÁNÍ SNÍMKU (NESMÍ SPADNUTÍM HARDWARU SELHAT) ---
         try:
+            nodemap = cam.GetNodeMap()
+
+            # --- 1. VYPNUTÍ VEŠKERÝCH HARDWAROVÝCH AUTOMATIK (KLÍČOVÝ KROK) ---
+            try:
+                # Vypnutí automatické expozice
+                if nodemap.GetNode("ExposureAuto") is not None:
+                    cam.ExposureAuto.SetValue("Off")
+                
+                # Vypnutí automatického zesílení (Continuous/Once -> Off)
+                if nodemap.GetNode("GainAuto") is not None:
+                    cam.GainAuto.SetValue("Off")
+            except Exception as e_auto:
+                print(f"⚠️ Nelze vypnout automatické smyčky jasu: {e_auto}")
+
+            # --- 2. HARDWAROVÝ ZÁPIS EXPOZICE ---
+            if exposure_time is not None:
+                try:
+                    if nodemap.GetNode("ExposureTime") is not None:
+                        cam.ExposureTime.SetValue(float(exposure_time))
+                except Exception as e_exp:
+                    print(f"❌ Nelze nastavit ExposureTime: {e_exp}")
+
+            # --- 3. HARDWAROVÝ ZÁPIS GAINU S UZAMČENÍM ---
+            if gain is not None:
+                try:
+                    # Nastavení selectoru na hlavní kanál před zápisem
+                    if nodemap.GetNode("GainSelector") is not None:
+                        if "All" in cam.GainSelector.GetSymbolics():
+                            cam.GainSelector.SetValue("All")
+                    
+                    # Zápis do standardního float registru 'Gain'
+                    if nodemap.GetNode("Gain") is not None:
+                        val_to_set = max(cam.Gain.GetMin(), min(cam.Gain.GetMax(), float(gain)))
+                        cam.Gain.SetValue(val_to_set)
+                        
+                    # Fallback pro starší modely s 'GainRaw'
+                    elif nodemap.GetNode("GainRaw") is not None:
+                        val_to_set = max(cam.GainRaw.GetMin(), min(cam.GainRaw.GetMax(), int(round(float(gain)))))
+                        cam.GainRaw.SetValue(val_to_set)
+                        
+                except Exception as e_gain:
+                    print(f"❌ Nelze aplikovat manuální Gain: {e_gain}")
+        
+            # --- 4. ZÍSKÁNÍ SNÍMKU Z BUFFERU ---
             grab_result = cam.RetrieveResult(2000, pylon.TimeoutHandling_Return)
             if grab_result.GrabSucceeded():
                 img = Image.fromarray(grab_result.Array).convert("RGB")
@@ -85,6 +92,6 @@ def capture_live_frame(*args, **kwargs):
                 return img, "OK"
             grab_result.Release()
         except Exception as e:
-            return None, f"Chyba vytažení dat z bufferu: {e}"
+            return None, f"Chyba registrů kamery: {e}"
             
     return None, "Kamera negrebuje nebo vypršel timeout."
