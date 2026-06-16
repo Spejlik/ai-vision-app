@@ -307,24 +307,25 @@ with tab2:
                     st.error("❌ Pro uložení musíte zadat název a mít načtený obrázek!")
 
         with col_img:
-        live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")
-        
-        if live_stream_active:
-            # 🍏 ZDE JE TO SPRÁVNÉ MÍSTO (Vložit přesně sem!):
-            # Nejdříve propíšeme hodnoty ze sliderů UI do registrů běžící kamery...
-            camera_manager.set_hardware_parameters(
-                st.session_state.get("exp_slider_val", 40000),
-                st.session_state.get("gain_slider_val", 3)
-            )
+            # Přepínač živého streamu (Odsazeno přesně o 1 tabulátor / 4 mezery)
+            live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")
             
-            # ...a hned v dalším kroku stáhneme čerstvý, stabilní snímek bez pulzování
-            live_full_img, error_msg = camera_manager.capture_live_frame()
-            if live_full_img:
-                st.session_state.setup_image_buffer = live_full_img
+            if live_stream_active:
+                # Nejdříve propíšeme hodnoty ze sliderů UI do registrů běžící kamery
+                camera_manager.set_hardware_parameters(
+                    st.session_state.get("exp_slider_val", 40000),
+                    st.session_state.get("gain_slider_val", 3)
+                )
+                
+                # Následně stáhneme čerstvý stabilní snímek ze sdíleného jádra
+                live_full_img, error_msg = camera_manager.capture_live_frame()
+                if live_full_img:
+                    st.session_state.setup_image_buffer = live_full_img
+                else:
+                    st.error(f"❌ {error_msg}")
             else:
-                st.error(f"❌ {error_msg}")
-        else:
-            sim_dir = os.path.join(BASE_IMAGE_DIR, "OK", active_p)
+                sim_dir = os.path.join(BASE_IMAGE_DIR, "OK", active_p)
+                
                 if "Složka OK" in source_type:
                     images = []
                     if os.path.exists(sim_dir):
