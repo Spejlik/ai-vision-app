@@ -386,17 +386,16 @@ with tab2:
                 draw.rectangle([safe_ax, safe_ay, safe_ax + safe_aw, safe_ay + safe_ah], outline="red", width=5)
                 st.image(preview_img, width="stretch", caption=f"Aktuální podklad ({img_w}x{img_h} px)")
 
-            # --- SLIDERY PŘÍMO POD OBRAZEM (OPRAVENO PRO STARŠÍ 5MPX ČIPY) ---
+            # --- HARDWAROVÉ SLIDERY (NAVÝŠENÉ PRO MAXIMÁLNÍ SVĚTLOST CCD ČIPU) ---
             st.markdown("### 💡 Hardwarové nastavení osvitu kamery")
             
-            # Expozice jako celé číslo v krocích po 1000 μs
-            st.slider("Čas expozice (μs)", 1000, 200000, 30000, step=1000, key="exp_slider_val")
+            # Navýšení maximálního limitu registru expozice pro extrémní prosvětlení
+            st.slider("Elektronická uzávěrka (ExposureTimeRaw index)", 1000, 150000, 60000, step=2000, key="exp_slider_val")
+            st.slider("Zesílení obrazu (Gain Raw index)", 0, 18, 15, step=1, key="gain_slider_val")
             
-            # 🍏 KLÍČOVÁ ZMĚNA: Gain jako čisté celé číslo (0 až 18) podle Elvac standardu pro 5MPx
-            st.slider("Zesílení obrazu (Gain Raw index)", 0, 18, 12, step=1, key="gain_slider_val")
-            
-            st.text_input("📝 Vlastní popis / poznámka k této konfiguraci pozice:", 
-                          value="Zakladni nastaveni jasu", 
+            # 🍏 Profi průmyslový zkrácený formát popisku podle přání (např. 281 P1)
+            st.text_input("📝 Označení konfigurace (např. Číslo_P1):", 
+                          value="281_P1", 
                           key="pfs_custom_description")
 
             # 💾 JEDNORÁZOVÝ ZÁPIS A UKLÁDÁNÍ PFS

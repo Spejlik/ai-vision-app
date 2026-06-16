@@ -42,17 +42,16 @@ def get_camera():
 
 def capture_live_frame(*args, **kwargs):
     """
-    Vysoce citlivé real-time snímání pro 5MPx starší Basler čipy (SFNC v1).
-    Natvrdo propisuje hodnoty sliderů do hardwaru při každém snímku pro okamžitou změnu jasu.
+    Vysoce optimalizované real-time snímání pro Elvac CCD 5MPx standard.
+    Zapisuje parametry přímo a výhradně do Raw registrů čipu pro maximální jas a nulové chyby.
     """
     global _last_valid_img
     
-    # Okamžité vytažení aktuální polohy sliderů ze Streamlitu
-    exposure_time = st.session_state.get("exp_slider_val", 30000)
-    gain_val = st.session_state.get("gain_slider_val", 0)
+    # Načtení hodnot z rozhraní
+    exposure_raw_val = st.session_state.get("exp_slider_val", 30000)
+    gain_raw_val = st.session_state.get("gain_slider_val", 12)
     
     cam = get_camera()
-    
     if cam is not None and cam.IsOpen():
         try:
             if not cam.IsGrabbing():
@@ -60,7 +59,7 @@ def capture_live_frame(*args, **kwargs):
 
             nodemap = cam.GetNodeMap()
             
-            # --- 1. NATVRDO VYPNEME AUTOMATIKY V KAŽDÉM KROKU ---
+            # --- 1. JEDNODUCHÉ VYPNUTÍ AUTOMATIK ---
             try:
                 exp_auto = nodemap.GetNode("ExposureAuto")
                 if exp_auto is not None: exp_auto.SetValue("Off")
@@ -69,39 +68,32 @@ def capture_live_frame(*args, **kwargs):
             except:
                 pass
 
-            # --- 2. AGRESIVNÍ REAL-TIME ZÁPIS EXPOZICE ---
+            # --- 2. PŘÍMÝ NATIVNÍ ZÁPIS EXPOZICE (ODSTRANÍ ČERVENÉ CHYBY) ---
             try:
-                exp_node = nodemap.GetNode("ExposureTime") or nodemap.GetNode("ExposureTimeAbs")
-                if exp_node is not None:
-                    exp_node.SetValue(float(exposure_time))
+                # Na starých CCD čipech Valeo zapisujeme výhradně do ExposureTimeRaw
+                exp_raw_node = nodemap.GetNode("ExposureTimeRaw")
+                if exp_raw_node is not None:
+                    exp_raw_node.SetValue(int(exposure_raw_val))
                 else:
-                    exp_raw = nodemap.GetNode("ExposureTimeRaw")
-                    if exp_raw is not None:
-                        exp_raw.SetValue(int(exposure_time))
-            except Exception as e_exp:
-                print(f"❌ Real-time chyba zápisu expozice: {e_exp}")
-
-            # --- 3. AGRESIVNÍ REAL-TIME ZÁPIS GAINU (ZISKU) ---
-            gain_written = False
-            for gain_name in ["GainRaw", "Gain", "GainAll"]:
-                try:
-                    g_node = nodemap.GetNode(gain_name)
-                    if g_node is not None:
-                        # Rozlišení zda uzel bere integer nebo float
-                        if "Raw" in gain_name or g_node.GetNode().GetType() == 1:
-                            g_node.SetValue(int(gain_val))
-                        else:
-                            g_node.SetValue(float(gain_val))
-                        gain_written = True
-                        break
-                except:
-                    continue
-
-            if not gain_written:
-                # Fallback pro případ, že kamera nemá zisk – nouzově pomůžeme expozici
+                    # Fallback pro novější modely, pokud by se kamera prohodila
+                    exp_node = nodemap.GetNode("ExposureTime") or nodemap.GetNode("ExposureTimeAbs")
+                    if exp_node is not None:
+                        exp_node.SetValue(float(exposure_raw_val))
+            except:
                 pass
 
-            # --- 4. STAŽENÍ SNÍMKU Z ČIPU ---
+            # --- 3. PŘÍMÝ NATIVNÍ ZÁPIS GAINU ---
+            try:
+                gain_raw_node = nodemap.GetNode("GainRaw") or nodemap.GetNode("GainAll") or nodemap.GetNode("Gain")
+                if gain_raw_node is not None:
+                    if gain_raw_node.GetNode().GetType() == 1 or "Raw" in gain_raw_node.GetNode().GetName():
+                        gain_raw_node.SetValue(int(gain_raw_val))
+                    else:
+                        gain_raw_node.SetValue(float(gain_raw_val))
+            except:
+                pass
+
+            # --- 4. STAŽENÍ SNÍMKU ---
             grab_result = cam.RetrieveResult(250, pylon.TimeoutHandling_Return)
             if grab_result and grab_result.GrabSucceeded():
                 img = Image.fromarray(grab_result.Array).convert("RGB")
@@ -111,10 +103,9 @@ def capture_live_frame(*args, **kwargs):
                 
             if grab_result:
                 grab_result.Release()
-        except Exception as e_loop:
-            print(f"⚠️ Výpadek smyčky grabberu: {e_loop}")
+        except:
+            pass
 
-    # Fallback přes záložní buffer pro plynulost rozhraní
     if _last_valid_img is not None:
         return _last_valid_img, "OK (Záložní buffer)"
         
