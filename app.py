@@ -716,7 +716,7 @@ with tab5:
         conn = sqlite3.connect("vision_system.db")
         cursor = conn.cursor()
         
-        # 🍏 DYNAMICKÁ KONTROLA STRUKTURY (Kompletní inspekce tabulky)
+        # 🍏 DYNAMICKÁ KONTROLA STRUKTURY (Vždy načteme sloupce hned na začátku)
         cursor.execute("PRAGMA table_info(history)")
         columns = [col[1] for col in cursor.fetchall()]
         
@@ -727,7 +727,7 @@ with tab5:
         # 3. Mapování cesty k obrázku (image_path / img_path / file_path / path)
         c_path = "image_path" if "image_path" in columns else ("img_path" if "img_path" in columns else ("file_path" if "file_path" in columns else "path"))
         
-        # Sestavení dotazu s dynamickými názvy sloupců
+        # Nyní sestavíme dotaz pro nezařazené řádky
         query = f"SELECT id, {c_roi}, {c_path}, status FROM history WHERE {c_proj}=? AND status='Neroztříděno' ORDER BY id DESC"
         cursor.execute(query, (active_p,))
         unassigned_records = cursor.fetchall()
