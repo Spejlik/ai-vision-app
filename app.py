@@ -129,8 +129,16 @@ with st.sidebar:
                 conn_p_del.commit()
                 conn_p_del.close()
                 
+                # 🌟 Klíčová oprava: Odstraníme smazaný projekt ze stavu aplikace,
+                # aby ho selectbox už nemohl znovu předvybrat
+                if "active_project" in st.session_state:
+                    st.session_state.active_project = None
+                if "project" in st.session_state:
+                    st.session_state.project = None
+                
+                # Zobrazíme hlášku a OKAMŽITĚ aplikaci restartujeme, 
+                # aby se znovu načetla čistá databáze bez sleepu
                 st.toast(f"Projekt {active_p_to_del} byl kompletně vymazán.", icon="🗑️")
-                time.sleep(0.5)
                 st.rerun()
                 
     else:
