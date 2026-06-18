@@ -91,6 +91,41 @@ with st.sidebar:
             projects,
             index=projects.index(st.session_state.active_project)
         )
+        
+        # 🔴 JEDNOTNÉ TLAČÍTKO PRO SMAZÁNÍ AKTIVNÍHO PROJEKTU (VLOŽENO SEM)
+        active_p_to_del = st.session_state.active_project
+        if active_p_to_del:
+            st.write("") # Drobná optická mezera
+            if st.button(f"🗑️ SMAZAT PROJEKT {active_p_to_del}", use_container_width=True, type="secondary", key="del_project_sidebar_btn"):
+                conn_p_del = sqlite3.connect("vision_system.db")
+                cur_p_del = conn_p_del.cursor()
+                
+                # 1. Kaskádové vyčištění ořezových zón (rois) z databáze
+                cur_p_del.execute("DELETE FROM rois WHERE project_name=?", (active_p_to_del,))
+                
+                # 2. Vyčištění registru modelů navázaných na tento projekt
+                cur_p_del.execute("DELETE FROM model_registry WHERE project_name=?", (active_p_to_del,))
+                
+                # 3. Vyčištění tabulky historie pro tento projekt (kontrola obou možných sloupců)
+                cursor_meta = cur_p_del.execute("PRAGMA table_info(history)")
+                history_cols = [c[1] for c in cursor_meta.fetchall()]
+                c_proj_h = "project" if "project" in history_cols else "project_name"
+                cur_p_del.execute(f"DELETE FROM history WHERE {c_proj_h}=?", (active_p_to_del,))
+                
+                # 4. Pokud má váš modul 'database.py' specifickou metodu nebo tabulku pro projekty, 
+                # vymažeme ho i z hlavní tabulky projektů:
+                try:
+                    cur_p_del.execute("DELETE FROM projects WHERE name=?", (active_p_to_del,))
+                except Exception:
+                    pass
+                
+                conn_p_del.commit()
+                conn_p_del.close()
+                
+                st.toast(f"Projekt {active_p_to_del} byl kompletně vymazán.", icon="🗑️")
+                time.sleep(0.5)
+                st.rerun()
+                
     else:
         st.warning("⚠️ Nejdříve vytvořte projekt")
         st.session_state.active_project = None
