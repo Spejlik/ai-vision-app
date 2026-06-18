@@ -100,22 +100,29 @@ with st.sidebar:
                 conn_p_del = sqlite3.connect("vision_system.db")
                 cur_p_del = conn_p_del.cursor()
                 
-                # 1. Kaskádové vyčištění ořezových zón (rois) z databáze
-                cur_p_del.execute("DELETE FROM rois WHERE project_name=?", (active_p_to_del,))
+                # 🍏 OPRAVA: Dynamicky zjistíme sloupce v tabulce 'rois'
+                cur_p_del.execute("PRAGMA table_info(rois)")
+                rois_cols = [c[1] for c in cur_p_del.fetchall()]
+                c_proj_r = "project" if "project" in rois_cols else "project_name"
+                
+                # 1. Vyčištění ořezových zón (rois) se správným sloupcem
+                cur_p_del.execute(f"DELETE FROM rois WHERE {c_proj_r}=?", (active_p_to_del,))
                 
                 # 2. Vyčištění registru modelů navázaných na tento projekt
-                cur_p_del.execute("DELETE FROM model_registry WHERE project_name=?", (active_p_to_del,))
+                cur_p_del.execute("PRAGMA table_info(model_registry)")
+                mod_cols = [c[1] for c in cur_p_del.fetchall()]
+                c_proj_m = "project_name" if "project_name" in mod_cols else "project"
+                cur_p_del.execute(f"DELETE FROM model_registry WHERE {c_proj_m}=?", (active_p_to_del,))
                 
-                # 3. Vyčištění tabulky historie pro tento projekt (kontrola obou možných sloupců)
-                cursor_meta = cur_p_del.execute("PRAGMA table_info(history)")
-                history_cols = [c[1] for c in cursor_meta.fetchall()]
+                # 3. Vyčištění tabulky historie pro tento projekt
+                cur_p_del.execute("PRAGMA table_info(history)")
+                history_cols = [c[1] for c in cur_p_del.fetchall()]
                 c_proj_h = "project" if "project" in history_cols else "project_name"
                 cur_p_del.execute(f"DELETE FROM history WHERE {c_proj_h}=?", (active_p_to_del,))
                 
-                # 4. Pokud má váš modul 'database.py' specifickou metodu nebo tabulku pro projekty, 
-                # vymažeme ho i z hlavní tabulky projektů:
+                # 4. Bezpečné vymazání z hlavní tabulky projektů (pokud existuje)
                 try:
-                    cur_p_del.execute("DELETE FROM projects WHERE name=?", (active_p_to_del,))
+                    cur_p_del.execute("DELETE FROM projects WHERE name=? OR project_name=?", (active_p_to_del, active_p_to_del))
                 except Exception:
                     pass
                 
