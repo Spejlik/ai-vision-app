@@ -548,6 +548,32 @@ with tab3:
                     key=f"model_reuse_select_{zn}"
                 )
                 
+                # 🔴 TLAČÍTKO PRO MAZÁNÍ STARÝCH NEBO NEPOTREBNÝCH SÍTÍ
+                if selected_model_option != "✨ Trénovat zcela novou síť":
+                    # Bezpečnostní pojistka: Zakážeme smazat univerzální síť lisu
+                    if "Univerzalni_Sit" in selected_model_option:
+                        st.caption("🔒 *Univerzální síť systému je uzamčena proti smazání.*")
+                    else:
+                        if st.button(f"🗑️ SMAZAT MODEL {selected_model_option} Z DISKU", use_container_width=True, type="secondary"):
+                            model_to_delete_path = f"models/{selected_model_option}"
+                            
+                            # 1. Fyzické smazání souboru .pth z pevného disku
+                            if os.path.exists(model_to_delete_path):
+                                os.remove(model_to_delete_path)
+                                
+                            # 2. Vymazání záznamu z SQL registru modelů
+                            conn_del = sqlite3.connect("vision_system.db")
+                            cur_del = conn_del.cursor()
+                            cur_del.execute("DELETE FROM model_registry WHERE model_name=?", (selected_model_option,))
+                            conn_del.commit()
+                            conn_del.close()
+                            
+                            st.toast(f"Model {selected_model_option} byl trvale smazán", icon="🗑️")
+                            time.sleep(0.5)
+                            st.rerun()
+
+                st.write("") # Malá mezera pro oddělení prvků UI
+                
                 # 2. Vlastní pojmenování sítě
                 default_custom_name = f"model_ai_{active_p}_{zn.replace(' ', '_')}"
                 custom_model_name = st.text_input(
