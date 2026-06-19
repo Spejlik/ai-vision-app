@@ -1,6 +1,7 @@
 import os
 from pypylon import pylon
 from camera_core import hardware_core
+from PIL import Image
 
 # Globální proměnná pro udržení instance kamery (pokud ji tak v manažeru máte)
 _active_camera_device = None
@@ -45,15 +46,16 @@ def capture_live_frame(device_name="Kamera1"):
         grab_result = _active_camera_device.GrabOne(5000)
         # Vzor standardního převodu z Pylonu na PIL:
         if grab_result.GrabSucceeded():
+            # Načtení knihovny přímo před konverzí pole na obrázek
+            from PIL import Image
+
             converter = pylon.ImageFormatConverter()
             converter.OutputPixelFormat = pylon.PixelType_RGB8packed
             pylon_image = converter.Convert(grab_result)
-            
-            # 🍏 ZKONTROLUJ NÁZEV ZDE: Pokud vytváříš 'img', musíš ho i vrátit!
+
             img = Image.fromarray(pylon_image.GetArray())
-            
-            grab_result.Release() # Nezapomenout uvolnit Basler buffer
-            return img, f"{device_name} OK"  # Vracíme 'img', ne 'image'
+            grab_result.Release()
+            return img, f"{device_name} OK"
         else:
             return None, "Grab failed"
 
