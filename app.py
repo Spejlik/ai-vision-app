@@ -233,14 +233,21 @@ with tab1:
                 is_entire_mold_ok = True
                 
                 for m, r in all_active_rois:
-                    m_path = m[3]
+                    # 🍏 Vytáhneme přesný název kamery z vlastnosti uloženého Masteru (Kamera1 / Kamera2 / Kamera3...)
+                    camera_target_name = str(m[2]).strip()
+                    
                     r_id, r_name, r_nok = r[0], r[3], r[8]
                     
-                    live_full_img, pylon_camera_name = camera_manager.capture_live_frame()
+                    # 🍏 Funkci natvrdo předáme cíl, aby vyfotila tu správnou kameru
+                    live_full_img, pylon_camera_name = camera_manager.capture_live_frame(device_name=camera_target_name)
                     
                     if live_full_img is not None:
                         timestamp = int(time.time())
                         ulozeny_raw_soubor = f"C:/Image/Unsorted/{active_p}/basler_{pylon_camera_name}_{timestamp}.jpg"
+                        os.makedirs(os.path.dirname(ulozeny_raw_soubor), exist_ok=True)
+                        live_full_img.save(ulozeny_raw_soubor, "JPEG", quality=95)
+                        
+                        database.save_to_history(active_p, r_name, ulozeny_raw_soubor, "Neroztříděno")
                         os.makedirs(os.path.dirname(ulozeny_raw_soubor), exist_ok=True)
                         live_full_img.save(ulozeny_raw_soubor, "JPEG", quality=95)
                         
