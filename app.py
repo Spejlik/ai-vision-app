@@ -479,7 +479,7 @@ with tab2:
                 else:
                     st.error(f"❌ Selhalo vytvoření PFS souboru: {path_or_err}")
         
-        if st.session_state.get("master_live_stream_toggle"):
+        if st.session_state.get("master_live_stream_toggle", False):
             time.sleep(0.04)  # Cílíme na stabilních ~25 FPS pro plynulé video bez pulzování
             st.rerun()
 
