@@ -379,9 +379,20 @@ with tab2:
 
         with col_img:
             st.markdown("### 📷 Výběr aktivního hardwaru")
+            
+            # 🍏 DYNAMICKÝ SEZNAM PRO UI:
+            # Zeptáme se pylonu, co reálně žije na síti a hodíme to rovnou do selectboxu
+            try:
+                from pypylon import pylon
+                online_devices = [d.GetUserDefinedName() for d in pylon.TlFactory.GetInstance().EnumerateDevices() if d.GetUserDefinedName()]
+                # Pokud by byla síť prázdná, dáme nouzový fallback
+                if not online_devices: online_devices = ["Kamera1", "Kamera2"]
+            except Exception:
+                online_devices = ["Kamera1", "Kamera2"]
+
             selected_cam_device = st.selectbox(
                 "Zvolte kameru pro uložení Master snímku:",
-                ["Kamera1", "Kamera2"],
+                options=sorted(online_devices), # 🍏 Seznam se vygeneruje sám (bude tam 3, 4 nebo 5 kamer)
                 key="master_camera_hardware_select"
             )
             target_camera_id = selected_cam_device

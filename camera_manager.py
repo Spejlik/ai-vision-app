@@ -39,19 +39,29 @@ def get_cached_camera_instance(device_name):
 # ==============================================================================
 def capture_live_frame(device_name="Kamera1"):
     try:
-        # Zjistíme název druhé kamery, abychom ji mohli přednostně zavřít a uvolnit port
-        other_device = "Kamera2" if device_name == "Kamera1" else "Kamera1"
+        from pypylon import pylon
         
-        try:
-            other_cam_handle = get_cached_camera_instance(other_device)
-            if other_cam_handle and other_cam_handle.IsOpen():
-                if other_cam_handle.IsGrabbing():
-                    other_cam_handle.StopGrabbing()
-                other_cam_handle.Close()
-        except Exception:
-            pass
+        # 🍏 1. AUTOMATICKÝ SCAN SÍTĚ (ŽÁDNÝ RUČNÍ SEZNAM!)
+        tl_factory = pylon.TlFactory.GetInstance()
+        devices = tl_factory.EnumerateDevices()
+        
+        # Samotný pylon nám vrátí seznam všech reálně zapojených kamer lisu
+        all_online_cameras = [d.GetUserDefinedName() for d in devices if d.GetUserDefinedName()]
+        
+        # 2. DYNAMICKÉ ZAVÍRÁNÍ OSTATNÍCH KAMER
+        # Ať už jich máš na lise 3, 5 nebo 10, kód automaticky uspí ty, co zrovna nesleduješ
+        for cam_name in all_online_cameras:
+            if cam_name != device_name:
+                try:
+                    other_cam_handle = get_cached_camera_instance(cam_name)
+                    if other_cam_handle and other_cam_handle.IsOpen():
+                        if other_cam_handle.IsGrabbing():
+                            other_cam_handle.StopGrabbing()
+                        other_cam_handle.Close()
+                except Exception:
+                    pass
 
-        # Načteme nebo probudíme handle pro požadovanou kameru
+        # 3. NAČTENÍ AKTIVNÍ KAMERY Z CACHE
         cam = get_cached_camera_instance(device_name)
         
         if cam is None:
@@ -60,21 +70,20 @@ def capture_live_frame(device_name="Kamera1"):
         if not cam.IsOpen():
             cam.Open()
 
-        # Zachycení jednoho snímku ze sběrnice s timeoutem 5000ms
+        # 4. PROVEDENÍ SNÍMKU
         grab_result = cam.GrabOne(5000)
         if grab_result.GrabSucceeded():
             converter = pylon.ImageFormatConverter()
             converter.OutputPixelFormat = pylon.PixelType_RGB8packed
             pylon_image = converter.Convert(grab_result)
             
-            # Převod na formát PIL Image pro Streamlit UI
             img = Image.fromarray(pylon_image.GetArray())
             grab_result.Release()
             return img, f"{device_name} OK"
         else:
             if 'grab_result' in locals():
                 grab_result.Release()
-            return None, "Chyba: Nepodařilo se vyjmout snímek z bufferu sběrnice (Timeout)."
+            return None, "Chyba: Nepodařilo se vyjmout snímek z bufferu sběrnice."
 
     except Exception as e:
         return None, f"Chyba hardwaru kamery: {str(e)}"
