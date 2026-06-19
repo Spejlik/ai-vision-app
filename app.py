@@ -402,21 +402,23 @@ with tab2:
             st.write("") # Optické oddělení
             
             # Přepínač živého streamu
-            live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")
-            
             if live_stream_active:
-                # Nejdříve propíšeme hodnoty ze sliderů UI do registrů běžící kamery
-                camera_manager.set_hardware_parameters(
-                    st.session_state.get("exp_slider_val", 40005),
-                    st.session_state.get("gain_slider_val", 3)
-                )
-                
-                # Předání čistého Pylon ID do kamery
+                # 1. Následně stáhneme čerstvý stabilní snímek ze sdíleného jádra
+                # (Předáváme target_camera_id, kterou máme vybranou v selectboxu)
                 live_full_img, error_msg = camera_manager.capture_live_frame(device_name=target_camera_id)
+                
                 if live_full_img:
                     st.session_state.setup_image_buffer = live_full_img
+                    
+                    # 🍏 KLÍČOVÁ POJISTKA PROTI PULZOVÁNÍ:
+                    # Okamžitě po úspěšném otevření vnutíme vybrané kameře anti-flicker parametry
+                    # Hodnota 40005 us je přesný matematický násobek pro potlačení 50Hz blikání zářivek
+                    camera_manager.set_hardware_parameters(
+                        st.session_state.get("exp_slider_val", 40005),
+                        st.session_state.get("gain_slider_val", 3)
+                    )
                 else:
-                    st.error(f"❌ {error_msg} (Zkontrolujte, zda proces nevisí v pylon Vieweru)")
+                    st.error(f"❌ {error_msg}")
             else:
                 sim_dir = os.path.join(BASE_IMAGE_DIR, "OK", active_p)
                 

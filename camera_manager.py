@@ -1,136 +1,145 @@
 import os
+import streamlit as st
 from pypylon import pylon
-from camera_core import hardware_core
 from PIL import Image
 
-# Globální proměnná pro udržení instance kamery (pokud ji tak v manažeru máte)
-_active_camera_device = None
-_last_opened_device_name = None
-_active_camera_device = None
-_last_opened_device_name = None
-
-_active_camera_device = None
-_last_opened_device_name = None
-
-def capture_live_frame(device_name="Kamera1"):
-    global _active_camera_device, _last_opened_device_name
-    
+# ==============================================================================
+# 🍏 1. CHRÁNĚNÁ MEZIPAMĚŤ PRO JEDNOTNÝ HARDWAROVÝ HANDLE (VALEO/ELVAC STANDARD)
+# ==============================================================================
+@st.cache_resource(show_spinner=False)
+def get_cached_camera_instance(device_name):
+    """
+    Udržuje exkluzivní a stabilní síťové připojení ke konkrétní kameře v RAM.
+    Streamlit díky tomu při obnovení stránky (Rerun) nezpůsobí kolizi socketů.
+    """
     try:
-        from pypylon import pylon
+        tl_factory = pylon.TlFactory.GetInstance()
+        devices = tl_factory.EnumerateDevices()
         
-        # 🍏 1. ÚPLNÉ UVOLNĚNÍ: Pokud se pokoušíme přistoupit ke kameře, 
-        # ujistíme se, že předchozí handle v paměti RAM nezůstal viset
-        if _active_camera_device is not None:
-            if _last_opened_device_name != device_name:
-                try:
-                    if _active_camera_device.IsOpen():
-                        _active_camera_device.Close()
-                    _active_camera_device.Destroy()
-                except Exception:
-                    pass
-                _active_camera_device = None
-                _last_opened_device_name = None
+        target_device_info = None
+        for d in devices:
+            if d.GetUserDefinedName() == device_name:
+                target_device_info = d
+                break
+                
+        if target_device_info is None:
+            return None
+            
+        # Vytvoření instantní kamery z továrny Basler
+        camera = pylon.InstantCamera(tl_factory.CreateDevice(target_device_info))
+        camera.SetCameraContext(0)  # Prevence kolizí vláken ve Windows 11
+        camera.Open()
+        return camera
+    except Exception as e:
+        print(f"❌ [HARDWARE] Selhal pokus o inicializaci {device_name}: {e}")
+        return None
 
-        # 2. ČISTÁ INICIALIZACE VYBRANÉHO ZAŘÍZENÍ
-        if _active_camera_device is None:
-            tl_factory = pylon.TlFactory.GetInstance()
-            devices = tl_factory.EnumerateDevices()
-            
-            target_device_info = None
-            for d in devices:
-                if d.GetUserDefinedName() == device_name:
-                    target_device_info = d
-                    break
-            
-            if target_device_info is None:
-                return None, f"Kamera '{device_name}' nebyla nalezena."
-            
-            # 🍏 KLÍČOVÁ ZMĚNA: Vytvoříme instantní kameru a okamžitě nastavíme,
-            # že chceme výhradně čistý exkluzivní přístup bez předchozí mezipaměti
-            _active_camera_device = pylon.InstantCamera(tl_factory.CreateDevice(target_device_info))
-            
-            # Nastavení vnitřní pojistky pypylonu proti kolizím vláken ve Windows 11
-            _active_camera_device.SetCameraContext(0) 
-            _active_camera_device.Open()
-            _last_opened_device_name = device_name
+# ==============================================================================
+# 🍏 2. HLAVNÍ FUNKCE PRO SNÍMÁNÍ OBRAZU S AUTOMATICKÝM PŘEPÍNÁNÍM
+# ==============================================================================
+def capture_live_frame(device_name="Kamera1"):
+    try:
+        # Zjistíme název druhé kamery, abychom ji mohli přednostně zavřít a uvolnit port
+        other_device = "Kamera2" if device_name == "Kamera1" else "Kamera1"
+        
+        try:
+            other_cam_handle = get_cached_camera_instance(other_device)
+            if other_cam_handle and other_cam_handle.IsOpen():
+                if other_cam_handle.IsGrabbing():
+                    other_cam_handle.StopGrabbing()
+                other_cam_handle.Close()
+        except Exception:
+            pass
 
-        # 3. SAMOTNÝ GRAB SNÍMKU
-        grab_result = _active_camera_device.GrabOne(5000)
+        # Načteme nebo probudíme handle pro požadovanou kameru
+        cam = get_cached_camera_instance(device_name)
+        
+        if cam is None:
+            return None, f"Kamera '{device_name}' nebyla v síti nalezena nebo je obsazená."
+            
+        if not cam.IsOpen():
+            cam.Open()
+
+        # Zachycení jednoho snímku ze sběrnice s timeoutem 5000ms
+        grab_result = cam.GrabOne(5000)
         if grab_result.GrabSucceeded():
-            from PIL import Image
             converter = pylon.ImageFormatConverter()
             converter.OutputPixelFormat = pylon.PixelType_RGB8packed
             pylon_image = converter.Convert(grab_result)
             
+            # Převod na formát PIL Image pro Streamlit UI
             img = Image.fromarray(pylon_image.GetArray())
             grab_result.Release()
             return img, f"{device_name} OK"
         else:
             if 'grab_result' in locals():
                 grab_result.Release()
-            return None, "Chyba: Snímek se nepodařilo vyjmout z bufferu sběrnice."
+            return None, "Chyba: Nepodařilo se vyjmout snímek z bufferu sběrnice (Timeout)."
 
     except Exception as e:
-        # V případě jakéhokoliv selhání vymažeme instanci, aby příští kliknutí začalo nanovo
-        if _active_camera_device is not None:
-            try:
-                _active_camera_device.Destroy()
-            except Exception:
-                pass
-        _active_camera_device = None
-        _last_opened_device_name = None
         return None, f"Chyba hardwaru kamery: {str(e)}"
 
-def set_hardware_parameters(exposure_val, gain_val):
-    """Zápis hodnot ze sliderů UI přímo do běžící instance a vynucení Free Run."""
-    if hardware_core.camera and hardware_core.camera.IsOpen():
+# ==============================================================================
+# 🍏 3. ZÁPIS PARAMETRŮ (EXPOZICE, GAIN) BEZ BLIKÁNÍ A CHYB
+# ==============================================================================
+def set_hardware_parameters(exposure_val, gain_val, device_name="Kamera1"):
+    """Zápis hodnot přímo do aktivní cachované instance kamery a vynucení Free Run."""
+    cam = get_cached_camera_instance(device_name)
+    
+    if cam and cam.IsOpen():
         try:
-            nodemap = hardware_core.camera.GetNodeMap()
+            nodemap = cam.GetNodeMap()
             
-            # --- 🍏 VYNUCENÝ HARDWAROVÝ RESET TRIGGERU ---
+            # --- VYNUCENÝ HARDWAROVÝ RESET TRIGGERU PRO ŽIVÝ PREVIEW ---
             t_mode = nodemap.GetNode("TriggerMode")
             if t_mode is not None and t_mode.GetValue() != "Off":
                 t_mode.SetValue("Off")
 
-            # --- 🍏 MATEMATICKÁ POJISTKA PRO INC = 35 (ELVAC STANDARD) ---
-            # Vezmeme hodnotu ze slideru a matematicky ji zarovnáme na nejbližší násobek 35
+            # --- MATEMATICKÁ POJISTKA PRO INC = 35 (ELVAC STANDARD) ---
             raw_exposure = int(exposure_val)
             remainder = (raw_exposure - 35) % 35
             if remainder != 0:
-                raw_exposure = raw_exposure - remainder  # Zaokrouhlíme dolů na perfektně dělitelné číslo
+                raw_exposure = raw_exposure - remainder  # Zaokrouhlení dolů na validní krok krokovače čipu
             
-            # Zápis elektronické uzávěrky bez rizika OutOfRangeException
+            # Zápis elektronické uzávěrky (Anti-Flicker stabilizace)
             exp_node = nodemap.GetNode("ExposureTimeRaw") or nodemap.GetNode("ExposureTime")
             if exp_node: 
                 exp_node.SetValue(int(raw_exposure))
             
-            # Zápis zesílení obrazu (Gain 0-18)
+            # Zápis zesílení obrazu (Gain)
             gain_node = nodemap.GetNode("GainRaw") or nodemap.GetNode("Gain")
             if gain_node: 
                 gain_node.SetValue(int(gain_val))
+                
         except Exception as e:
-            print(f"⚠️ [MANAGER] Chyba zápisu parametrů: {e}")
+            print(f"⚠️ [MANAGER] Chyba zápisu parametrů pro {device_name}: {e}")
 
-def save_camera_features_to_pfs(project_name, position_num):
+# ==============================================================================
+# 🍏 4. UKLÁDÁNÍ A NAČÍTÁNÍ PFS PROFILŮ VALEO LINCE
+# ==============================================================================
+def save_camera_features_to_pfs(project_name, position_num, device_name="Kamera1"):
     try:
-        if hardware_core.camera:
+        cam = get_cached_camera_instance(device_name)
+        if cam and cam.IsOpen():
             os.makedirs("profiles", exist_ok=True)
-            pfs_path = f"profiles/{project_name}_pos_{position_num}.pfs"
-            pylon.FeaturePersistence.Save(pfs_path, hardware_core.camera.GetNodeMap())
+            pfs_path = f"profiles/{project_name}_pos_{position_num}_{device_name}.pfs"
+            pylon.FeaturePersistence.Save(pfs_path, cam.GetNodeMap())
             return True, pfs_path
     except Exception as e:
         return False, str(e)
     return False, "Kamera není inicializována."
 
-def load_camera_features_from_pfs(project_name, position_num):
-    if hardware_core.camera:
-        pfs_path = f"profiles/{project_name}_pos_{position_num}.pfs"
+def load_camera_features_from_pfs(project_name, position_num, device_name="Kamera1"):
+    cam = get_cached_camera_instance(device_name)
+    if cam and cam.IsOpen():
+        pfs_path = f"profiles/{project_name}_pos_{position_num}_{device_name}.pfs"
         if os.path.exists(pfs_path):
             try:
-                hardware_core.camera.StopGrabbing()
-                pylon.FeaturePersistence.Load(pfs_path, hardware_core.camera.GetNodeMap(), True)
-                hardware_core.camera.StartGrabbingMax(30, pylon.GrabStrategy_LatestImageOnly)
-                return True, "PFS načteno"
+                if cam.IsGrabbing():
+                    cam.StopGrabbing()
+                pylon.FeaturePersistence.Load(pfs_path, cam.GetNodeMap(), True)
+                cam.StartGrabbingMax(30, pylon.GrabStrategy_LatestImageOnly)
+                return True, "PFS profil úspěšně nahrán do registrů."
             except Exception as e:
                 return False, str(e)
-    return False, "Profil neexistuje"
+    return False, "Profil pro tuto pozici a kameru neexistuje."
