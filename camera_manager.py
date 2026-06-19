@@ -9,46 +9,52 @@ _last_opened_device_name = None
 _active_camera_device = None
 _last_opened_device_name = None
 
+d_active_camera_device = None
+_last_opened_device_name = None
+
 def capture_live_frame(device_name="Kamera1"):
     global _active_camera_device, _last_opened_device_name
     
     try:
         from pypylon import pylon
         
-        # 🍏 DEFINITIVNÍ POJISTKA: Pokud měníme kameru, musíme instanci kompletně smazat z RAM
+        # 🍏 1. ÚPLNÉ UVOLNĚNÍ: Pokud se pokoušíme přistoupit ke kameře, 
+        # ujistíme se, že předchozí handle v paměti RAM nezůstal viset
         if _active_camera_device is not None:
             if _last_opened_device_name != device_name:
                 try:
                     if _active_camera_device.IsOpen():
                         _active_camera_device.Close()
-                    # Natvrdo zničíme vnitřní C++ pointery Basleru
                     _active_camera_device.Destroy()
                 except Exception:
                     pass
                 _active_camera_device = None
                 _last_opened_device_name = None
 
-        # Pokud není otevřená žádná kamera, vytvoříme úplně čisté nové spojení
+        # 2. ČISTÁ INICIALIZACE VYBRANÉHO ZAŘÍZENÍ
         if _active_camera_device is None:
             tl_factory = pylon.TlFactory.GetInstance()
             devices = tl_factory.EnumerateDevices()
             
             target_device_info = None
             for d in devices:
-                # Kontrola shody s Pylon Device User ID (Kamera1 / Kamera2)
                 if d.GetUserDefinedName() == device_name:
                     target_device_info = d
                     break
             
             if target_device_info is None:
-                return None, f"Kamera s názvem '{device_name}' nebyla v síti nalezena."
+                return None, f"Kamera '{device_name}' nebyla nalezena."
             
-            # Inicializace "od nuly"
+            # 🍏 KLÍČOVÁ ZMĚNA: Vytvoříme instantní kameru a okamžitě nastavíme,
+            # že chceme výhradně čistý exkluzivní přístup bez předchozí mezipaměti
             _active_camera_device = pylon.InstantCamera(tl_factory.CreateDevice(target_device_info))
+            
+            # Nastavení vnitřní pojistky pypylonu proti kolizím vláken ve Windows 11
+            _active_camera_device.SetCameraContext(0) 
             _active_camera_device.Open()
             _last_opened_device_name = device_name
 
-        # --- TADY POKRAČUJE TVŮJ KÓD PRO GRABOVÁNÍ SNÍMKU (GrabOne) ---
+        # 3. SAMOTNÝ GRAB SNÍMKU
         grab_result = _active_camera_device.GrabOne(5000)
         if grab_result.GrabSucceeded():
             from PIL import Image
@@ -60,12 +66,19 @@ def capture_live_frame(device_name="Kamera1"):
             grab_result.Release()
             return img, f"{device_name} OK"
         else:
-            grab_result.Release()
-            return None, "Grab failed"
+            if 'grab_result' in locals():
+                grab_result.Release()
+            return None, "Chyba: Snímek se nepodařilo vyjmout z bufferu sběrnice."
 
     except Exception as e:
-        # Pokud cokoliv selže, raději vyčistíme proměnnou pro příští pokus
+        # V případě jakéhokoliv selhání vymažeme instanci, aby příští kliknutí začalo nanovo
+        if _active_camera_device is not None:
+            try:
+                _active_camera_device.Destroy()
+            except Exception:
+                pass
         _active_camera_device = None
+        _last_opened_device_name = None
         return None, f"Chyba hardwaru kamery: {str(e)}"
 
 def set_hardware_parameters(exposure_val, gain_val):
