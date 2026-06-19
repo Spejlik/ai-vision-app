@@ -389,15 +389,15 @@ with tab2:
                     st.error("❌ Pro uložení musíte zadat název a mít načtený obrázek!")
 
         with col_img:
-            # 🍏 KROK 1: PRŮMYSLOVÝ PŘEPÍNAČ MEZI FYZICKÝMI KAMERAMI LISU
+            # 🍏 UPRAVENO: Názvy přesně odpovídají Pylon Device User ID z konfigurátoru
             st.markdown("### 📷 Výběr aktivního hardwaru")
             selected_cam_device = st.selectbox(
                 "Zvolte kameru pro uložení Master snímku:",
-                ["Kamera 1 (Odmotávání / Zadní)", "Kamera 2 (Dolití / Přední)"],
+                ["Kamera1", "Kamera2"],
                 key="master_camera_hardware_select"
             )
-            # Převod textu na čistý název/index pro camera_manager
-            target_camera_id = "Kamera1" if "Kamera 1" in selected_cam_device else "Kamera2"
+            # Teď už nemusíme nic složitě převádět, text z UI je přímo Pylon ID!
+            target_camera_id = selected_cam_device
             
             st.write("") # Optické oddělení
             
@@ -411,8 +411,7 @@ with tab2:
                     st.session_state.get("gain_slider_val", 3)
                 )
                 
-                # 🍏 KROK 2: PŘEDÁNÍ VYBRANÉ KAMERY DO ČTENÍ BUFFERU
-                # Upravili jsme volání, aby manažer věděl, ze které kamery chceme číst
+                # Předání čistého Pylon ID do kamery
                 live_full_img, error_msg = camera_manager.capture_live_frame(device_name=target_camera_id)
                 if live_full_img:
                     st.session_state.setup_image_buffer = live_full_img
