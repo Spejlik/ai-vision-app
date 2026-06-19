@@ -2,12 +2,56 @@ import os
 from pypylon import pylon
 from camera_core import hardware_core
 
-def capture_live_frame():
-    """Vrací poslední platný snímek ze sdílené paměti core modulu."""
-    img, cam_name = hardware_core.get_latest_image()
-    if img is not None:
-        return img, cam_name
-    return None, "Čekání na uvolnění sběrnice kamery..."
+# Globální proměnná pro udržení instance kamery (pokud ji tak v manažeru máte)
+_active_camera_device = None
+_last_opened_device_name = None
+
+def capture_live_frame(device_name="Kamera1"):
+    global _active_camera_device, _last_opened_device_name
+    
+    try:
+        from pypylon import pylon
+        
+        # 🍏 KLÍČOVÁ POJISTKA: Pokud přepínáme na jinou kameru, tu starou musíme natvrdo zavřít
+        if _active_camera_device is not None:
+            if _last_opened_device_name != device_name or not _active_camera_device.IsOpen():
+                try:
+                    _active_camera_device.Close()
+                except Exception:
+                    pass
+                _active_camera_device = None
+
+        # Pokud kamera ještě není inicializovaná, najdeme ji podle DeviceUserID
+        if _active_camera_device is None:
+            tl_factory = pylon.TlFactory.GetInstance()
+            devices = tl_factory.EnumerateDevices()
+            
+            target_device_info = None
+            for d in devices:
+                if d.GetUserDefinedName() == device_name:
+                    target_device_info = d
+                    break
+            
+            if target_device_info is None:
+                return None, f"Kamera s názvem '{device_name}' nebyla v síti nalezena."
+            
+            # Inicializace a otevření konkrétní kamery
+            _active_camera_device = pylon.InstantCamera(tl_factory.CreateDevice(target_device_info))
+            _active_camera_device.Open()
+            _last_opened_device_name = device_name
+
+        # --- ZDE PONECHTE SVŮJ STÁVAJÍCÍ KÓD PRO SNÍMÁNÍ (GrabOne / Convert) ---
+        # Příklad standardního grabu, který tam pravděpodobně máš:
+        grab_result = _active_camera_device.GrabOne(5000)
+        if grab_result.GrabSucceeded():
+            # ... převod na PIL Image a return ...
+            # image = ...
+            return image, f"{device_name} OK"
+        else:
+            return None, "Grab failed"
+
+    except Exception as e:
+        return None, f"Chyba hardwaru kamery: {str(e)}"
 
 def set_hardware_parameters(exposure_val, gain_val):
     """Zápis hodnot ze sliderů UI přímo do běžící instance a vynucení Free Run."""
