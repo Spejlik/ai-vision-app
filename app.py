@@ -100,12 +100,12 @@ with st.sidebar:
                 conn_p_del = sqlite3.connect("vision_system.db")
                 cur_p_del = conn_p_del.cursor()
                 
-                # 🍏 OPRAVA: Dynamicky zjistíme sloupce v tabulce 'rois'
+                # A. Dynamické zjištění sloupců v tabulce 'rois'
                 cur_p_del.execute("PRAGMA table_info(rois)")
                 rois_cols = [c[1] for c in cur_p_del.fetchall()]
                 c_proj_r = "project" if "project" in rois_cols else "project_name"
                 
-                # 1. Vyčištění ořezových zón (rois) se správným sloupcem
+                # 1. Vyčištění ořezových zón (rois)
                 cur_p_del.execute(f"DELETE FROM rois WHERE {c_proj_r}=?", (active_p_to_del,))
                 
                 # 2. Vyčištění registru modelů navázaných na tento projekt
@@ -120,25 +120,25 @@ with st.sidebar:
                 c_proj_h = "project" if "project" in history_cols else "project_name"
                 cur_p_del.execute(f"DELETE FROM history WHERE {c_proj_h}=?", (active_p_to_del,))
                 
-                # 4. Bezpečné vymazání z hlavní tabulky projektů (pokud existuje)
+                # 4. 🍏 KLÍČOVÁ OPRAVA: Vymazání z hlavní tabulky 'projects', odkud bere selectbox data!
                 try:
-                    cur_p_del.execute("DELETE FROM projects WHERE name=? OR project_name=?", (active_p_to_del, active_p_to_del))
-                except Exception:
-                    pass
+                    # Elvac standard používá pro název projektu sloupec 'name'
+                    cur_p_del.execute("DELETE FROM projects WHERE name=?", (active_p_to_del,))
+                except Exception as e:
+                    # Fallback pro případ jiné struktury
+                    try:
+                        cur_p_del.execute("DELETE FROM projects WHERE project_name=?", (active_p_to_del,))
+                    except Exception:
+                        pass
                 
                 conn_p_del.commit()
                 conn_p_del.close()
                 
-                # 🌟 Klíčová oprava: Odstraníme smazaný projekt ze stavu aplikace,
-                # aby ho selectbox už nemohl znovu předvybrat
+                # Vynutíme vyčištění stavu v paměti RAM
                 if "active_project" in st.session_state:
                     st.session_state.active_project = None
-                if "project" in st.session_state:
-                    st.session_state.project = None
                 
-                # Zobrazíme hlášku a OKAMŽITĚ aplikaci restartujeme, 
-                # aby se znovu načetla čistá databáze bez sleepu
-                st.toast(f"Projekt {active_p_to_del} byl kompletně vymazán.", icon="🗑️")
+                st.toast(f"Projekt {active_p_to_del} byl kompletně vymazán ze systému.", icon="🗑️")
                 st.rerun()
                 
     else:
