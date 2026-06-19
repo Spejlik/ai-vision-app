@@ -43,10 +43,17 @@ def capture_live_frame(device_name="Kamera1"):
         # --- ZDE PONECHTE SVŮJ STÁVAJÍCÍ KÓD PRO SNÍMÁNÍ (GrabOne / Convert) ---
         # Příklad standardního grabu, který tam pravděpodobně máš:
         grab_result = _active_camera_device.GrabOne(5000)
+        # Vzor standardního převodu z Pylonu na PIL:
         if grab_result.GrabSucceeded():
-            # ... převod na PIL Image a return ...
-            # image = ...
-            return image, f"{device_name} OK"
+            converter = pylon.ImageFormatConverter()
+            converter.OutputPixelFormat = pylon.PixelType_RGB8packed
+            pylon_image = converter.Convert(grab_result)
+            
+            # 🍏 ZKONTROLUJ NÁZEV ZDE: Pokud vytváříš 'img', musíš ho i vrátit!
+            img = Image.fromarray(pylon_image.GetArray())
+            
+            grab_result.Release() # Nezapomenout uvolnit Basler buffer
+            return img, f"{device_name} OK"  # Vracíme 'img', ne 'image'
         else:
             return None, "Grab failed"
 
