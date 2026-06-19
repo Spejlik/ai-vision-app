@@ -6,6 +6,8 @@ from PIL import Image
 # Globální proměnná pro udržení instance kamery (pokud ji tak v manažeru máte)
 _active_camera_device = None
 _last_opened_device_name = None
+_active_camera_device = None
+_last_opened_device_name = None
 
 def capture_live_frame(device_name="Kamera1"):
     global _active_camera_device, _last_opened_device_name
@@ -13,22 +15,27 @@ def capture_live_frame(device_name="Kamera1"):
     try:
         from pypylon import pylon
         
-        # 🍏 KLÍČOVÁ POJISTKA: Pokud přepínáme na jinou kameru, tu starou musíme natvrdo zavřít
+        # 🍏 DEFINITIVNÍ POJISTKA: Pokud měníme kameru, musíme instanci kompletně smazat z RAM
         if _active_camera_device is not None:
-            if _last_opened_device_name != device_name or not _active_camera_device.IsOpen():
+            if _last_opened_device_name != device_name:
                 try:
-                    _active_camera_device.Close()
+                    if _active_camera_device.IsOpen():
+                        _active_camera_device.Close()
+                    # Natvrdo zničíme vnitřní C++ pointery Basleru
+                    _active_camera_device.Destroy()
                 except Exception:
                     pass
                 _active_camera_device = None
+                _last_opened_device_name = None
 
-        # Pokud kamera ještě není inicializovaná, najdeme ji podle DeviceUserID
+        # Pokud není otevřená žádná kamera, vytvoříme úplně čisté nové spojení
         if _active_camera_device is None:
             tl_factory = pylon.TlFactory.GetInstance()
             devices = tl_factory.EnumerateDevices()
             
             target_device_info = None
             for d in devices:
+                # Kontrola shody s Pylon Device User ID (Kamera1 / Kamera2)
                 if d.GetUserDefinedName() == device_name:
                     target_device_info = d
                     break
@@ -36,30 +43,29 @@ def capture_live_frame(device_name="Kamera1"):
             if target_device_info is None:
                 return None, f"Kamera s názvem '{device_name}' nebyla v síti nalezena."
             
-            # Inicializace a otevření konkrétní kamery
+            # Inicializace "od nuly"
             _active_camera_device = pylon.InstantCamera(tl_factory.CreateDevice(target_device_info))
             _active_camera_device.Open()
             _last_opened_device_name = device_name
 
-        # --- ZDE PONECHTE SVŮJ STÁVAJÍCÍ KÓD PRO SNÍMÁNÍ (GrabOne / Convert) ---
-        # Příklad standardního grabu, který tam pravděpodobně máš:
+        # --- TADY POKRAČUJE TVŮJ KÓD PRO GRABOVÁNÍ SNÍMKU (GrabOne) ---
         grab_result = _active_camera_device.GrabOne(5000)
-        # Vzor standardního převodu z Pylonu na PIL:
         if grab_result.GrabSucceeded():
-            # Načtení knihovny přímo před konverzí pole na obrázek
             from PIL import Image
-
             converter = pylon.ImageFormatConverter()
             converter.OutputPixelFormat = pylon.PixelType_RGB8packed
             pylon_image = converter.Convert(grab_result)
-
+            
             img = Image.fromarray(pylon_image.GetArray())
             grab_result.Release()
             return img, f"{device_name} OK"
         else:
+            grab_result.Release()
             return None, "Grab failed"
 
     except Exception as e:
+        # Pokud cokoliv selže, raději vyčistíme proměnnou pro příští pokus
+        _active_camera_device = None
         return None, f"Chyba hardwaru kamery: {str(e)}"
 
 def set_hardware_parameters(exposure_val, gain_val):
