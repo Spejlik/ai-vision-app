@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import cv2
 import database
@@ -29,9 +30,8 @@ conn.close()
 # --- ODSTRANĚNÍ CACHE HARDWAROVÉHO MODULU Z RAM ---
 import importlib
 importlib.reload(camera_manager)
-importlib.reload(camera_manager)
 
-# --- JEDNORÁZOVÁ PRŮMYSLOVÁ POJISTKA PRO ROZŠÍŘENÍ DATABÁZE (ELVAC STANDARD) ---
+# --- JEDNORÁZOVÁ PRŮMYSLOVÁ POJISTKA PRO ROZŠÍŘENHO DATABÁZE (ELVAC STANDARD) ---
 def check_database_structure():
     import sqlite3
     try:
@@ -92,40 +92,33 @@ with st.sidebar:
             index=projects.index(st.session_state.active_project)
         )
         
-        # 🔴 JEDNOTNÉ TLAČÍTKO PRO SMAZÁNÍ AKTIVNÍHO PROJEKTU (VLOŽENO SEM)
+        # 🔴 JEDNOTNÉ TLAČÍTKO PRO SMAZÁNÍ AKTIVNÍHO PROJEKTU
         active_p_to_del = st.session_state.active_project
         if active_p_to_del:
-            st.write("") # Drobná optická mezera
+            st.write("") 
             if st.button(f"🗑️ SMAZAT PROJEKT {active_p_to_del}", use_container_width=True, type="secondary", key="del_project_sidebar_btn"):
                 conn_p_del = sqlite3.connect("vision_system.db")
                 cur_p_del = conn_p_del.cursor()
                 
-                # A. Dynamické zjištění sloupců v tabulce 'rois'
                 cur_p_del.execute("PRAGMA table_info(rois)")
                 rois_cols = [c[1] for c in cur_p_del.fetchall()]
                 c_proj_r = "project" if "project" in rois_cols else "project_name"
                 
-                # 1. Vyčištění ořezových zón (rois)
                 cur_p_del.execute(f"DELETE FROM rois WHERE {c_proj_r}=?", (active_p_to_del,))
                 
-                # 2. Vyčištění registru modelů navázaných na tento projekt
                 cur_p_del.execute("PRAGMA table_info(model_registry)")
                 mod_cols = [c[1] for c in cur_p_del.fetchall()]
                 c_proj_m = "project_name" if "project_name" in mod_cols else "project"
                 cur_p_del.execute(f"DELETE FROM model_registry WHERE {c_proj_m}=?", (active_p_to_del,))
                 
-                # 3. Vyčištění tabulky historie pro tento projekt
                 cur_p_del.execute("PRAGMA table_info(history)")
                 history_cols = [c[1] for c in cur_p_del.fetchall()]
                 c_proj_h = "project" if "project" in history_cols else "project_name"
                 cur_p_del.execute(f"DELETE FROM history WHERE {c_proj_h}=?", (active_p_to_del,))
                 
-                # 4. 🍏 KLÍČOVÁ OPRAVA: Vymazání z hlavní tabulky 'projects', odkud bere selectbox data!
                 try:
-                    # Elvac standard používá pro název projektu sloupec 'name'
                     cur_p_del.execute("DELETE FROM projects WHERE name=?", (active_p_to_del,))
                 except Exception as e:
-                    # Fallback pro případ jiné struktury
                     try:
                         cur_p_del.execute("DELETE FROM projects WHERE project_name=?", (active_p_to_del,))
                     except Exception:
@@ -134,7 +127,6 @@ with st.sidebar:
                 conn_p_del.commit()
                 conn_p_del.close()
                 
-                # Vynutíme vyčištění stavu v paměti RAM
                 if "active_project" in st.session_state:
                     st.session_state.active_project = None
                 
@@ -171,7 +163,6 @@ with tab1:
                     st.session_state.current_run_position = pos
                     proj_name = st.session_state.get("active_project", "Default_Project")
                     
-                    # Správné volání načtení hardwarového PFS profilu z camera_manageru
                     success, msg = camera_manager.load_camera_features_from_pfs(proj_name, pos)
                     if not success:
                         st.toast(f"ℹ️ {msg}", icon="ℹ️")
@@ -264,7 +255,6 @@ with tab1:
                         pylon_camera_name = "Chyba Kamery"
                         live_roi_img = Image.new('RGB', (500, 500), color=(30, 30, 30))
                     
-                    # 🍏 DYNAMICKÉ NAČTENÍ PŘIŘAZENÉHO MODELU PODLE REGISTRU PRO DANÝ PROJEKT
                     active_model = None
                     try:
                         conn_inf = sqlite3.connect("vision_system.db")
@@ -277,7 +267,6 @@ with tab1:
                     except Exception:
                         pass
                     
-                    # Fallback na starý název nebo univerzální síť, pokud v registru nic není
                     if not active_model:
                         model_path = f"models/model_ai_{active_p}_{r_name}.pth"
                         universal_model_path = f"models/model_ai_{active_p}_Univerzalni_Sit.pth"
@@ -389,33 +378,30 @@ with tab2:
                     st.error("❌ Pro uložení musíte zadat název a mít načtený obrázek!")
 
         with col_img:
-            # 🍏 UPRAVENO: Názvy přesně odpovídají Pylon Device User ID z konfigurátoru
             st.markdown("### 📷 Výběr aktivního hardwaru")
             selected_cam_device = st.selectbox(
                 "Zvolte kameru pro uložení Master snímku:",
                 ["Kamera1", "Kamera2"],
                 key="master_camera_hardware_select"
             )
-            # Teď už nemusíme nic složitě převádět, text z UI je přímo Pylon ID!
             target_camera_id = selected_cam_device
             
-            st.write("") # Optické oddělení
+            st.write("") 
             
-            # Přepínač živého streamu
+            # 🍏 POJISTKA PROTI NameError: Správně definovaný Streamlit toggle prvek
+            live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")
+            
             if live_stream_active:
-                # 1. Následně stáhneme čerstvý stabilní snímek ze sdíleného jádra
-                # (Předáváme target_camera_id, kterou máme vybranou v selectboxu)
                 live_full_img, error_msg = camera_manager.capture_live_frame(device_name=target_camera_id)
                 
                 if live_full_img:
                     st.session_state.setup_image_buffer = live_full_img
                     
-                    # 🍏 KLÍČOVÁ POJISTKA PROTI PULZOVÁNÍ:
-                    # Okamžitě po úspěšném otevření vnutíme vybrané kameře anti-flicker parametry
-                    # Hodnota 40005 us je přesný matematický násobek pro potlačení 50Hz blikání zářivek
+                    # Propojení s korektním device_name zamezuje pulzování jasu
                     camera_manager.set_hardware_parameters(
                         st.session_state.get("exp_slider_val", 40005),
-                        st.session_state.get("gain_slider_val", 3)
+                        st.session_state.get("gain_slider_val", 3),
+                        device_name=target_camera_id
                     )
                 else:
                     st.error(f"❌ {error_msg}")
@@ -448,7 +434,6 @@ with tab2:
                 draw.rectangle([safe_ax, safe_ay, safe_ax + safe_aw, safe_ay + safe_ah], outline="red", width=5)
                 st.image(preview_img, use_container_width=True, caption=f"Aktuální podklad ({img_w}x{img_h} px)")
 
-            # --- HARDWAROVÉ SLIDERY (ANTI-FLICKER + INC 35 JISTOTA) ---
             st.slider(
                 "Elektronická uzávěrka (Anti-Flicker 50Hz takty)", 
                 min_value=19985,     
@@ -461,17 +446,14 @@ with tab2:
             
             st.text_input("📝 Označení konfigurace (např. Číslo_P1):", value="281_P1", key="pfs_custom_description")
 
-            # 💾 SPRÁVNÝ ZÁPIS A UKLÁDÁNÍ PFS DO CAMERA_MANAGERU
             current_setup_pos = st.session_state.get("current_run_position", 1)
             if st.button(f"💾 ULOŽIT TUTO KONFIGURACI JAKO PFS PRO POZICI {current_setup_pos}", type="primary", use_container_width=True):
                 proj_name = st.session_state.get("active_project", "Default_Project")
                 
                 raw_desc = st.session_state.pfs_custom_description.strip().replace(" ", "_")
                 clean_desc = "".join([c for c in raw_desc if c.isalnum() or c in ["_", "-"]])
-                custom_pos_identifier = f"{clean_desc}"
                 
-                # Volání bezpečné ukladací metody z camera_manageru
-                success, path_or_err = camera_manager.save_camera_features_to_pfs(proj_name, current_setup_pos)
+                success, path_or_err = camera_manager.save_camera_features_to_pfs(proj_name, current_setup_pos, device_name=target_camera_id)
                 if success:
                     st.session_state[f"pfs_desc_pos_{current_setup_pos}"] = st.session_state.pfs_custom_description
                     st.success(f"🎉 Průmyslový PFS profil pro Pozici {current_setup_pos} úspěšně vytvořen!")
@@ -480,7 +462,7 @@ with tab2:
                     st.error(f"❌ Selhalo vytvoření PFS souboru: {path_or_err}")
         
         if st.session_state.get("master_live_stream_toggle", False):
-            time.sleep(0.04)  # Cílíme na stabilních ~25 FPS pro plynulé video bez pulzování
+            time.sleep(0.04)  
             st.rerun()
 
 # --- TAB 3: ZÓNY ---
@@ -541,7 +523,7 @@ with tab3:
         if 'selected_master_id' not in st.session_state or st.session_state.selected_master_id is None:
             st.session_state.selected_master_id = all_masters[0][0]
 
-        st.write("### 🖼️ Výběr podkladového Masteru / kamery:")
+        st.write("### 🔑 Výber podkladového Masteru / kamery:")
         m_cols = st.columns(6)
         for idx, m in enumerate(all_masters):
             m_id_loop, m_name_loop, m_path_loop = m[0], m[2], m[3]
@@ -588,6 +570,7 @@ with tab3:
                         with del_col2:
                             if st.button("🗑️", key=f"del_roi_{r[0]}"):
                                 database.delete_roi(r[0])
+                                r_name = r[3]
                                 st.rerun()
 
             with c_viz:
@@ -601,7 +584,6 @@ with tab3:
                 st.divider()
                 st.markdown("### 🧠 Řízení sítě projektu")
                 
-                # 1. Zjistíme dostupné již naučené sítě na disku pro možnost znovupoužití
                 os.makedirs("models", exist_ok=True)
                 existing_models = [os.path.basename(f) for f in glob.glob("models/*.pth")]
                 model_options = ["✨ Trénovat zcela novou síť"] + existing_models
@@ -612,20 +594,15 @@ with tab3:
                     key=f"model_reuse_select_{zn}"
                 )
                 
-                # 🔴 TLAČÍTKO PRO MAZÁNÍ STARÝCH NEBO NEPOTREBNÝCH SÍTÍ
                 if selected_model_option != "✨ Trénovat zcela novou síť":
-                    # Bezpečnostní pojistka: Zakážeme smazat univerzální síť lisu
                     if "Univerzalni_Sit" in selected_model_option:
                         st.caption("🔒 *Univerzální síť systému je uzamčena proti smazání.*")
                     else:
                         if st.button(f"🗑️ SMAZAT MODEL {selected_model_option} Z DISKU", use_container_width=True, type="secondary"):
                             model_to_delete_path = f"models/{selected_model_option}"
-                            
-                            # 1. Fyzické smazání souboru .pth z pevného disku
                             if os.path.exists(model_to_delete_path):
                                 os.remove(model_to_delete_path)
-                                
-                            # 2. Vymazání záznamu z SQL registru modelů
+                            
                             conn_del = sqlite3.connect("vision_system.db")
                             cur_del = conn_del.cursor()
                             cur_del.execute("DELETE FROM model_registry WHERE model_name=?", (selected_model_option,))
@@ -636,9 +613,8 @@ with tab3:
                             time.sleep(0.5)
                             st.rerun()
 
-                st.write("") # Malá mezera pro oddělení prvků UI
+                st.write("") 
                 
-                # 2. Vlastní pojmenování sítě
                 default_custom_name = f"model_ai_{active_p}_{zn.replace(' ', '_')}"
                 custom_model_name = st.text_input(
                     "📝 Vlastní název pro ukládanou neuronovou síť (bez přípony .pth):",
@@ -646,7 +622,6 @@ with tab3:
                     key=f"custom_model_name_input_{zn}"
                 ).strip()
                 
-                # Zajištění čistého názvu souboru bez nepovolených znaků
                 clean_model_filename = "".join([c for c in custom_model_name if c.isalnum() or c in ["_", "-"]]) + ".pth"
 
                 ok_dir_check = os.path.join("C:/Image", "OK", active_p)
@@ -666,27 +641,23 @@ with tab3:
                 else:
                     st.info(f"📊 **Množství dat:** Pro učení projektu `{active_p}` je k dispozici **{count_ok}x OK** a **{count_nok}x NOK** reálných vzorků.")
 
-                # TLAČÍTKO 1: Nalinkování stávajícího modelu
                 if selected_model_option != "✨ Trénovat zcela novou síť":
                     if st.button(f"🔗 PROPOJIT ZÓNU SE STÁVAJÍCÍ SÍTÍ: {selected_model_option}", use_container_width=True, type="secondary"):
                         import datetime
                         current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         
-                        # Zapíšeme vazbu přímo do registru modelů
                         conn_reg = sqlite3.connect("vision_system.db")
                         cur_reg = conn_reg.cursor()
                         cur_reg.execute("""
                             INSERT INTO model_registry (project_name, model_name, accuracy, created_at, engineering_notes)
                             VALUES (?, ?, ?, ?, ?)
-                        """, (active_p, selected_model_option, "Kopie / Link", current_time, f"Převzatý model ze sdílené klapky. Zdrojový soubor: {selected_model_option}"))
+                        """, (active_p, selected_model_option, "Kopie / Link", current_time, f"Převzatý model ze sdílené klapky. Soubor: {selected_model_option}"))
                         conn_reg.commit()
                         conn_reg.close()
                         
-                        st.success(f"✅ Zóna úspěšně propojena se stávající sítí {selected_model_option}!")
+                        st.success(f"✅ Zóna úspěšně propojena se sítě {selected_model_option}!")
                         time.sleep(0.5)
                         st.rerun()
-
-                # TLAČÍTKO 2: Spuštění nového učení s vlastním názvem
                 else:
                     if st.button(f"🚀 SPUSTIT UČENÍ S NÁZVEM: {clean_model_filename}", use_container_width=True, type="primary"):
                         with st.spinner("Učení neuronové sítě běží..."):
@@ -696,7 +667,6 @@ with tab3:
                                 progress_bar.progress(pct)
                                 status_text.text(msg)
                             
-                            # Spustíme učení, předáme náš vlastní čistý název souboru
                             success, result_msg = ai_engine.train_ai_model(active_p, clean_model_filename, update_progress)
                             if success: 
                                 st.success(f"🎉 Úspěšně naučeno! {result_msg}")
@@ -709,18 +679,17 @@ with tab3:
                                     cur_reg.execute("""
                                         INSERT INTO model_registry (project_name, model_name, accuracy, created_at, engineering_notes)
                                         VALUES (?, ?, ?, ?, ?)
-                                    """, (active_p, clean_model_filename, "100%", current_time, "Výchozí trénování s vlastním pojmenováním sítě."))
+                                    """, (active_p, clean_model_filename, "100%", current_time, "Výchozí trénování s vlastním pojmenováním."))
                                     conn_reg.commit()
                                     conn_reg.close()
                                 except Exception as db_err:
-                                    print(f"⚠️ Chyba zápisu modelu do registru: {db_err}")
+                                    print(f"⚠️ Chyba zápisu modelu: {db_err}")
                                     
                                 time.sleep(0.5)
                                 st.rerun()
                             else: 
                                 st.error(f"❌ Chyba: {result_msg}")
 
-                # 🍏 ČÁST 2: INTERAKTIVNÍ REGISTR MODELŮ S DYNAMICKOU KONTROLOU SLOUPCŮ
                 st.markdown("---")
                 st.subheader("🧠 Přehled a správa naučených neuronových sítí")
                 
@@ -761,7 +730,7 @@ with tab3:
                                     cur_up.execute("UPDATE model_registry SET engineering_notes=? WHERE id=?", (new_note, m_id))
                                     conn_up.commit()
                                     conn_up.close()
-                                    st.toast("Poznámka k síti byla aktualizována", icon="💾")
+                                    st.toast("Poznámka k síti aktualizována", icon="💾")
                                     time.sleep(0.1)
                                     st.rerun()
 
@@ -775,7 +744,6 @@ with tab4:
 with tab5:
     st.subheader("📜 Historie kontrol a snímků")
     
-    # 🍏 SIMULAČNÍ TLAČÍTKO PRO RUČNÍ TEST U DISKU
     if st.button("📸 VYFOTIT A ULOŽIT TESTOVACÍ SNÍMEK DO HISTORIE", type="primary", key="manual_capture_tab5"):
         import camera_manager
         live_full_img, pylon_camera_name = camera_manager.capture_live_frame()
@@ -784,11 +752,9 @@ with tab5:
             active_p = st.session_state.get("active_project", "Default_Project")
             timestamp = int(time.time())
             
-            # Vytvoření cesty na disku C:
             test_path = f"C:/Image/Unsorted/{active_p}/manual_{timestamp}.jpg"
             os.makedirs(os.path.dirname(test_path), exist_ok=True)
             
-            # Zápis souboru a uložení do SQL
             live_full_img.save(test_path, "JPEG", quality=95)
             database.save_to_history(active_p, "Manualni_Test", test_path, "Neroztříděno")
             st.success(f"✅ Snímek úspěšně zapsán na disk a uložen do SQL databáze!")
@@ -799,25 +765,19 @@ with tab5:
 
     st.divider()
 
-    # --- INTERAKTIVNÍ TŘÍDĚNÍ SNÍMKŮ PRO UČENÍ (KOMPLETNÍ DYNAMICKÉ MAPOVÁNÍ) ---
     active_p = st.session_state.get("active_project")
     if active_p:
         import sqlite3
         conn = sqlite3.connect("vision_system.db")
         cursor = conn.cursor()
         
-        # 🍏 DYNAMICKÁ KONTROLA STRUKTURY (Vždy načteme sloupce hned na začátku)
         cursor.execute("PRAGMA table_info(history)")
         columns = [col[1] for col in cursor.fetchall()]
         
-        # 1. Mapování projektu (project / project_name)
         c_proj = "project" if "project" in columns else ("project_name" if "project_name" in columns else columns[1])
-        # 2. Mapování zóny (roi_name / zone_name)
         c_roi = "roi_name" if "roi_name" in columns else ("zone_name" if "zone_name" in columns else columns[2])
-        # 3. Mapování cesty k obrázku (image_path / img_path / file_path / path)
         c_path = "image_path" if "image_path" in columns else ("img_path" if "img_path" in columns else ("file_path" if "file_path" in columns else "path"))
         
-        # Nyní sestavíme dotaz pro nezařazené řádky
         query = f"SELECT id, {c_roi}, {c_path}, status FROM history WHERE {c_proj}=? AND status='Neroztříděno' ORDER BY id DESC"
         cursor.execute(query, (active_p,))
         unassigned_records = cursor.fetchall()
@@ -832,12 +792,11 @@ with tab5:
             displayed_count = 0
             
             for idx, record in enumerate(unassigned_records):
-                if displayed_count >= 12: # Ukážeme maximálně 12 VALIDNÍCH karet najednou
+                if displayed_count >= 12: 
                     break
                     
                 r_id, r_zone, r_path, r_status = record[0], record[1], record[2], record[3]
                 
-                # Pokud soubor na disku neexistuje, přeskočíme ho (nechceme prázdné karty)
                 if not os.path.exists(r_path):
                     continue
                 
@@ -882,18 +841,15 @@ with tab5:
                 
                 displayed_count += 1
 
-# --- SEPARÁTOR PRO ZPĚTNOU KONTROLU DATASETU ---
         st.markdown("---")
-        st.subheader("📂 Kontrola a revize již roztříděného datasetu")
-        st.info("Zde si můžete zkontrolovat snímky v trénovacích složkách a případně změnit their stav (např. z OK na NOK).")
+        st.subheader("📂 Kontrola a revize datasetu")
+        st.info("Zde si můžete zkontrolovat snímky v trénovacích složkách.")
         
-        # Přepínač mezi složkami, které chceme revidovat
         rev_folder = st.radio("Vyberte složku ke kontrole:", ["Zobrazit složku OK", "Zobrazit složku NOK"], horizontal=True, key="rev_folder_select")
         target_status = "OK" if "Zobrazit složku OK" in rev_folder else "NOK"
         opp_status = "NOK" if target_status == "OK" else "OK"
         opp_color = "🍎 Změnit na NOK" if target_status == "OK" else "🍏 Změnit na OK"
         
-        # Vytažení již roztříděných dat z SQL
         conn = sqlite3.connect("vision_system.db")
         cursor = conn.cursor()
         cursor.execute(f"SELECT id, {c_roi}, {c_path} FROM history WHERE {c_proj}=? AND status=? ORDER BY id DESC", (active_p, target_status))
@@ -901,11 +857,10 @@ with tab5:
         conn.close()
         
         if not reviewed_records:
-            st.caption(f"Složka {target_status} je momentálně prázdná.")
+            st.caption(f"Složka {target_status} je prázdná.")
         else:
             st.markdown(f"**Vzorky ve složce {target_status} ({len(reviewed_records)}x):**")
             
-            # Vykreslení mřížky pro revizi (max 8 snímků pro přehlednost)
             rev_cols = st.columns(4)
             for r_idx, r_rec in enumerate(reviewed_records[:8]):
                 rev_id, rev_zone, rev_path = r_rec[0], r_rec[1], r_rec[2]
@@ -917,20 +872,16 @@ with tab5:
                         if os.path.exists(rev_path):
                             st.image(rev_path, use_container_width=True)
                         else:
-                            st.caption("⚠️ Soubor byl přesunut/smazán")
+                            st.caption("⚠️ Soubor přesunut nebo smazán")
                             
-                        # Tlačítko pro okamžitou změnu klasifikace (přeřazení)
                         if st.button(opp_color, key=f"rev_flip_{rev_id}_{r_idx}", use_container_width=True):
-                            # 1. Definice nové složky na disku C:
                             new_dir = f"C:/Image/{opp_status}/{active_p}"
                             os.makedirs(new_dir, exist_ok=True)
                             new_path = os.path.join(new_dir, os.path.basename(rev_path))
                             
-                            # 2. Fyzický přesun souboru na disku do druhé složky
                             if os.path.exists(rev_path):
                                 os.rename(rev_path, new_path)
                                 
-                            # 3. Aktualizace stavu a nové cesty v SQL
                             conn = sqlite3.connect("vision_system.db")
                             cursor = conn.cursor()
                             cursor.execute(f"UPDATE history SET status=?, {c_path}=? WHERE id=?", (opp_status, new_path, rev_id))
