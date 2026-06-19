@@ -389,7 +389,19 @@ with tab2:
                     st.error("❌ Pro uložení musíte zadat název a mít načtený obrázek!")
 
         with col_img:
-            # Přepínač živého streamu (Odsazeno přesně o 1 tabulátor / 4 mezery)
+            # 🍏 KROK 1: PRŮMYSLOVÝ PŘEPÍNAČ MEZI FYZICKÝMI KAMERAMI LISU
+            st.markdown("### 📷 Výběr aktivního hardwaru")
+            selected_cam_device = st.selectbox(
+                "Zvolte kameru pro uložení Master snímku:",
+                ["Kamera 1 (Odmotávání / Zadní)", "Kamera 2 (Dolití / Přední)"],
+                key="master_camera_hardware_select"
+            )
+            # Převod textu na čistý název/index pro camera_manager
+            target_camera_id = "Kamera1" if "Kamera 1" in selected_cam_device else "Kamera2"
+            
+            st.write("") # Optické oddělení
+            
+            # Přepínač živého streamu
             live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")
             
             if live_stream_active:
@@ -399,12 +411,13 @@ with tab2:
                     st.session_state.get("gain_slider_val", 3)
                 )
                 
-                # Následně stáhneme čerstvý stabilní snímek ze sdíleného jádra
-                live_full_img, error_msg = camera_manager.capture_live_frame()
+                # 🍏 KROK 2: PŘEDÁNÍ VYBRANÉ KAMERY DO ČTENÍ BUFFERU
+                # Upravili jsme volání, aby manažer věděl, ze které kamery chceme číst
+                live_full_img, error_msg = camera_manager.capture_live_frame(device_name=target_camera_id)
                 if live_full_img:
                     st.session_state.setup_image_buffer = live_full_img
                 else:
-                    st.error(f"❌ {error_msg}")
+                    st.error(f"❌ {error_msg} (Zkontrolujte, zda proces nevisí v pylon Vieweru)")
             else:
                 sim_dir = os.path.join(BASE_IMAGE_DIR, "OK", active_p)
                 
