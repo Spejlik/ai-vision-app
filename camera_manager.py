@@ -9,7 +9,7 @@ _last_opened_device_name = None
 _active_camera_device = None
 _last_opened_device_name = None
 
-d_active_camera_device = None
+_active_camera_device = None
 _last_opened_device_name = None
 
 def capture_live_frame(device_name="Kamera1"):
