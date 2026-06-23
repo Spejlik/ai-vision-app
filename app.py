@@ -368,14 +368,14 @@ with tab2:
             st.markdown("### 📷 Výběr aktivního hardwaru")
             selected_cam_device = st.selectbox(
                 "Zvolte kameru pro uložení Master snímku:",
-                options=sorted(online_devices),
+                ["Kamera1", "Kamera2"],
                 key="master_camera_hardware_select"
             )
-            # Uložíme volbu bezpečně do session_state, aby k ní měl přístup i levý sloupec
-            st.session_state["current_hardware_target"] = selected_cam_device
+            target_camera_id = selected_cam_device
             
             st.write("") 
             
+            # 🍏 TENTO přepínač je ten jediný správný, který v kódu necháváme!
             live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")
             
             if live_stream_active:
