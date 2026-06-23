@@ -568,45 +568,56 @@ with tab3:
             with c_ctrl:
                 st.markdown(f"### 🔧 Nastavení zón: {m_name.split('#')[0]}")
                 
-                # 🍏 ROZŠÍŘENÍ: Výběr, zda dělám novou zónu, nebo upravuji starou
-                rezim_zony = st.radio("Režim konfigurace:", ["➕ Přidat DALŠÍ novou zónu do této fotky", "✏️ Upravit stávající zónu"], horizontal=True)
+                # Výběr režimu
+                rezim_zony = st.radio("Režim konfigurace:", ["➕ Přidat DALŠÍ novou zónu do této fotky", "✏️ Upravit stávající zónu"], horizontal=True, key="rezim_radio_u")
                 
+                # Inicializace výchozích souřadnic, abychom předešli NameError za všech okolností
+                zx_val, zy_val, zw_val, zh_val, ztol_val = 10, 10, W - 20, H - 20, 20
+                nok_val = 1
+                lze_ulozit = True
+
                 if rezim_zony == "➕ Přidat DALŠÍ novou zónu do této fotky":
-                    zn = st.text_input("Název NOVÉ zóny (např. Klip_Vpravo):", value=f"Zóna {len(all_rois)+1}")
+                    zn = st.text_input("Název NOVÉ zóny (např. Klip_Vpravo):", value=f"Zóna {len(all_rois)+1}", key="new_roi_name_input")
                     nok_val = st.selectbox("Přiřazení chyby pro tuto novou zónu (NOK 1-8):", range(1, 9), key="new_nok_select")
                 else:
                     if not all_rois:
-                        st.warning("Na této fotce ještě nemáš žádnou zónu. Přepni na režim Přidat.")
-                        zn = f"Zóna {len(all_rois)+1}"
-                        nok_val = 1
+                        st.warning("⚠️ Na této fotce ještě nemáš žádnou zónu! Přepni nejdříve na režim 'Přidat DALŠÍ novou zónu' nahoře.")
+                        lze_ulozit = False
+                        zn = ""
                     else:
-                        # Necháme tě vybrat ze seznamu už existujících zón na tomto Masteru
                         seznam_zon = [r[3] for r in all_rois]
-                        vybrana_zona_uprava = st.selectbox("Vyber zónu k úpravě polohy:", seznam_zon)
+                        vybrana_zona_uprava = st.selectbox("Vyber zónu k úpravě polohy:", seznam_zon, key="edit_roi_select")
                         zn = vybrana_zona_uprava
-                        # Vyhledáme stávající NOK hodnotu z databáze
+                        
+                        # Bezpečné vyhledání existujícího záznamu
                         stajici_roi = next((r for r in all_rois if r[3] == vybrana_zona_uprava), None)
-                        nok_val = stajici_roi[8] if stajici_roi else 1
+                        if stajici_roi:
+                            nok_val = stajici_roi[8]
+                            zx_val = stajici_roi[4]
+                            zy_val = stajici_roi[5]
+                            zw_val = stajici_roi[6]
+                            zh_val = stajici_roi[7]
+                            ztol_val = stajici_roi[9] if len(stajici_roi) > 9 else 20
 
-                # Slidery polohy (oranžový obdélník)
-                zx = st.slider("X poloha zóny", 0, W, 10 if rezim_zony.startswith("➕") else stajici_roi[4], key="roi_zx_slider")
-                zy = st.slider("Y poloha zóny", 0, H, 10 if rezim_zony.startswith("➕") else stajici_roi[5], key="roi_zy_slider")
-                zw = st.slider("Šířka zóny", 10, W, W - 20 if rezim_zony.startswith("➕") else stajici_roi[6], key="roi_zw_slider")
-                zh = st.slider("Výška zóny", 10, H, H - 20 if rezim_zony.startswith("➕") else stajici_roi[7], key="roi_zh_slider")
-                ztol = st.slider("Tolerance odchylky", 1, 100, 20, key="roi_ztol_slider")
-                
-                if st.button("💾 ULOŽIT ZÓNU DO DATABÁZE", type="primary", use_container_width=True, key="save_roi_dynamic_btn"):
-                    # 🍏 Pokud upravujeme, nejdřív starou se stejným názvem smažeme, aby nevznikaly duplicity
-                    if rezim_zony == "✏️ Upravit stávající zónu" and all_rois:
-                        target_to_del = next((r for r in all_rois if r[3] == zn), None)
-                        if target_to_del:
-                            database.delete_roi(target_to_del[0])
+                # 🍏 Vykreslíme posuvníky pouze tehdy, pokud jsme v režimu Přidat nebo pokud existují data pro Úpravu
+                if lze_ulozit:
+                    zx = st.slider("X poloha zóny", 0, W, int(zx_val), key="roi_zx_slider")
+                    zy = st.slider("Y poloha zóny", 0, H, int(zy_val), key="roi_zy_slider")
+                    zw = st.slider("Šířka zóny", 10, W, int(zw_val), key="roi_zw_slider")
+                    zh = st.slider("Výška zóny", 10, H, int(zh_val), key="roi_zh_slider")
+                    ztol = st.slider("Tolerance odchylky", 1, 100, int(ztol_val), key="roi_ztol_slider")
                     
-                    # Uložíme zónu pod zvoleným (nebo novým) názvem
-                    database.save_roi(m_id, active_p, zn, zx, zy, zw, zh, nok_val, ztol, st.session_state.current_position)
-                    st.success(f"🎉 Zóna '{zn}' úspěšně zapsána pro Pozici {st.session_state.current_position}!")
-                    time.sleep(0.4)
-                    st.rerun()
+                    if st.button("💾 ULOŽIT ZÓNU DO DATABÁZE", type="primary", use_container_width=True, key="save_roi_dynamic_btn"):
+                        # Pokud upravujeme stávající, vymažeme starou verzi se stejným názvem před zápisem nové polohy
+                        if rezim_zony == "✏️ Upravit stávající zónu" and all_rois:
+                            target_to_del = next((r for r in all_rois if r[3] == zn), None)
+                            if target_to_del:
+                                database.delete_roi(target_to_del[0])
+                        
+                        database.save_roi(m_id, active_p, zn, zx, zy, zw, zh, nok_val, ztol, st.session_state.current_position)
+                        st.success(f"🎉 Zóna '{zn}' úspěšně uložena pro Pozici {st.session_state.current_position}!")
+                        time.sleep(0.4)
+                        st.rerun()
                 
                 if all_rois:
                     st.write("---")
