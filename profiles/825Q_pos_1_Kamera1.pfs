@@ -6,7 +6,7 @@ SequenceSetIndex	0
 SequenceSetExecutions	1
 SequenceAdvanceMode	Auto
 GainAuto	Off
-GainRaw	{GainSelector=All}	5
+GainRaw	{GainSelector=All}	3
 GainSelector	All
 BlackLevelRaw	{BlackLevelSelector=All}	8
 BlackLevelSelector	All
