@@ -676,18 +676,24 @@ with tab3:
 
             # --- VIZUALIZAČNÍ SLOUPEC (Vpravo) ---
             with c_viz:
+                # Vytvoříme kreslící plátno nad naším výřezem
                 draw = ImageDraw.Draw(img_roi)
                 line_w = max(2, int(W * 0.007))
                 
-                # Vykreslení všech již hotových zelených zón uložených v SQL
+                # 🍏 KROK 1: Nejprve projdeme databázi a do JEDNOHO obrázku vtiskneme všechny zelené čtverce
                 if all_rois:
                     for r in all_rois:
-                        draw.rectangle([int(r[4]), int(r[5]), int(r[4])+int(r[6]), int(r[5])+int(r[7])], outline="#00FF00", width=line_w)
+                        rx = int(r[4])
+                        ry = int(r[5])
+                        rw = int(r[6])
+                        rh = int(r[7])
+                        draw.rectangle([rx, ry, rx + rw, ry + rh], outline="#00FF00", width=line_w)
                 
-                # Vykreslení aktuálně laděné zóny (oranžový rámeček)
+                # 🍏 KROK 2: Do toho samého obrázku přidáme jeden oranžový zaměřovač ze sliderů
                 if lze_ulozit:
-                    draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=line_w + 2)
+                    draw.rectangle([zx, zy, zx + zw, zy + zh], outline="orange", width=line_w + 2)
                 
+                # 🍏 KROK 3: Obrázek pošleme na monitor pouze JEDNOU (striktně mimo cyklus for!)
                 st.image(img_roi, use_container_width=True, caption="Náhled zón (Zelená = Uložené v SQL, Oranžová = Aktuální výběr)")
                 
                 if all_rois:
