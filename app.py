@@ -589,14 +589,14 @@ with tab3:
                     # ➕ + ROI: Fyzicky vygeneruje a ihned uloží novou zónu do SQL, aby se okamžitě objevila zeleně!
                     if st.button("➕ + ROI", use_container_width=True, key="elvac_plus_roi_btn"):
                         novy_index = len(all_rois) + 1
-                        automaticky_nazev = f"p1_{novy_index}" # Čisté ASCII jméno proti chybám fontu
+                        automaticky_nazev = f"p1_{novy_index}"
                         odskok = novy_index * 30
                         
-                        # Okamžitý zápis do SQL databáze lisu
                         database.save_roi(m_id, active_p, automaticky_nazev, 100 + odskok, 100 + odskok, 150, 150, 1, 20, st.session_state.current_position)
                         st.session_state["elvac_active_roi"] = automaticky_nazev
                         st.toast(f"🎉 Přidána nová {automaticky_nazev}!", icon="➕")
-                        time.makedirs("models", exist_ok=True)
+                        # 🍏 OPRAVENO: Používáme knihovnu os pro bezpečné založení složky na disku lisu
+                        os.makedirs("models", exist_ok=True) 
                         time.sleep(0.1)
                         st.rerun()
 
