@@ -568,67 +568,72 @@ with tab3:
             with c_ctrl:
                 st.markdown(f"### 🔧 Nastavení zón: {m_name.split('#')[0]}")
                 
+                # Inicializace pomocných stavů v paměti pro plynulé přidávání zón lisu
+                if "sub_roi_counter" not in st.session_state:
+                    st.session_state["sub_roi_counter"] = len(all_rois)
+                if "forced_roi_name" not in st.session_state:
+                    st.session_state["forced_roi_name"] = ""
+
                 # Výběr režimu konfigurace
                 rezim_zony = st.radio("Režim konfigurace:", ["➕ Přidat DALŠÍ novou zónu do této fotky", "✏️ Upravit stávající zónu"], horizontal=True, key="rezim_radio_u")
                 
-                # Výchozí inicializace souřadnic
-                zx_val, zy_val, zw_val, zh_val, ztol_val = 10, 10, W - 20, H - 20, 20
+                # Výchozí souřadnice pro nový rozpracovaný čtverec (nastavíme rozumnou menší velikost, ne přes celý obraz!)
+                zx_val, zy_val, zw_val, zh_val, ztol_val = 100, 100, 300, 300, 20
                 nok_val = 1
                 lze_ulozit = True
 
-                # --- 🍏 ELVAC STYLE: AKČNÍ TLAČÍTKA (image_17d59f.png) ---
+                # --- 🍏 ELVAC STYLE AKČNÍ LIŠTA ---
                 btn_col1, btn_col2, btn_col3, btn_col4 = st.columns(4)
                 
                 with btn_col1:
-                    # Tlačítko + ROI pro automatické generování další pod-zóny
+                    # Tlačítko + ROI pouze bezpečně připraví paměť RAM pro další zápis
                     if st.button("➕ + ROI", use_container_width=True, key="elvac_plus_roi_btn"):
-                        nova_sub_index = len(all_rois) + 1
-                        zn_auto = f"Zóna {nova_sub_index}"
-                        # Automatický rychlý zápis výchozího čtverce do DB
-                        database.save_roi(m_id, active_p, zn_auto, 50, 50, 150, 150, 1, 20, st.session_state.current_position)
-                        st.toast(f"🎉 Přidán nový rámeček: {zn_auto}", icon="➕")
-                        time.sleep(0.2)
+                        st.session_state["sub_roi_counter"] += 1
+                        st.session_state["forced_roi_name"] = f"Zóna_{int(time.time())[-4:]}" # Unikátní časový otisk proti kolizím v SQL
+                        st.toast("💡 Připraven nový inspekční rámeček. Nastav polohu slidery a ulož!", icon="➕")
+                        time.sleep(0.1)
                         st.rerun()
 
                 with btn_col2:
-                    # Tlačítko - ROI pro smazání poslední zóny
+                    # Tlačítko - ROI smaže poslední přidanou zónu
                     if st.button("➖ - ROI", use_container_width=True, key="elvac_minus_roi_btn"):
                         if all_rois:
                             posledni_roi = all_rois[-1]
                             database.delete_roi(posledni_roi[0])
-                            st.toast(f"🗑️ Odstraněna {posledni_roi[3]}", icon="➖")
+                            st.session_state["sub_roi_counter"] = max(0, len(all_rois) - 1)
+                            st.toast(f"🗑️ Odstraněna zóna: {posledni_roi[3]}", icon="🚨")
                             time.sleep(0.2)
                             st.rerun()
-                        else:
-                            st.toast("⚠️ Žádná zóna k odebrání.", icon="ℹ️")
 
                 with btn_col3:
-                    # Rychlé zapnutí přejmenování
                     přejmenovat_aktivni = st.toggle("PŘEJMEN.", key="toggle_rename_active")
 
                 with btn_col4:
-                    # Smazání úplně všech zón na tomto masteru
                     if st.button("SMAZAT", use_container_width=True, type="secondary", key="elvac_delete_all_btn"):
                         if all_rois:
                             for r in all_rois:
                                 database.delete_roi(r[0])
-                            st.toast("💥 Všechny zóny z tohoto Masteru byly vymazány.", icon="🗑️")
+                            st.session_state["sub_roi_counter"] = 0
+                            st.toast("💥 Všechny zóny smazány.", icon="🗑️")
                             time.sleep(0.2)
                             st.rerun()
 
                 st.write("")
 
-                # Logika výběru jména zóny a načtení souřadnic podle zvoleného režimu
+                # Logika určení jména a načítání souřadnic z databáze
                 if rezim_zony == "➕ Přidat DALŠÍ novou zónu do této fotky":
+                    generovany_nazev = f"Zóna_{st.session_state['sub_roi_counter'] + 1}"
+                    
                     if přejmenovat_aktivni:
-                        zn = st.text_input("📝 Název nové zóny:", value=f"Zóna {len(all_rois)+1}", key="new_roi_name_input")
+                        zn = st.text_input("📝 Název nové zóny:", value=generovany_nazev, key="new_roi_name_input")
                     else:
-                        zn = f"Zóna {len(all_rois)+1}"
-                        st.caption(f"Automatický název pro uložení: **{zn}**")
+                        zn = generovany_nazev
+                        st.info(f"📍 Vytváříte objekt s názvem: **{zn}**")
+                    
                     nok_val = st.selectbox("Přiřazení chyby pro tuto novou zónu (NOK 1-8):", range(1, 9), key="new_nok_select")
                 else:
                     if not all_rois:
-                        st.warning("⚠️ Na této fotce ještě nemáš žádnou zónu! Použij tlačítko '+ ROI'.")
+                        st.warning("⚠️ Na této fotce ještě nemáš žádnou zónu! Použij tlačítko '+ ROI' nebo režim Přidat.")
                         lze_ulozit = False
                         zn = ""
                     else:
@@ -648,7 +653,7 @@ with tab3:
                             if přejmenovat_aktivni:
                                 zn = st.text_input("✏️ Změnit název vybrané zóny:", value=stajici_roi[3], key="rename_roi_input")
 
-                # Vykreslení posuvníků pro doladění rozměrů
+                # Vykreslení posuvníků polohy (oranžový zaměřovač)
                 if lze_ulozit:
                     st.write("---")
                     zx = st.slider("X poloha zóny", 0, W, int(zx_val), key="roi_zx_slider")
@@ -657,17 +662,33 @@ with tab3:
                     zh = st.slider("Výška zóny", 10, H, int(zh_val), key="roi_zh_slider")
                     ztol = st.slider("Tolerance odchylky", 1, 100, int(ztol_val), key="roi_ztol_slider")
                     
-                    if st.button("💾 ULOŽIT ZMĚNY POLOHY", type="primary", use_container_width=True, key="save_roi_dynamic_btn"):
-                        # Pokud upravujeme nebo přejmenováváme, vymažeme předchozí instanci
+                    if st.button("💾 ULOŽIT ZÓNU DO DATABÁZE", type="primary", use_container_width=True, key="save_roi_dynamic_btn"):
+                        # Pokud upravujeme/přejmenováváme, vymažeme starou verzi před zápisem nové polohy
                         if rezim_zony == "✏️ Upravit stávající zónu" and all_rois:
                             target_to_del = next((r for r in all_rois if r[3] == vybrana_zona_uprava), None)
                             if target_to_del:
                                 database.delete_roi(target_to_del[0])
                         
                         database.save_roi(m_id, active_p, zn, zx, zy, zw, zh, nok_val, ztol, st.session_state.current_position)
-                        st.success(f"🎉 Zóna '{zn}' úspěšně uložena s novými parametry!")
+                        st.success(f"🎉 Zóna '{zn}' úspěšně uložena do databáze lisu!")
                         time.sleep(0.4)
                         st.rerun()
+
+            # --- VIZUALIZAČNÍ SLOUPEC (Vpravo) ---
+            with c_viz:
+                draw = ImageDraw.Draw(img_roi)
+                line_w = max(2, int(W * 0.007))
+                
+                # Vykreslení všech již hotových zelených zón uložených v SQL
+                if all_rois:
+                    for r in all_rois:
+                        draw.rectangle([int(r[4]), int(r[5]), int(r[4])+int(r[6]), int(r[5])+int(r[7])], outline="#00FF00", width=line_w)
+                
+                # Vykreslení aktuálně laděné zóny (oranžový rámeček)
+                if lze_ulozit:
+                    draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=line_w + 2)
+                
+                st.image(img_roi, use_container_width=True, caption="Náhled zón (Zelená = Uložené v SQL, Oranžová = Aktuální výběr)")
                 
                 if all_rois:
                     st.write("---")
