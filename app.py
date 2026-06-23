@@ -566,19 +566,45 @@ with tab3:
             
             c_ctrl, c_viz = st.columns([1, 1.8])
             with c_ctrl:
-                st.markdown(f"### 🔧 Nastavení zón: {m_name}")
-                zn = st.text_input("Název zóny", value=f"Zóna {len(all_rois)+1}")
-                nok_val = st.selectbox("Přiřazení chyby (NOK 1-8)", range(1, 9))
+                st.markdown(f"### 🔧 Nastavení zón: {m_name.split('#')[0]}")
                 
-                zx = st.slider("X", 0, W, 0)
-                zy = st.slider("Y", 0, H, 0)
-                zw = st.slider("Šířka", 10, W, W)
-                zh = st.slider("Výška", 10, H, H)
-                ztol = st.slider("Tolerance odchylky", 1, 100, 20)
+                # 🍏 ROZŠÍŘENÍ: Výběr, zda dělám novou zónu, nebo upravuji starou
+                rezim_zony = st.radio("Režim konfigurace:", ["➕ Přidat DALŠÍ novou zónu do této fotky", "✏️ Upravit stávající zónu"], horizontal=True)
                 
-                if st.button("💾 ULOŽIT NOVOU ZÓNU", type="primary", use_container_width=True):
+                if rezim_zony == "➕ Přidat DALŠÍ novou zónu do této fotky":
+                    zn = st.text_input("Název NOVÉ zóny (např. Klip_Vpravo):", value=f"Zóna {len(all_rois)+1}")
+                    nok_val = st.selectbox("Přiřazení chyby pro tuto novou zónu (NOK 1-8):", range(1, 9), key="new_nok_select")
+                else:
+                    if not all_rois:
+                        st.warning("Na této fotce ještě nemáš žádnou zónu. Přepni na režim Přidat.")
+                        zn = f"Zóna {len(all_rois)+1}"
+                        nok_val = 1
+                    else:
+                        # Necháme tě vybrat ze seznamu už existujících zón na tomto Masteru
+                        seznam_zon = [r[3] for r in all_rois]
+                        vybrana_zona_uprava = st.selectbox("Vyber zónu k úpravě polohy:", seznam_zon)
+                        zn = vybrana_zona_uprava
+                        # Vyhledáme stávající NOK hodnotu z databáze
+                        stajici_roi = next((r for r in all_rois if r[3] == vybrana_zona_uprava), None)
+                        nok_val = stajici_roi[8] if stajici_roi else 1
+
+                # Slidery polohy (oranžový obdélník)
+                zx = st.slider("X poloha zóny", 0, W, 10 if rezim_zony.startswith("➕") else stajici_roi[4], key="roi_zx_slider")
+                zy = st.slider("Y poloha zóny", 0, H, 10 if rezim_zony.startswith("➕") else stajici_roi[5], key="roi_zy_slider")
+                zw = st.slider("Šířka zóny", 10, W, W - 20 if rezim_zony.startswith("➕") else stajici_roi[6], key="roi_zw_slider")
+                zh = st.slider("Výška zóny", 10, H, H - 20 if rezim_zony.startswith("➕") else stajici_roi[7], key="roi_zh_slider")
+                ztol = st.slider("Tolerance odchylky", 1, 100, 20, key="roi_ztol_slider")
+                
+                if st.button("💾 ULOŽIT ZÓNU DO DATABÁZE", type="primary", use_container_width=True, key="save_roi_dynamic_btn"):
+                    # 🍏 Pokud upravujeme, nejdřív starou se stejným názvem smažeme, aby nevznikaly duplicity
+                    if rezim_zony == "✏️ Upravit stávající zónu" and all_rois:
+                        target_to_del = next((r for r in all_rois if r[3] == zn), None)
+                        if target_to_del:
+                            database.delete_roi(target_to_del[0])
+                    
+                    # Uložíme zónu pod zvoleným (nebo novým) názvem
                     database.save_roi(m_id, active_p, zn, zx, zy, zw, zh, nok_val, ztol, st.session_state.current_position)
-                    st.success(f"Zóna {zn} úspěšně uložena do Pozice {st.session_state.current_position}!")
+                    st.success(f"🎉 Zóna '{zn}' úspěšně zapsána pro Pozici {st.session_state.current_position}!")
                     time.sleep(0.4)
                     st.rerun()
                 
