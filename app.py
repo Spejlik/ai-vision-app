@@ -233,10 +233,19 @@ with tab1:
                 is_entire_mold_ok = True
                 
                 for m, r in all_active_rois:
-                    # 🍏 Vytáhneme přesný název kamery z vlastnosti uloženého Masteru (Kamera1 / Kamera2 / Kamera3...)
-                    camera_target_name = str(m[2]).strip()
+                    plny_nazev_masteru = str(m[2]).strip()
+                    
+                    # 🍏 Pokud název obsahuje mřížku, bezpečně z něj vytáhneme hardwarový cíl kamery
+                    if "#" in plny_nazev_masteru:
+                        lidsky_popis, camera_target_name = plny_nazev_masteru.split("#", 1)
+                    else:
+                        # Fallback pro starší záznamy
+                        camera_target_name = plny_nazev_masteru 
                     
                     r_id, r_name, r_nok = r[0], r[3], r[8]
+                    
+                    # Vystřelení exkluzivního příkazu pro focení konkrétní kamery lisu
+                    live_full_img, pylon_camera_name = camera_manager.capture_live_frame(device_name=camera_target_name.strip())
                     
                     # 🍏 Funkci natvrdo předáme cíl, aby vyfotila tu správnou kameru
                     live_full_img, pylon_camera_name = camera_manager.capture_live_frame(device_name=camera_target_name)
@@ -378,7 +387,9 @@ with tab2:
                     square_img = square_img.resize((500, 500), Image.Resampling.LANCZOS)
                     square_img.save(filename)
                     
-                    database.add_master(active_p, m_id_name, filename, ax, ay, aw, ah)
+                    # Sloučíme tvůj lidský název (např. Pozice 1 Klip) s hardwarovým ID kamery (Kamera1)
+                    kombinovany_nazev = f"{m_id_name}#{target_camera_id}"
+                    database.add_master(active_p, kombinovany_nazev, filename, ax, ay, aw, ah)
                     st.success(f"Master {m_id_name} byl úspěšně uložen!")
                     st.rerun()
                 else:
