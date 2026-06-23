@@ -355,23 +355,98 @@ with tab2:
         active_p = st.session_state.active_project
         col_ctrl, col_img = st.columns([1, 2])
         
+        # --- 🍏 A. DYNAMICKÝ SCAN SÍTĚ PRO PŘEDCHÁZENÍ CHYBÁM SCOPE ---
+        try:
+            from pypylon import pylon
+            online_devices = [d.GetUserDefinedName() for d in pylon.TlFactory.GetInstance().EnumerateDevices() if d.GetUserDefinedName()]
+            if not online_devices: 
+                online_devices = ["Kamera1", "Kamera2"]
+        except Exception:
+            online_devices = ["Kamera1", "Kamera2"]
+
+        with col_img:
+            st.markdown("### 📷 Výběr aktivního hardwaru")
+            selected_cam_device = st.selectbox(
+                "Zvolte kameru pro uložení Master snímku:",
+                options=sorted(online_devices),
+                key="master_camera_hardware_select"
+            )
+            # Uložíme volbu bezpečně do session_state, aby k ní měl přístup i levý sloupec
+            st.session_state["current_hardware_target"] = selected_cam_device
+            
+            st.write("") 
+            
+            live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")
+            
+            if live_stream_active:
+                live_full_img, error_msg = camera_manager.capture_live_frame(device_name=st.session_state["current_hardware_target"])
+                
+                if live_full_img:
+                    st.session_state.setup_image_buffer = live_full_img
+                    camera_manager.set_hardware_parameters(
+                        st.session_state.get("exp_slider_val", 40005),
+                        st.session_state.get("gain_slider_val", 3),
+                        device_name=st.session_state["current_hardware_target"]
+                    )
+                else:
+                    st.error(f"❌ {error_msg}")
+            else:
+                sim_dir = os.path.join(BASE_IMAGE_DIR, "OK", active_p)
+                if "Složka OK" in source_type if 'source_type' in locals() else True:
+                    images = []
+                    if os.path.exists(sim_dir):
+                        for ext in ["*.jpg", "*.jpeg", "*.png", "*.JPG", "*.PNG"]:
+                            images.extend(glob.glob(os.path.join(sim_dir, ext)))
+                    if images:
+                        st.session_state.setup_image_buffer = Image.open(images[0]).convert("RGB")
+                    else:
+                        if st.session_state.setup_image_buffer is None:
+                            st.session_state.setup_image_buffer = Image.new('RGB', (1920, 1080), color=(75, 105, 130))
+
+            if st.session_state.setup_image_buffer is not None:
+                preview_img = st.session_state.setup_image_buffer.copy()
+                img_w, img_h = preview_img.size
+                
+                # Ošetření mezí pro posuvníky
+                safe_ax = min(st.session_state.get("master_ax_slider", 0), img_w - 10)
+                safe_ay = min(st.session_state.get("master_ay_slider", 0), img_h - 10)
+                
+                draw = ImageDraw.Draw(preview_img)
+                draw.rectangle([safe_ax, safe_ay, safe_ax + 500, safe_ay + 500], outline="red", width=5)
+                st.image(preview_img, use_container_width=True, caption=f"Aktuální podklad ({img_w}x{img_h} px)")
+
+            st.slider("Elektronická uzávěrka (Anti-Flicker 50Hz takty)", min_value=19985, max_value=159985, value=40005, step=19985, key="exp_slider_val")
+            st.slider("Zesílení obrazu (Gain Raw index)", 0, 18, 3, step=1, key="gain_slider_val")
+            st.text_input("📝 Označení konfigurace (např. Číslo_P1):", value="281_P1", key="pfs_custom_description")
+
+            current_setup_pos = st.session_state.get("current_run_position", 1)
+            if st.button(f"💾 ULOŽIT TUTO KONFIGURACI JAKO PFS PRO POZICI {current_setup_pos}", type="primary", use_container_width=True):
+                proj_name = st.session_state.get("active_project", "Default_Project")
+                success, path_or_err = camera_manager.save_camera_features_to_pfs(proj_name, current_setup_pos, device_name=st.session_state["current_hardware_target"])
+                if success:
+                    st.success(f"🎉 Průmyslový PFS profil pro Pozici {current_setup_pos} úspěšně vytvořen!")
+                    st.rerun()
+                else:
+                    st.error(f"❌ Selhalo vytvoření PFS souboru: {path_or_err}")
+
         with col_ctrl:
             st.markdown("### 🔌 Zdroj obrázku")
             source_type = st.radio(
                 "Vyberte, jak chcete nahrát podkladový snímek:",
-                ["📷 Simulovat z kamery lisu (Složka OK)", "📁 Nahrát soubor z disku (Příprava dopředu)"]
+                ["📷 Simulovat z kamery lisu (Složka OK)", "📁 Nahrát soubor z disku (Příprava dopředu)"],
+                key="master_source_radio"
             )
             
             st.divider()
             st.write("### ✂️ Definice výřezu")
-            m_id_name = st.text_input("Název Masteru (např. Pozice 1)")
+            m_id_name = st.text_input("Název Masteru (např. Pozice 1)", key="master_name_input_text")
             
-            ax = st.slider("X začátek", 0, 2000, 0)
-            ay = st.slider("Y začátek", 0, 2000, 0)
-            aw = st.slider("Šířka výřezu", 10, 2000, 500)
-            ah = st.slider("Výška výřezu", 10, 2000, 500)
+            ax = st.slider("X začátek", 0, 2000, 0, key="master_ax_slider")
+            ay = st.slider("Y začátek", 0, 2000, 0, key="master_ay_slider")
+            aw = st.slider("Šířka výřezu", 10, 2000, 500, key="master_aw_slider")
+            ah = st.slider.get if False else st.slider("Výška výřezu", 10, 2000, 500, key="master_ah_slider")
 
-            if st.button("💾 ULOŽIT MASTER", type="primary", use_container_width=True):
+            if st.button("💾 ULOŽIT MASTER", type="primary", use_container_width=True, key="save_master_concrete_btn"):
                 if m_id_name and st.session_state.setup_image_buffer:
                     if not os.path.exists("masters"):
                         os.makedirs("masters")
@@ -387,13 +462,20 @@ with tab2:
                     square_img = square_img.resize((500, 500), Image.Resampling.LANCZOS)
                     square_img.save(filename)
                     
-                    # Sloučíme tvůj lidský název (např. Pozice 1 Klip) s hardwarovým ID kamery (Kamera1)
-                    kombinovany_nazev = f"{m_id_name}#{target_camera_id}"
+                    # 🍏 DOKONALÉ SPOJENÍ: Spojíme tvůj inženýrský název s hardwarovým parametrem z session_state
+                    hw_id = st.session_state.get("current_hardware_target", "Kamera1")
+                    kombinovany_nazev = f"{m_id_name}#{hw_id}"
+                    
                     database.add_master(active_p, kombinovany_nazev, filename, ax, ay, aw, ah)
-                    st.success(f"Master {m_id_name} byl úspěšně uložen!")
+                    st.success(f"Master {m_id_name} byl úspěšně uložen s vazbou na {hw_id}!")
+                    time.sleep(0.4)
                     st.rerun()
                 else:
                     st.error("❌ Pro uložení musíte zadat název a mít načtený obrázek!")
+        
+        if st.session_state.get("master_live_stream_toggle", False):
+            time.sleep(0.04)  
+            st.rerun()
 
         with col_img:
             st.markdown("### 📷 Výběr aktivního hardwaru")
