@@ -490,13 +490,7 @@ with tab2:
             except Exception:
                 online_devices = ["Kamera1", "Kamera2"]
 
-            selected_cam_device = st.selectbox(
-                "Zvolte kameru pro uložení Master snímku:",
-                options=sorted(online_devices), # 🍏 Seznam se vygeneruje sám (bude tam 3, 4 nebo 5 kamer)
-                key="master_camera_hardware_select"
-            )
-            target_camera_id = selected_cam_device
-            
+                        
             st.write("") 
             
             # 🍏 POJISTKA PROTI NameError: Správně definovaný Streamlit toggle prvek
