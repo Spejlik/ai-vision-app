@@ -634,13 +634,13 @@ with tab3:
                 draw = ImageDraw.Draw(img_roi)
                 line_w = max(2, int(W * 0.007))
                 
-                # 🍏 Vykreslení všech již bezpečně uložených oblastí z databáze lisu
+                # 🍏 1. Vykreslení úplně všech již bezpečně uložených oblastí na této fotce z databáze lisu
+                # r[4]=X, r[5]=Y, r[6]=Šířka, r[7]=Výška
                 if all_rois:
                     for r in all_rois:
-                        # r[4]=X, r[5]=Y, r[6]=Šířka, r[7]=Výška
                         draw.rectangle([int(r[4]), int(r[5]), int(r[4])+int(r[6]), int(r[5])+int(r[7])], outline="#00FF00", width=line_w)
                 
-                # Vykreslení té zóny, kterou zrovna teď ladíš posuvníky (oranžová)
+                # 2. Vykreslení té jedné zóny, kterou zrovna teď ladíš posuvníky (oranžová)
                 if lze_ulozit:
                     draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=line_w + 2)
                 
