@@ -591,16 +591,16 @@ with tab3:
                 
                 with btn_col1:
                     if st.button("➕ + ROI", use_container_width=True, key="elvac_plus_roi_btn"):
-    # 🍏 Generujeme bezpečný a unikátní název, aby nedošlo k duplicitě v SQL
-    novy_index = len(all_rois) + 1
-    automaticky_nazev = f"Zóna_{novy_index}"
+                        # 🍏 Generujeme bezpečný a unikátní název, aby nedošlo k duplicitě v SQL
+                        novy_index = len(all_rois) + 1
+                        automaticky_nazev = f"Zóna_{novy_index}"
     
-    # 🍏 OKAMŽITÝ ZÁPIS: Natvrdo vložíme nový výchozí čtverec do databáze projektu lisu
-    database.save_roi(m_id, active_p, automaticky_nazev, 100, 100, 200, 200, 1, 20, st.session_state.current_position)
+                        # 🍏 OKAMŽITÝ ZÁPIS: Natvrdo vložíme nový výchozí čtverec do databáze projektu lisu
+                        database.save_roi(m_id, active_p, automaticky_nazev, 100, 100, 200, 200, 1, 20, st.session_state.current_position)
     
-    st.toast(f"🎉 Úspěšně přidána {automaticky_nazev}! Nyní ji uprav posuvníky.", icon="➕")
-    time.sleep(0.2)
-    st.rerun() # Bleskově překreslíme monitor, aby se čtverec hned objevil
+                        st.toast(f"🎉 Úspěšně přidána {automaticky_nazev}! Nyní ji uprav posuvníky.", icon="➕")
+                        time.sleep(0.2)
+                        st.rerun() # Bleskově překreslíme monitor, aby se čtverec hned objevil
 
                 with btn_col2:
                     if st.button("➖ - ROI", use_container_width=True, key="elvac_minus_roi_btn"):
