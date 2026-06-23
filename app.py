@@ -676,9 +676,13 @@ with tab3:
 
             # --- VIZUALIZAČNÍ SLOUPEC (Vpravo) ---
             with c_viz:
-                # Vytvoříme kreslící plátno nad naším výřezem
+                # Inicializace kreslení, nic víc tu nahoře nebude!
                 draw = ImageDraw.Draw(img_roi)
                 line_w = max(2, int(W * 0.007))
+                
+                st.divider()
+                st.markdown("### 🧠 Řízení sítě projektu")
+                # ... dolů jedou modely, učení AI, tabulky modelů ...
                 
                 # 🍏 KROK 1: Nejprve projdeme databázi a do JEDNOHO obrázku vtiskneme všechny zelené čtverce
                 if all_rois:
