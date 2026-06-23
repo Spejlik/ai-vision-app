@@ -676,15 +676,11 @@ with tab3:
 
             # --- VIZUALIZAČNÍ SLOUPEC (Vpravo) ---
             with c_viz:
-                # Inicializace kreslení, nic víc tu nahoře nebude!
+                # 🍏 KROK 1: Příprava kreslícího plátna
                 draw = ImageDraw.Draw(img_roi)
                 line_w = max(2, int(W * 0.007))
                 
-                st.divider()
-                st.markdown("### 🧠 Řízení sítě projektu")
-                # ... dolů jedou modely, učení AI, tabulky modelů ...
-                
-                # 🍏 KROK 1: Nejprve projdeme databázi a do JEDNOHO obrázku vtiskneme všechny zelené čtverce
+                # 🍏 KROK 2: Vykreslení všech zelených zón, které už jsou uložené v SQL databázi
                 if all_rois:
                     for r in all_rois:
                         rx = int(r[4])
@@ -693,40 +689,32 @@ with tab3:
                         rh = int(r[7])
                         draw.rectangle([rx, ry, rx + rw, ry + rh], outline="#00FF00", width=line_w)
                 
-                # 🍏 KROK 2: Do toho samého obrázku přidáme jeden oranžový zaměřovač ze sliderů
+                # 🍏 KROK 3: Vykreslení jednoho oranžového čtverce, kterým zrovna hýbeš slidery
                 if lze_ulozit:
                     draw.rectangle([zx, zy, zx + zw, zy + zh], outline="orange", width=line_w + 2)
                 
-                # 🍏 KROK 3: Obrázek pošleme na monitor pouze JEDNOU (striktně mimo cyklus for!)
+                # 🍏 KROK 4: Poslat obrázek na monitor (Pouze JEDNOU pro celou záložku!)
                 st.image(img_roi, use_container_width=True, caption="Náhled zón (Zelená = Uložené v SQL, Oranžová = Aktuální výběr)")
                 
+                st.divider()
+                st.markdown("### 📋 Seznam vytvořených zón na této fotce")
+                
+                # 🍏 KROK 5: Vypsání textového seznamu zón s popelnicemi pro smazání
                 if all_rois:
-                    st.write("---")
                     for r in all_rois:
                         del_col1, del_col2 = st.columns([3, 1])
-                        with del_col1: st.write(f"• {r[3]} (NOK{r[8]})")
+                        with del_col1: 
+                            st.write(f"• **{r[3]}** (NOK {r[8]})")
                         with del_col2:
                             if st.button("🗑️", key=f"del_roi_{r[0]}"):
                                 database.delete_roi(r[0])
-                                r_name = r[3]
+                                st.toast(f"Zóna {r[3]} smazána", icon="🗑️")
+                                time.sleep(0.2)
                                 st.rerun()
+                else:
+                    st.caption("Na této fotce zatím nejsou vytvořeny žádné kontrolní zóny.")
 
-            with c_viz:
-                draw = ImageDraw.Draw(img_roi)
-                line_w = max(2, int(W * 0.007))
-                
-                # 🍏 1. Vykreslení úplně všech již bezpečně uložených oblastí na této fotce z databáze lisu
-                # r[4]=X, r[5]=Y, r[6]=Šířka, r[7]=Výška
-                if all_rois:
-                    for r in all_rois:
-                        draw.rectangle([int(r[4]), int(r[5]), int(r[4])+int(r[6]), int(r[5])+int(r[7])], outline="#00FF00", width=line_w)
-                
-                # 2. Vykreslení té jedné zóny, kterou zrovna teď ladíš posuvníky (oranžová)
-                if lze_ulozit:
-                    draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=line_w + 2)
-                
-                st.image(img_roi, use_container_width=True, caption="Náhled zón (Zelená = Uložené v SQL, Oranžová = Aktuální výběr)")
-                
+                # --- 🍏 KROK 6: ŘÍZENÍ SÍTĚ A UČENÍ AI ---
                 st.divider()
                 st.markdown("### 🧠 Řízení sítě projektu")
                 
@@ -737,7 +725,7 @@ with tab3:
                 selected_model_option = st.selectbox(
                     "🔗 Použít stávající neuronovou síť (např. z jiné formy/projektu):",
                     options=model_options,
-                    key=f"model_reuse_select_{zn}"
+                    key=f"model_reuse_select_{zn}" if zn else "model_reuse_default"
                 )
                 
                 if selected_model_option != "✨ Trénovat zcela novou síť":
@@ -761,11 +749,11 @@ with tab3:
 
                 st.write("") 
                 
-                default_custom_name = f"model_ai_{active_p}_{zn.replace(' ', '_')}"
+                default_custom_name = f"model_ai_{active_p}_{zn.replace(' ', '_')}" if zn else f"model_ai_{active_p}_default"
                 custom_model_name = st.text_input(
                     "📝 Vlastní název pro ukládanou neuronovou síť (bez přípony .pth):",
                     value=default_custom_name,
-                    key=f"custom_model_name_input_{zn}"
+                    key=f"custom_model_name_input_{zn}" if zn else "custom_model_default"
                 ).strip()
                 
                 clean_model_filename = "".join([c for c in custom_model_name if c.isalnum() or c in ["_", "-"]]) + ".pth"
