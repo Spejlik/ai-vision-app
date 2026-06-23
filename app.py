@@ -564,52 +564,31 @@ with tab3:
             W, H = img_roi.size
             all_rois = database.get_rois(m_id, active_p)
             
-            # Synchronizace počítadla sub-zón s reálným stavem v DB lisu
-            if "sub_roi_counter" not in st.session_state:
-                st.session_state["sub_roi_counter"] = len(all_rois)
-            
             c_ctrl, c_viz = st.columns([1, 1.8])
             with c_ctrl:
                 st.markdown(f"### 🔧 Nastavení zón: {m_name.split('#')[0]}")
                 
-                # Pomocné registry v paměti pro stabilizaci rozměrů rámečku lisu
-                if "sub_roi_counter" not in st.session_state:
-                    st.session_state["sub_roi_counter"] = len(all_rois)
-                if "roi_live_x" not in st.session_state: st.session_state["roi_live_x"] = 100
-                if "roi_live_y" not in st.session_state: st.session_state["roi_live_y"] = 100
-                if "roi_live_w" not in st.session_state: st.session_state["roi_live_w"] = 150
-                if "roi_live_h" not in st.session_state: st.session_state["roi_live_h"] = 150
-
-                # Výběr režimu konfigurace
-                rezim_zony = st.radio("Režim konfigurace:", ["➕ Přidat DALŠÍ novou zónu do této fotky", "✏️ Upravit stávající zónu"], horizontal=True, key="rezim_radio_u")
-                
-                nok_val = 1
-                lze_ulozit = True
-
-                # --- AKČNÍ LIŠTA TLAČÍTEK ---
+                # --- AKČNÍ LIŠTA TLAČÍTEK (ELVAC STANDARD) ---
                 btn_col1, btn_col2, btn_col3, btn_col4 = st.columns(4)
                 
                 with btn_col1:
                     if st.button("➕ + ROI", use_container_width=True, key="elvac_plus_roi_btn"):
-                        # 🍏 Generujeme bezpečný a unikátní název, aby nedošlo k duplicitě v SQL
                         novy_index = len(all_rois) + 1
                         automaticky_nazev = f"Zóna_{novy_index}"
-    
-                        # 🍏 OKAMŽITÝ ZÁPIS: Natvrdo vložíme nový výchozí čtverec do databáze projektu lisu
-                        database.save_roi(m_id, active_p, automaticky_nazev, 100, 100, 200, 200, 1, 20, st.session_state.current_position)
-    
-                        st.toast(f"🎉 Úspěšně přidána {automaticky_nazev}! Nyní ji uprav posuvníky.", icon="➕")
-                        time.sleep(0.2)
-                        st.rerun() # Bleskově překreslíme monitor, aby se čtverec hned objevil
+                        # 🍏 ODOSKOK SOUŘADNIC: Každá nová zóna se vytvoří o kousek vedle, aby se neskrývaly přes sebe
+                        odskok = novy_index * 25
+                        database.save_roi(m_id, active_p, automaticky_nazev, 50 + odskok, 50 + odskok, 200, 200, 1, 20, st.session_state.current_position)
+                        st.toast(f"🎉 Přidána {automaticky_nazev}!", icon="➕")
+                        time.sleep(0.1)
+                        st.rerun()
 
                 with btn_col2:
                     if st.button("➖ - ROI", use_container_width=True, key="elvac_minus_roi_btn"):
                         if all_rois:
                             posledni_roi = all_rois[-1]
                             database.delete_roi(posledni_roi[0])
-                            st.session_state["sub_roi_counter"] = max(0, len(all_rois) - 1)
                             st.toast(f"🗑️ Odstraněna poslední zóna", icon="🚨")
-                            time.sleep(0.2)
+                            time.sleep(0.1)
                             st.rerun()
 
                 with btn_col3:
@@ -620,103 +599,79 @@ with tab3:
                         if all_rois:
                             for r in all_rois:
                                 database.delete_roi(r[0])
-                            st.session_state["sub_roi_counter"] = 0
                             st.toast("💥 Plátno kompletně vyčištěno.", icon="🗑️")
-                            time.sleep(0.2)
+                            time.sleep(0.1)
                             st.rerun()
 
-                st.write("")
+                st.write("---")
 
-                # --- 🍏 OPRAVENÁ LOGIKA POJMENOVÁNÍ A NÁČÍTÁNÍ SOUŘADNIC ---
-                if rezim_zony == "➕ Přidat DALŠÍ novou zónu do této fotky":
-                    generovany_nazev = f"Zóna_{len(all_rois) + 1}"
-                    
-                    # Pokud zapneš přepínač PŘEJMEN., ukáže se ti textové pole
-                    if přejmenovat_aktivni:
-                        zn = st.text_input("📝 Název nové zóny:", value=generovany_nazev, key="new_roi_name_input")
-                    else:
-                        zn = generovany_nazev
-                        st.info(f"📍 Vytváříte objekt s názvem: **{zn}**")
-                    
-                    nok_val = st.selectbox("Přiřazení chyby pro tuto novou zónu (NOK 1-8):", range(1, 9), key="new_nok_select")
-                    
-                    # Výchozí hodnoty bereme z persistentního stavu RAM
-                    zx_val = st.session_state["roi_live_x"]
-                    zy_val = st.session_state["roi_live_y"]
-                    zw_val = st.session_state["roi_live_w"]
-                    zh_val = st.session_state["roi_live_h"]
-                    ztol_val = 20
+                if not all_rois:
+                    st.warning("⚠️ Na této fotce nemáte žádnou zónu. Klikněte nahoře na tlačítko '➕ + ROI'.")
+                    lze_ulozit = False
                 else:
-                    if not all_rois:
-                        st.warning("⚠️ Na této fotce ještě nemáš žádnou zónu! Přepni na režim Přidat.")
-                        lze_ulozit = False
-                        zn = ""
-                    else:
-                        seznam_zon = [r[3] for r in all_rois]
-                        vybrana_zona_uprava = st.selectbox("🎯 Vyber zónu k úpravě polohy:", seznam_zon, key="edit_roi_select")
-                        zn = vybrana_zona_uprava
+                    lze_ulozit = True
+                    # 🍏 INTERAKTIVNÍ VOLIČ: Uživatel si vybere, se kterou zónou z databáze chce pracovat
+                    seznam_zon = [r[3] for r in all_rois]
+                    vybrana_zona_uprava = st.selectbox("🎯 Vyberte aktivní zónu k úpravě polohy:", seznam_zon, key="edit_roi_select")
+                    
+                    stajici_roi = next((r for r in all_rois if r[3] == vybrana_zona_uprava), None)
+                    if stajici_roi:
+                        roi_id_db = stajici_roi[0]
+                        nok_val = stajici_roi[8]
+                        zx_val = stajici_roi[4]
+                        zy_val = stajici_roi[5]
+                        zw_val = stajici_roi[6]
+                        zh_val = stajici_roi[7]
+                        ztol_val = stajici_roi[9] if len(stajici_roi) > 9 else 20
                         
-                        stajici_roi = next((r for r in all_rois if r[3] == vybrana_zona_uprava), None)
-                        if stajici_roi:
-                            nok_val = stajici_roi[8]
-                            zx_val = stajici_roi[4]
-                            zy_val = stajici_roi[5]
-                            zw_val = stajici_roi[6]
-                            zh_val = stajici_roi[7]
-                            ztol_val = stajici_roi[9] if len(stajici_roi) > 9 else 20
+                        if přejmenovat_aktivni:
+                            zn = st.text_input("✏️ Zadejte nový název pro tuto zónu:", value=stajici_roi[3], key="rename_roi_input")
+                        else:
+                            zn = vybrana_zona_uprava
+                            st.markdown(f"Aktivní objekt: **{zn}**")
                             
-                            if přejmenovat_aktivni:
-                                zn = st.text_input("✏️ Změnit název vybrané zóny:", value=stajici_roi[3], key="rename_roi_input")
+                        nok_val = st.selectbox("Přiřazení chyby pro tuto zónu (NOK 1-8):", range(1, 9), index=int(nok_val)-1, key="new_nok_select")
 
-                if lze_ulozit:
-                    st.write("---")
+                if lze_ulozit and stajici_roi:
                     zx = st.slider("X poloha zóny", 0, W, int(zx_val), key="roi_zx_slider")
                     zy = st.slider("Y poloha zóny", 0, H, int(zy_val), key="roi_zy_slider")
                     zw = st.slider("Šířka zóny", 10, W, int(zw_val), key="roi_zw_slider")
                     zh = st.slider("Výška zóny", 10, H, int(zh_val), key="roi_zh_slider")
                     ztol = st.slider("Tolerance odchylky", 1, 100, int(ztol_val), key="roi_ztol_slider")
                     
-                    # Průběžně ukládáme do session_state za běhu slideru, ať se rozměry neresetují
-                    if rezim_zony == "➕ Přidat DALŠÍ novou zónu do této fotky":
-                        st.session_state["roi_live_x"] = zx
-                        st.session_state["roi_live_y"] = zy
-                        st.session_state["roi_live_w"] = zw
-                        st.session_state["roi_live_h"] = zh
-                    
-                    if st.button("💾 ULOŽIT ZÓNU DO DATABÁZE", type="primary", use_container_width=True, key="save_roi_dynamic_btn"):
-                        if rezim_zony == "✏️ Upravit stávající zónu" and all_rois:
-                            target_to_del = next((r for r in all_rois if r[3] == vybrana_zona_uprava), None)
-                            if target_to_del:
-                                database.delete_roi(target_to_del[0])
-                        
+                    if st.button("💾 ULOŽIT ZMĚNY POLOHY DO SQL", type="primary", use_container_width=True, key="save_roi_dynamic_btn"):
+                        # Smažeme původní záznam a zapišeme ho s novými slidery
+                        database.delete_roi(roi_id_db)
                         database.save_roi(m_id, active_p, zn, zx, zy, zw, zh, nok_val, ztol, st.session_state.current_position)
-                        
-                        # Po úspěšném zápisu vyčistíme paměť pro další čisté plátno
-                        st.session_state["roi_live_x"], st.session_state["roi_live_y"] = 100, 100
-                        st.session_state["roi_live_w"], st.session_state["roi_live_h"] = 150, 150
-                        
-                        st.success(f"🎉 Zóna '{zn}' úspěšně uložena do SQL databáze lisu!")
-                        time.sleep(0.4)
+                        st.success(f"🎉 Zóna '{zn}' úspěšně aktualizována!")
+                        time.sleep(0.3)
                         st.rerun()
 
             # --- VIZUALIZAČNÍ SLOUPEC (Vpravo) ---
             with c_viz:
                 draw = ImageDraw.Draw(img_roi)
-                line_w = max(2, int(W * 0.007))
+                line_w = max(2, int(W * 0.006))
                 
+                # 🍏 ETALON VIZUALIZACE: Kreslíme textové popisky přímo na plátno lisu
                 if all_rois:
                     for r in all_rois:
-                        draw.rectangle([int(r[4]), int(r[5]), int(r[4])+int(r[6]), int(r[5])+int(r[7])], outline="#00FF00", width=line_w)
+                        r_name_loop = str(r[3])
+                        
+                        # Pokud je to zóna, kterou zrovna ladíme v selectboxu, kreslíme ji dynamicky oranžově
+                        if lze_ulozit and r_name_loop == vybrana_zona_uprava:
+                            draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=line_w + 2)
+                            draw.text((zx + 6, zy + 6), f"▶ {r_name_loop} (LADĚNÍ)", fill="orange")
+                        else:
+                            # Ostatní uložené zóny svítí staticky zeleně
+                            rx, ry, rw, rh = int(r[4]), int(r[5]), int(r[6]), int(r[7])
+                            draw.rectangle([rx, ry, rx+rw, ry+rh], outline="#00FF00", width=line_w)
+                            draw.text((rx + 6, ry + 6), r_name_loop, fill="#00FF00")
                 
-                if lze_ulozit:
-                    draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=line_w + 2)
-                
-                st.image(img_roi, use_container_width=True, caption="Náhled zón (Zelená = Uložené v SQL, Oranžová = Aktuální výběr)")
+                st.image(img_roi, use_container_width=True, caption="Náhled zón (Zelená = Uložené v SQL, Oranžová = Právě upravovaná oblast)")
                 
                 st.divider()
                 st.markdown("### 📋 Seznam vytvořených zón na této fotce")
                 
-                # 🍏 INTEGRACE: STRIKTNÍ A FUNKČNÍ POPELNICE SE REFRESHEREM STRÁNKY
                 if all_rois:
                     for r in all_rois:
                         del_col1, del_col2 = st.columns([3, 1])
@@ -725,10 +680,9 @@ with tab3:
                         with del_col2:
                             if st.button("🗑️", key=f"del_roi_{r[0]}"):
                                 database.delete_roi(r[0])
-                                st.session_state["sub_roi_counter"] = max(0, len(all_rois) - 2)
-                                st.toast(f"Zóna {r[3]} smazána z SQL", icon="🗑️")
+                                st.toast(f"Zóna {r[3]} smazána", icon="🗑️")
                                 time.sleep(0.2)
-                                st.rerun() # 🍏 Zde vynutíme okamžité překreslení monitoru
+                                st.rerun()
                 else:
                     st.caption("Na této fotce zatím nejsou vytvořeny žádné kontrolní zóny.")
                 
@@ -740,10 +694,12 @@ with tab3:
                 existing_models = [os.path.basename(f) for f in glob.glob("models/*.pth")]
                 model_options = ["✨ Trénovat zcela novou síť"] + existing_models
                 
+                # Bezpečný název pro klíč selectboxu
+                active_zn_name = vybrana_zona_uprava if (all_rois and lze_ulozit) else "default"
                 selected_model_option = st.selectbox(
                     "🔗 Použít stávající neuronovou síť (např. z jiné formy/projektu):",
                     options=model_options,
-                    key=f"model_reuse_select_{zn}" if zn else "model_reuse_default"
+                    key=f"model_reuse_select_{active_zn_name}"
                 )
                 
                 if selected_model_option != "✨ Trénovat zcela novou síť":
@@ -765,11 +721,11 @@ with tab3:
                             st.rerun()
 
                 st.write("") 
-                default_custom_name = f"model_ai_{active_p}_{zn.replace(' ', '_')}" if zn else f"model_ai_{active_p}_default"
+                default_custom_name = f"model_ai_{active_p}_{active_zn_name.replace(' ', '_')}"
                 custom_model_name = st.text_input(
                     "📝 Vlastní název pro ukládanou neuronovou síť:",
                     value=default_custom_name,
-                    key=f"custom_model_name_input_{zn}" if zn else "custom_model_default"
+                    key=f"custom_model_name_input_{active_zn_name}"
                 ).strip()
                 
                 clean_model_filename = "".join([c for c in custom_model_name if c.isalnum() or c in ["_", "-"]]) + ".pth"
@@ -822,50 +778,6 @@ with tab3:
                                 st.rerun()
                             else: 
                                 st.error(f"❌ Chyba: {result_msg}")
-
-                st.markdown("---")
-                st.subheader("🧠 Přehled a správa naučených neuronových sítí")
-                
-                conn_view = sqlite3.connect("vision_system.db")
-                cur_view = conn_view.cursor()
-                cur_view.execute("PRAGMA table_info(model_registry)")
-                cols_m = [c[1] for c in cur_view.fetchall()]
-                c_proj_m = "project_name" if "project_name" in cols_m else "project"
-                
-                cur_view.execute(f"SELECT id, model_name, created_at, accuracy, engineering_notes FROM model_registry WHERE {c_proj_m}=? ORDER BY id DESC", (active_p,))
-                saved_models = cur_view.fetchall()
-                conn_view.close()
-                
-                if not saved_models:
-                    st.caption("ℹ️ V tomto projektu zatím nebyly uloženy žádné verze neuronových sítí.")
-                else:
-                    for m_id, m_name, m_date, m_acc, m_notes in saved_models:
-                        with st.container(border=True):
-                            col_info, col_notes = st.columns([2, 3])
-                            
-                            with col_info:
-                                st.markdown(f"🤖 **Název:** `{m_name}`")
-                                st.caption(f"📅 Vytvořeno: {m_date}")
-                                st.markdown(f"🎯 Přesnost: :green[{m_acc}]")
-                                
-                            with col_notes:
-                                note_key = f"note_{m_id}_{active_p}"
-                                new_note = st.text_input(
-                                    "Inženýrská poznámka k verzi:", 
-                                    value=m_notes, 
-                                    key=note_key,
-                                    label_visibility="collapsed" if m_notes else "visible"
-                                )
-                                
-                                if new_note != m_notes:
-                                    conn_up = sqlite3.connect("vision_system.db")
-                                    cur_up = conn_up.cursor()
-                                    cur_up.execute("UPDATE model_registry SET engineering_notes=? WHERE id=?", (new_note, m_id))
-                                    conn_up.commit()
-                                    conn_up.close()
-                                    st.toast("Poznámka k síti aktualizována", icon="💾")
-                                    time.sleep(0.1)
-                                    st.rerun()
 
 # --- TAB 4: I/O ---
 with tab4:
