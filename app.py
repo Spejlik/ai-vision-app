@@ -455,11 +455,15 @@ with tab2:
                 preview_img = st.session_state.setup_image_buffer.copy()
                 img_w, img_h = preview_img.size
                 
+                # Bezpečné ošetření konců obrázku proti přetečení
                 safe_ax = min(ax, img_w - 10)
                 safe_ay = min(ay, img_h - 10)
+                safe_aw = min(aw, img_w - safe_ax)
+                safe_ah = min(ah, img_h - safe_ay)
                 
                 draw = ImageDraw.Draw(preview_img)
-                draw.rectangle([safe_ax, safe_ay, safe_ax + 500, safe_ay + 500], outline="red", width=5)
+                # 🍏 OPRAVA: Rámeček se teď bude zvětšovat a smršťovat přesně podle sliderů aw a ah!
+                draw.rectangle([safe_ax, safe_ay, safe_ax + safe_aw, safe_ay + safe_ah], outline="red", width=5)
                 st.image(preview_img, use_container_width=True, caption=f"Aktuální podklad ({img_w}x{img_h} px)")
 
             st.slider("Elektronická uzávěrka (Anti-Flicker 50Hz takty)", min_value=19985, max_value=159985, value=40005, step=19985, key="exp_slider_val")
