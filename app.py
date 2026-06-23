@@ -589,7 +589,7 @@ with tab3:
                     # Tlačítko + ROI pouze bezpečně připraví paměť RAM pro další zápis
                     if st.button("➕ + ROI", use_container_width=True, key="elvac_plus_roi_btn"):
                         st.session_state["sub_roi_counter"] += 1
-                        st.session_state["forced_roi_name"] = f"Zóna_{int(time.time())[-4:]}" # Unikátní časový otisk proti kolizím v SQL
+                        st.session_state["forced_roi_name"] = f"Zóna_{str(int(time.time()))[-4:]}" # Unikátní časový otisk proti kolizím v SQL
                         st.toast("💡 Připraven nový inspekční rámeček. Nastav polohu slidery a ulož!", icon="➕")
                         time.sleep(0.1)
                         st.rerun()
