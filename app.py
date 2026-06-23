@@ -633,10 +633,18 @@ with tab3:
             with c_viz:
                 draw = ImageDraw.Draw(img_roi)
                 line_w = max(2, int(W * 0.007))
-                for r in all_rois:
-                    draw.rectangle([r[4], r[5], r[4]+r[6], r[5]+r[7]], outline="#00FF00", width=line_w)
-                draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=line_w + 2)
-                st.image(img_roi, use_container_width=True)
+                
+                # 🍏 Vykreslení všech již bezpečně uložených oblastí z databáze lisu
+                if all_rois:
+                    for r in all_rois:
+                        # r[4]=X, r[5]=Y, r[6]=Šířka, r[7]=Výška
+                        draw.rectangle([int(r[4]), int(r[5]), int(r[4])+int(r[6]), int(r[5])+int(r[7])], outline="#00FF00", width=line_w)
+                
+                # Vykreslení té zóny, kterou zrovna teď ladíš posuvníky (oranžová)
+                if lze_ulozit:
+                    draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=line_w + 2)
+                
+                st.image(img_roi, use_container_width=True, caption="Náhled zón (Zelená = Uložené v SQL, Oranžová = Aktuální výběr)")
                 
                 st.divider()
                 st.markdown("### 🧠 Řízení sítě projektu")
