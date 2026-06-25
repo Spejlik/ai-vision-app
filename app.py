@@ -588,7 +588,7 @@ with tab3:
 
             c_ctrl, c_viz = st.columns([1, 1.8])
             with c_ctrl:
-                st.markdown(f"### 🔧 Nastavení zón: {m_name}")
+                st.markdown(f"### 🔧 Nastavení zón: {m_name.split('#')[0]}")
                 
                 # --- AKČNÍ LIŠTA TLAČÍTEK ---
                 btn_col1, btn_col2, btn_col3 = st.columns(3)
@@ -611,13 +611,13 @@ with tab3:
 
                 st.write("---")
 
-                # Sestavení seznamu zón pro operátora
+                # Sestavení seznamu zón pro operátora lisu
                 seznam_moznosti = ["➕ Vytvořit novou zónu"] + [r[3] for r in all_rois] if all_rois else ["➕ Vytvořit novou zónu"]
                 
                 if st.session_state["vybrany_roi_name"] not in seznam_moznosti:
                     st.session_state["vybrany_roi_name"] = seznam_moznosti[0]
 
-                # 🍏 VOLIČ AKTIVNÍ INSPEKCE (Základní prvek Elvac rozhraní)
+                # 🍏 VOLIČ AKTIVNÍ INSPEKCE (Elvac rozhraní pro vrstvení zón)
                 vybrany_u = st.selectbox(
                     "🎯 Vyberte zónu k úpravě nebo založte novou:",
                     options=seznam_moznosti,
@@ -626,7 +626,6 @@ with tab3:
                 )
                 st.session_state["vybrany_roi_name"] = vybrany_u
 
-                # Načtení dat podle výběru v selectboxu
                 roi_id_db = None
                 nok_val_idx = 0
 
@@ -668,7 +667,7 @@ with tab3:
                     st.session_state["roi_live_w"] = zw
                     st.session_state["roi_live_h"] = zh
 
-                if st.button("💾 ULOŽIT AKTIVNÍ ROZMĚRY DO SQL", type="primary", use_container_width=True):
+                if st.button("💾 ULOŽIT AKTIVNÍ ROZMĚRY DO SQL", type="primary", use_container_width=True, key="save_roi_dynamic_btn"):
                     # Bezpečný přepis záznamu v SQLite databázi lisu
                     if roi_id_db is not None:
                         database.delete_roi(roi_id_db)
