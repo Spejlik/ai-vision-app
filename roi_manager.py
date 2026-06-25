@@ -73,6 +73,7 @@ def render_roi_tab(m_id, m_name, m_path, active_p):
         ztol_val = 20
 
         if vybrany_u == "➕ Přidat nové ROI":
+            # Vygeneruje unikátní výchozí název na základě reálného počtu záznamů v DB
             zn_default = f"p1_{len(all_rois) + 1}"
             zx_val = st.session_state["slider_x"]
             zy_val = st.session_state["slider_y"]
@@ -112,14 +113,19 @@ def render_roi_tab(m_id, m_name, m_path, active_p):
                 st.error("❌ Popis ROI nesmí být prázdný!")
             else:
                 try:
+                    # Odstranění duplicity z databáze před přepsáním polohy
                     if vybrany_u != "➕ Přidat nové ROI" and roi_id_db is not None:
                         database.delete_roi(roi_id_db)
                     else:
                         duplicitni = next((r for r in all_rois if str(r[3]).strip() == zn), None)
                         if duplicitni: database.delete_roi(duplicitni[0])
                         
+                    # Zápis do SQL databáze lisu
                     database.save_roi(m_id, active_p, zn, int(zx), int(zy), int(zw), int(zh), int(nok_val), int(ztol))
+                    
+                    # 🍏 ZDE JE OPRAVA: Zápis do správné proměnné, kterou hlídá selectbox
                     st.session_state["selected_roi_identity"] = zn
+                    
                     st.success(f"🎉 ROI '{zn}' úspěšně zapsáno do SQL databáze!")
                     time.sleep(0.3)
                     st.rerun()
