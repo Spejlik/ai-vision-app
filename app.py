@@ -578,106 +578,109 @@ with tab3:
             if seznam_jmen_v_db and (st.session_state["elvac_active_roi"] not in seznam_jmen_v_db):
                 st.session_state["elvac_active_roi"] = seznam_jmen_v_db[0]
 
-            # --- 🍏 PAMĚŤOVÝ REGISTR PRO VRSTVENÍ ZÓN (ELVAC STANDARD) ---
-            if "vybrany_roi_name" not in st.session_state:
-                st.session_state["vybrany_roi_name"] = "➕ Vytvořit novou zónu"
-            if "roi_live_x" not in st.session_state: st.session_state["roi_live_x"] = 100
-            if "roi_live_y" not in st.session_state: st.session_state["roi_live_y"] = 100
-            if "roi_live_w" not in st.session_state: st.session_state["roi_live_w"] = 150
-            if "roi_live_h" not in st.session_state: st.session_state["roi_live_h"] = 150
+            # --- 🍏 INICIALIZACE MULTI-ROI PAMĚTI PODLE VZORU ELVAC ---
+            all_rois = database.get_rois(m_id, active_p)
+            
+            if "elvac_selected_roi" not in st.session_state:
+                st.session_state["elvac_selected_roi"] = "➕ Přidat novou zónu"
+            if "slider_x" not in st.session_state: st.session_state["slider_x"] = 100
+            if "slider_y" not in st.session_state: st.session_state["slider_y"] = 100
+            if "slider_w" not in st.session_state: st.session_state["slider_w"] = 150
+            if "slider_h" not in st.session_state: st.session_state["slider_h"] = 150
+
+            # Automatická synchronizace seznamu zón z databáze lisu
+            seznam_zon_v_db = [r[3] for r in all_rois] if all_rois else []
+            if st.session_state["elvac_selected_roi"] != "➕ Přidat novou zónu" and st.session_state["elvac_selected_roi"] not in seznam_zon_v_db:
+                st.session_state["elvac_selected_roi"] = "➕ Přidat novou zónu"
 
             c_ctrl, c_viz = st.columns([1, 1.8])
             with c_ctrl:
-                st.markdown(f"### 🔧 Nastavení zón: {m_name}")
+                st.markdown(f"### 🔧 Nastavení zón: {m_name.split('#')[0]}")
                 
                 # --- AKČNÍ LIŠTA TLAČÍTEK ---
                 btn_col1, btn_col2, btn_col3 = st.columns(3)
                 with btn_col1:
                     if st.button("➕ + ROI", use_container_width=True, key="elvac_plus_roi_btn"):
-                        st.session_state["vybrany_roi_name"] = "➕ Vytvořit novou zónu"
-                        st.session_state["roi_live_x"], st.session_state["roi_live_y"] = 100, 100
-                        st.session_state["roi_live_w"], st.session_state["roi_live_h"] = 150, 150
+                        st.session_state["elvac_selected_roi"] = "➕ Přidat novou zónu"
+                        st.session_state["slider_x"], st.session_state["slider_y"] = 100, 100
+                        st.session_state["slider_w"], st.session_state["slider_h"] = 150, 150
                         st.rerun()
                 with btn_col2:
                     přejmenovat_aktivni = st.toggle("PŘEJMEN.", key="toggle_rename_active")
                 with btn_col3:
-                    if st.button("SMAZAT", use_container_width=True, type="secondary", key="elvac_delete_all_btn"):
+                    if st.button("SMAZAT VŠE", use_container_width=True, type="secondary", key="elvac_delete_all_btn"):
                         if all_rois:
                             for r in all_rois: database.delete_roi(r[0])
-                            st.session_state["vybrany_roi_name"] = "➕ Vytvořit novou zónu"
-                            st.toast("💥 Všechny zóny vymazány.", icon="🗑️")
+                            st.session_state["elvac_selected_roi"] = "➕ Přidat novou zónu"
+                            st.toast("💥 Plátno vyčištěno.", icon="🗑️")
                             time.sleep(0.2)
                             st.rerun()
 
                 st.write("---")
 
-                # Sestavení možností pro výběr aktivního rámečku
-                seznam_moznosti = ["➕ Vytvořit novou zónu"] + [r[3] for r in all_rois] if all_rois else ["➕ Vytvořit novou zónu"]
-                
-                if st.session_state["vybrany_roi_name"] not in seznam_moznosti:
-                    st.session_state["vybrany_roi_name"] = seznam_moznosti[0]
-
-                # 🍏 INTERAKTIVNÍ SELEKTOR (Umožní přepínat mezi čtverci na fotce)
+                # Rozbalovací seznam všech dostupných zón na snímku
+                moznosti_selectboxu = ["➕ Přidat novou zónu"] + seznam_zon_v_db
                 vybrany_u = st.selectbox(
                     "🎯 Vyberte zónu k úpravě polohy nebo založte novou:",
-                    options=seznam_moznosti,
-                    index=seznam_moznosti.index(st.session_state["vybrany_roi_name"]),
+                    options=moznosti_selectboxu,
+                    index=moznosti_selectboxu.index(st.session_state["elvac_selected_roi"]),
                     key="selector_active_roi_elvac"
                 )
-                st.session_state["vybrany_roi_name"] = vybrany_u
+                st.session_state["elvac_selected_roi"] = vybrany_u
 
+                # Výchozí plnění souřadnic pro slidery
                 roi_id_db = None
                 nok_val_idx = 0
 
-                if vybrany_u == "➕ Vytvořit novou zónu":
-                    zn = f"Zona_{len(all_rois) + 1}"
-                    st.info(f"📍 Připravujete NOVÝ kontrolní bod: **{zn}**")
-                    zx_val = st.session_state["roi_live_x"]
-                    zy_val = st.session_state["roi_live_y"]
-                    zw_val = st.session_state["roi_live_w"]
-                    zh_val = st.session_state["roi_live_h"]
+                if vybrany_u == "➕ Přidat novou zónu":
+                    zn_default = f"Zona_{len(all_rois) + 1}"
+                    zx_val = st.session_state["slider_x"]
+                    zy_val = st.session_state["slider_y"]
+                    zw_val = st.session_state["slider_w"]
+                    zh_val = st.session_state["slider_h"]
                     ztol_val = 20
                 else:
                     stajici_roi = next((r for r in all_rois if r[3] == vybrany_u), None)
-                    roi_id_db = stajici_roi[0]
-                    zn = stajici_roi[3]
-                    zx_val = stajici_roi[4]
-                    zy_val = stajici_roi[5]
-                    zw_val = stajici_roi[6]
-                    zh_val = stajici_roi[7]
-                    nok_val_idx = int(stajici_roi[8]) - 1
-                    ztol_val = stajici_roi[9] if len(stajici_roi) > 9 else 20
+                    if stajici_roi:
+                        roi_id_db = stajici_roi[0]
+                        zn_default = stajici_roi[3]
+                        zx_val = stajici_roi[4]
+                        zy_val = stajici_roi[5]
+                        zw_val = stajici_roi[6]
+                        zh_val = stajici_roi[7]
+                        nok_val_idx = int(stajici_roi[8]) - 1
+                        ztol_val = stajici_roi[9] if len(stajici_roi) > 9 else 20
 
-                if přejmenovat_aktivni:
-                    zn = st.text_input("📝 Vlastní název zóny (bez diakritiky):", value=zn, key="rename_input_elvac")
-
+                # Textové pole pro název zóny
+                zn = st.text_input("📝 Název zóny (bez diakritiky):", value=zn_default, key=f"roi_name_input_field_{vybrany_u}")
                 nok_val = st.selectbox("Přiřazení chyby (NOK 1-8)", range(1, 9), index=max(0, nok_val_idx))
                 
-                # --- CHRÁNĚNÉ POSUVNÍKY SOUŘADNIC ---
+                # --- CHROMÉ POSUVNÍKY SOUŘADNIC ---
                 zx = st.slider("X poloha zóny", 0, W, int(zx_val), key="roi_zx_slider")
                 zy = st.slider("Y poloha zóny", 0, H, int(zy_val), key="roi_zy_slider")
                 zw = st.slider("Šířka zóny", 10, W, int(zw_val), key="roi_zw_slider")
                 zh = st.slider("Výška zóny", 10, H, int(zh_val), key="roi_zh_slider")
                 ztol = st.slider("Tolerance odchylky", 1, 100, int(ztol_val), key="roi_ztol_slider")
                 
-                # Průběžné ukládání změn do paměti RAM
-                if vybrany_u == "➕ Vytvořit novou zónu":
-                    st.session_state["roi_live_x"] = zx
-                    st.session_state["roi_live_y"] = zy
-                    st.session_state["roi_live_w"] = zw
-                    st.session_state["roi_live_h"] = zh
+                # Průběžný zápis polohy do RAM paměti za běhu slideru
+                if vybrany_u == "➕ Přidat novou zónu":
+                    st.session_state["slider_x"] = zx
+                    st.session_state["slider_y"] = zy
+                    st.session_state["slider_w"] = zw
+                    st.session_state["slider_h"] = zh
 
                 if st.button("💾 ULOŽIT AKTIVNÍ ROZMĚRY DO SQL", type="primary", use_container_width=True, key="save_roi_dynamic_btn"):
-                    # Bezpečný zápis zamezující nechtěnému přepisování ostatních vrstev
-                    if roi_id_db is not None:
+                    # Pokud upravujeme starou zónu pod stejným jménem, přepíšeme ji.
+                    # Pokud operátor zadal nové unikátní jméno, vytvoříme nový nezávislý řádek.
+                    if vybrany_u != "➕ Přidat novou zónu" and roi_id_db is not None:
                         database.delete_roi(roi_id_db)
                     else:
                         duplicitni = next((r for r in all_rois if r[3] == zn), None)
                         if duplicitni: database.delete_roi(duplicitni[0])
                         
                     database.save_roi(m_id, active_p, zn, zx, zy, zw, zh, nok_val, ztol, st.session_state.current_position)
-                    st.session_state["vybrany_roi_name"] = zn
-                    st.success(f"🎉 Zóna {zn} úspěšně zapsána do SQL databáze lisu!")
+                    st.session_state["elvac_selected_roi"] = zn
+                    st.success(f"🎉 Zóna {zn} úspěšně uložena!")
                     time.sleep(0.3)
                     st.rerun()
 
@@ -685,34 +688,26 @@ with tab3:
                 draw = ImageDraw.Draw(img_roi)
                 line_w = max(2, int(W * 0.006))
                 
-                # 🍏 MULTI-ZONE RENDER: Vykreslíme všechny zafixované zóny najednou (zeleně)
+                # --- 🍏 HROMADNÉ VYKRESLOVÁNÍ PODLE REDIS VZORU ELVAC ---
                 if all_rois:
                     for r in all_rois:
                         r_name_loop = str(r[3])
-                        if r_name_loop != st.session_state["vybrany_roi_name"]:
+                        # Zeleně svítí všechny zóny z databáze, které zrovna netuníme posuvníkem
+                        if r_name_loop != zn:
                             rx, ry, rw, rh = int(r[4]), int(r[5]), int(r[6]), int(r[7])
                             draw.rectangle([rx, ry, rx+rw, ry+rh], outline="#00FF00", width=line_w)
                             draw.text((rx + 8, ry + 8), r_name_loop, fill="#00FF00")
                 
-                # Vykreslení aktuálně upravovaného obdélníku (oranžově)
+                # Právě laděná oblast svítí jasně oranžově
                 draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=line_w + 3)
                 draw.text((zx + 8, zy + 8), f"-> {zn} (LADENI)", fill="orange")
                 
                 st.image(img_roi, use_container_width=True, caption="Inspekční plátno lisu (Zelená = Uložené v SQL, Oranžová = Laděná oblast)")
                 
-                # --- TRÉNOVÁNÍ AI MODELŮ (Zůstává zachováno níže) ---
+                # --- TRÉNOVÁNÍ AI MODELŮ ---
                 st.divider()
                 st.markdown("### 🧠 Řízení sítě projektu")
-                
-                os.makedirs("models", exist_ok=True)
-                existing_models = [os.path.basename(f) for f in glob.glob("models/*.pth")]
-                model_options = ["✨ Trénovat zcela novou síť"] + existing_models
-                
-                selected_model_option = st.selectbox(
-                    "🔗 Použít stávající neuronovou síť (např. z jiné formy/projektu):",
-                    options=model_options,
-                    key=f"model_reuse_select_{zn}"
-                )
+                # ... (zbytek kódu s modely nechej dál plynule běžet, ten je v pořádku) ...
 
 # --- TAB 4: I/O ---
 with tab4:
