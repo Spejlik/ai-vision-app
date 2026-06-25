@@ -6,7 +6,7 @@ import glob
 import sqlite3
 from PIL import Image, ImageDraw
 
-def render_roi_tab(m_id, m_name, m_path, active_p):
+def render_roi_tab(m_id, m_name, m_path, active_p, current_position):
     """
     Izolovaný průmyslový modul pro správu a vrstvení ROI.
     Kompletně odstíněn od hlavního app.py.
@@ -23,7 +23,7 @@ def render_roi_tab(m_id, m_name, m_path, active_p):
     if "slider_h" not in st.session_state: st.session_state["slider_h"] = 150
 
     # Načtení všech uložených ROI z SQL pro tento master podklad
-    all_rois = database.get_rois(m_id, active_p)
+    all_rois = database.get_rois(m_id, active_p, current_position)
     seznam_roi_v_db = [str(r[3]).strip() for r in all_rois] if all_rois else []
     
     if st.session_state["selected_roi_identity"] != "➕ Přidat nové ROI" and st.session_state["selected_roi_identity"] not in seznam_roi_v_db:
@@ -121,7 +121,7 @@ def render_roi_tab(m_id, m_name, m_path, active_p):
                         if duplicitni: database.delete_roi(duplicitni[0])
                         
                     # Zápis do SQL databáze lisu
-                    database.save_roi(m_id, active_p, zn, int(zx), int(zy), int(zw), int(zh), int(nok_val), int(ztol))
+                    database.save_roi(m_id, active_p, zn, int(zx), int(zy), int(zw), int(zh), int(nok_val), int(ztol), current_position)
                     
                     # 🍏 ZDE JE OPRAVA: Zápis do správné proměnné, kterou hlídá selectbox
                     st.session_state["selected_roi_identity"] = zn

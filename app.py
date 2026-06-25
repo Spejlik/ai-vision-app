@@ -540,7 +540,7 @@ with tab3:
             m_id, m_name, m_path = sel_m[0], sel_m[2], sel_m[3]
             
             # 🍏 FINÁLNÍ HLADKÉ VOLÁNÍ ODDĚLENÉHO ROI MANAŽERA
-            roi_manager.render_roi_tab(m_id, m_name, m_path, active_p)
+            roi_manager.render_roi_tab(m_id, m_name, m_path, active_p, st.session_state.current_position)
 
 # --- TAB 4: I/O ---
 with tab4:
