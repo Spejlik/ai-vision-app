@@ -563,7 +563,7 @@ with tab3:
             img_roi = Image.open(m_path).convert("RGB")
             W, H = img_roi.size
             
-            # --- INDUSTRIAL MULTI-ROI BUFFER MANAGEMENT ---
+            # --- 🍏 PODPORA JEDNOTNÉHO UKLÁDÁNÍ VRSTEV ---
             if "selected_roi_identity" not in st.session_state:
                 st.session_state["selected_roi_identity"] = "➕ Přidat nové ROI"
             if "slider_x" not in st.session_state: st.session_state["slider_x"] = 100
@@ -571,7 +571,7 @@ with tab3:
             if "slider_w" not in st.session_state: st.session_state["slider_w"] = 150
             if "slider_h" not in st.session_state: st.session_state["slider_h"] = 150
 
-            # Hromadné stažení existujících dat z SQLite
+            # Načtení všech uložených ROI z SQL pro tento master podklad
             all_rois = database.get_rois(m_id, active_p)
             seznam_roi_v_db = [str(r[3]).strip() for r in all_rois] if all_rois else []
             
@@ -582,7 +582,7 @@ with tab3:
             with c_ctrl:
                 st.markdown(f"### 🔧 Oblasti zájmu pro Master: {m_name.split('#')[0]}")
                 
-                # --- AKČNÍ LIŠTA TLAČÍTEK (MULTI-ZONE FIX) ---
+                # --- AKČNÍ LIŠTA TLAČÍTEK ---
                 btn_col1, btn_col2, btn_col3 = st.columns(3)
                 with btn_col1:
                     if st.button("➕ + ROI", use_container_width=True, key="roi_append_new_trigger_btn"):
@@ -643,7 +643,7 @@ with tab3:
                 zn = st.text_input("📝 Popis / Název ROI (bez diakritiky):", value=zn_default, key=f"input_field_name_instance_{vybrany_u}").strip()
                 nok_val = st.selectbox("Přiřazení chyby lisu (NOK 1-8)", range(1, 9), index=max(0, nok_val_idx), key=f"selectbox_nok_instance_{vybrany_u}")
                 
-                # --- CHROMÉ POSUVNÍKY SOUŘADNIC ---
+                # --- CHRÁNĚNÉ POSUVNÍKY SOUŘADNIC ---
                 zx = st.slider("X poloha", 0, W, int(zx_val), key=f"slider_axis_x_{vybrany_u}")
                 zy = st.slider("Y poloha", 0, H, int(zy_val), key=f"slider_axis_y_{vybrany_u}")
                 zw = st.slider("Šířka", 10, W, int(zw_val), key=f"slider_axis_w_{vybrany_u}")
@@ -767,7 +767,7 @@ with tab3:
                         st.rerun()
                 else:
                     if st.button(f"🚀 SPUSTIT UČENÍ S NÁZVEM: {clean_model_filename}", use_container_width=True, type="primary", key=f"start_train_btn_{zn}"):
-                        with st.spinner("Učení neuronové sítě běžží..."):
+                        with st.spinner("Učení neuronové sítě běží..."):
                             progress_bar = st.progress(0.0)
                             status_text = st.empty()
                             def update_progress(pct, msg):
