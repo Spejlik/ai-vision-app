@@ -694,20 +694,36 @@ with tab3:
                     if not zn:
                         st.error("❌ Název zóny nesmí být prázdný!")
                     else:
-                        # 🍏 ODSTRAŇOVÁNÍ DUPLICIT: Pokud upravujeme existující, nejprve vyčistíme starý řádek podle ID
-                        if vybrany_u != "➕ Přidat novou zónu" and roi_id_db is not None:
-                            database.delete_roi(roi_id_db)
-                        else:
-                            # Pokud zakládáme novou zónu, ale operátor zadal jméno, které už v DB existuje, přepíšeme ji
-                            duplicitni = next((r for r in all_rois if str(r[3]).strip() == zn), None)
-                            if duplicitni: database.delete_roi(duplicitni[0])
+                        try:
+                            # 🍏 ODSTRAŇOVÁNÍ DUPLICIT: Pokud upravujeme existující, vyčistíme starý řádek podle ID
+                            if vybrany_u != "➕ Přidat novou zónu" and roi_id_db is not None:
+                                database.delete_roi(roi_id_db)
+                            else:
+                                duplicitni = next((r for r in all_rois if str(r[3]).strip() == zn), None)
+                                if duplicitni: database.delete_roi(duplicitni[0])
+                                
+                            # Bezpečný finální zápis do SQL databáze lisu chráněný proti NameError / TypeError
+                            database.save_roi(
+                                m_id, 
+                                active_p, 
+                                zn, 
+                                int(zx), 
+                                int(zy), 
+                                int(zw), 
+                                int(zh), 
+                                int(nok_val), 
+                                int(ztol), 
+                                int(st.session_state.current_position)
+                            )
                             
-                        # Bezpečný finální zápis do SQL databáze lisu
-                        database.save_roi(m_id, active_p, zn, zx, zy, zw, zh, nok_val, ztol, st.session_state.current_position)
-                        st.session_state["elvac_selected_roi"] = zn
-                        st.success(f"🎉 Zóna '{zn}' úspěšně zapsána do SQL databáze lisu!")
-                        time.sleep(0.3)
-                        st.rerun()
+                            st.session_state["elvac_selected_roi"] = zn
+                            st.success(f"🎉 Zóna '{zn}' úspěšně zapsána do SQL databáze lisu!")
+                            time.sleep(0.3)
+                            st.rerun()
+                        except Exception as db_error:
+                            # Pokud funkce save_roi vyhodí chybu (např. špatný počet argumentů), vypíšeme ji přímo na terminál lisu
+                            st.error(f"❌ Chyba při ukládání do DB: {db_error}")
+                            st.info("💡 Zkontrolujte, zda funkce `save_roi` v souboru `database.py` přijímá přesně těchto 10 parametrů.")
 
             with c_viz:
                 draw = ImageDraw.Draw(img_roi)
