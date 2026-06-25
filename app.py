@@ -400,7 +400,7 @@ with tab2:
             st.markdown("### 📷 Výběr aktivního hardwaru")
             selected_cam_device = st.selectbox(
                 "Zvolte kameru pro uložení Master snímku:",
-                options=options=sorted(online_devices),
+                options=sorted(online_devices),
                 key="master_camera_hardware_select"
             )
             st.session_state["current_hardware_target"] = selected_cam_device
