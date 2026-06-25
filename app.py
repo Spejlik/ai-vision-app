@@ -31,6 +31,7 @@ conn.close()
 import importlib
 importlib.reload(camera_manager)
 importlib.reload(roi_manager)
+importlib.reload(database)
 
 # --- JEDNORÁZOVÁ PRŮMYSLOVÁ POJISTKA PRO ROZŠÍŘENÍ DATABÁZE ---
 def check_database_structure():
