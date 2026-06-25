@@ -713,7 +713,7 @@ with tab3:
                 # --- AKČNÍ LIŠTA TLAČÍTEK ---
                 btn_col1, btn_col2, btn_col3 = st.columns(3)
                 with btn_col1:
-                    if st.button("➕ + ROI", use_container_width=True, key="elvac_plus_roi_btn_fixed"):
+                    if st.button("➕ + ROI", use_container_width=True, key="elvac_plus_roi_btn_unique_v2"):
                         st.session_state["elvac_selected_roi"] = "➕ Přidat nové ROI"
                         st.session_state["slider_x"], st.session_state["slider_y"] = 100, 100
                         st.session_state["slider_w"], st.session_state["slider_h"] = 150, 150
