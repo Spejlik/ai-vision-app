@@ -30,6 +30,7 @@ conn.close()
 # --- ODSTRANĚNÍ CACHE HARDWAROVÉHO MODULU Z RAM ---
 import importlib
 importlib.reload(camera_manager)
+importlib.reload(roi_manager)
 
 # --- JEDNORÁZOVÁ PRŮMYSLOVÁ POJISTKA PRO ROZŠÍŘENÍ DATABÁZE ---
 def check_database_structure():
