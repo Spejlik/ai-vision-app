@@ -53,13 +53,20 @@ def get_all_masters(project_name):
     conn.close()
     return data
 
-def get_rois(master_id, project_name):
-    conn = sqlite3.connect('vision_system.db')
-    c = conn.cursor()
-    c.execute("SELECT * FROM rois WHERE master_id = ? AND project = ?", (master_id, project_name))
-    data = c.fetchall()
+def get_rois(master_id, project_name, position_num=None):
+    conn = sqlite3.connect("vision_system.db")
+    cursor = conn.cursor()
+    
+    if position_num is not None:
+        # Filtrujeme pouze zóny patřící ke konkrétnímu kroku sekvence lisu
+        cursor.execute("SELECT * FROM rois WHERE master_id=? AND project=? AND position_num=?", (master_id, project_name, position_num))
+    else:
+        # Fallback pro starší volání z jiných částí aplikace
+        cursor.execute("SELECT * FROM rois WHERE master_id=? AND project=?", (master_id, project_name))
+        
+    rows = cursor.fetchall()
     conn.close()
-    return data
+    return rows
 
 def save_roi(master_id, project_name, roi_name, x, y, w, h, nok_output, tolerance, position_num=1):
     """
