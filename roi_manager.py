@@ -120,14 +120,14 @@ def render_roi_tab(m_id, m_name, m_path, active_p, current_position):
                         duplicitni = next((r for r in all_rois if str(r[3]).strip() == zn), None)
                         if duplicitni: database.delete_roi(duplicitni[0])
                         
-                    # Zápis do SQL databáze lisu
+                    # 🍏 OPRAVA: Přidáváme pátý parametr 'current_position' do zápisu SQL lisu
                     database.save_roi(m_id, active_p, zn, int(zx), int(zy), int(zw), int(zh), int(nok_val), int(ztol), current_position)
                     
-                    # 🍏 ZDE JE OPRAVA: Zápis do správné proměnné, kterou hlídá selectbox
+                    # 🍏 Nastavíme stav, aby selectbox po obnovení rovnou vybral tuto novou zónu
                     st.session_state["selected_roi_identity"] = zn
                     
-                    st.success(f"🎉 ROI '{zn}' úspěšně zapsáno do SQL databáze!")
-                    time.sleep(0.3)
+                    st.toast(f"✅ ROI '{zn}' úspěšně zapsáno a aktivováno!", icon="💾")
+                    time.sleep(0.2)
                     st.rerun()
                 except Exception as db_error:
                     st.error(f"❌ Chyba při zápisu: {db_error}")
