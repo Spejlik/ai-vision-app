@@ -721,7 +721,7 @@ with tab3:
                 with btn_col2:
                     přejmenovat_aktivni = st.toggle("PŘEJMEN.", key="toggle_rename_active_unique_v2")
                 with btn_col3:
-                    if st.button("SMAZAT VŠE", use_container_width=True, type="secondary", key="elvac_delete_all_btn_fixed"):
+                    if st.button("SMAZAT VŠE", use_container_width=True, type="secondary", key="elvac_delete_all_btn_unique_v2"):
                         if all_rois:
                             for r in all_rois: database.delete_roi(r[0])
                             st.session_state["elvac_selected_roi"] = "➕ Přidat nové ROI"
