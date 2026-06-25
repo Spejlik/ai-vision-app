@@ -57,11 +57,10 @@ def get_rois(master_id, project_name, position_num=None):
     conn = sqlite3.connect("vision_system.db")
     cursor = conn.cursor()
     
+    # Pojistka: Pokud position_num neexistuje, stáhni vše, ať nezhodíš aplikaci
     if position_num is not None:
-        # Filtrujeme pouze zóny patřící ke konkrétnímu kroku sekvence lisu
-        cursor.execute("SELECT * FROM rois WHERE master_id=? AND project=? AND position_num=?", (master_id, project_name, position_num))
+        cursor.execute("SELECT * FROM rois WHERE master_id=? AND project=? AND position_num=?", (master_id, project_name, int(position_num)))
     else:
-        # Fallback pro starší volání z jiných částí aplikace
         cursor.execute("SELECT * FROM rois WHERE master_id=? AND project=?", (master_id, project_name))
         
     rows = cursor.fetchall()
