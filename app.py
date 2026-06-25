@@ -542,7 +542,7 @@ with tab3:
             
             # 🍏 FINÁLNÍ HLADKÉ VOLÁNÍ ODDĚLENÉHO ROI MANAŽERA
             aktualni_krok = st.session_state.get("current_position", 1)
-            roi_manager.render_roi_tab(m_id, m_name, m_path, active_p, int(aktualni_krok))roi_manager.render_roi_tab(m_id, m_name, m_path, active_p, st.session_state.current_position)
+            roi_manager.render_roi_tab(m_id, m_name, m_path, active_p, int(aktualni_krok))
 
 # --- TAB 4: I/O ---
 with tab4:
