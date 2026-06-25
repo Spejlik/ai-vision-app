@@ -593,6 +593,22 @@ with tab3:
             if st.session_state["elvac_selected_roi"] != "➕ Přidat novou zónu" and st.session_state["elvac_selected_roi"] not in seznam_zon_v_db:
                 st.session_state["elvac_selected_roi"] = "➕ Přidat novou zónu"
 
+            # --- 🍏 PAMĚŤOVÝ ENGINE ELVAC PRO VÍCERO ZÓN (ZABRÁNÍ PŘEMAZÁVÁNÍ) ---
+            if "elvac_selected_roi" not in st.session_state:
+                st.session_state["elvac_selected_roi"] = "➕ Přidat novou zónu"
+            if "slider_x" not in st.session_state: st.session_state["slider_x"] = 100
+            if "slider_y" not in st.session_state: st.session_state["slider_y"] = 100
+            if "slider_w" not in st.session_state: st.session_state["slider_w"] = 150
+            if "slider_h" not in st.session_state: st.session_state["slider_h"] = 150
+
+            # Načtení všech aktuálně uložených zón z SQL
+            all_rois = database.get_rois(m_id, active_p)
+            seznam_zon_v_db = [r[3] for r in all_rois] if all_rois else []
+            
+            # Bezpečnostní reset výběru při změně masteru
+            if st.session_state["elvac_selected_roi"] != "➕ Přidat novou zónu" and st.session_state["elvac_selected_roi"] not in seznam_zon_v_db:
+                st.session_state["elvac_selected_roi"] = "➕ Přidat novou zónu"
+
             c_ctrl, c_viz = st.columns([1, 1.8])
             with c_ctrl:
                 st.markdown(f"### 🔧 Nastavení zón formy: {m_name.split('#')[0]}")
@@ -618,7 +634,7 @@ with tab3:
 
                 st.write("---")
 
-                # Rozbalovací seznam pro nezávislou volbu zóny (Elvac standard)
+                # Rozbalovací seznam všech dostupných zón na snímku
                 moznosti_selectboxu = ["➕ Přidat novou zónu"] + seznam_zon_v_db
                 vybrany_u = st.selectbox(
                     "🎯 Vyberte zónu k úpravě polohy nebo založte novou:",
@@ -628,6 +644,7 @@ with tab3:
                 )
                 st.session_state["elvac_selected_roi"] = vybrany_u
 
+                # Výchozí plnění souřadnic pro slidery
                 roi_id_db = None
                 nok_val_idx = 0
 
@@ -650,7 +667,7 @@ with tab3:
                         nok_val_idx = int(stajici_roi[8]) - 1
                         ztol_val = stajici_roi[9] if len(stajici_roi) > 9 else 20
 
-                # Unikátní klíč pro text input zamezuje přepisování jmen při tahu sliderem
+                # Textové pole pro název zóny svázané s jejím unikátním ID klíčem
                 zn = st.text_input("📝 Název zóny (bez diakritiky):", value=zn_default, key=f"roi_name_input_field_{vybrany_u}")
                 nok_val = st.selectbox("Přiřazení chyby lisu (NOK 1-8)", range(1, 9), index=max(0, nok_val_idx))
                 
@@ -661,6 +678,7 @@ with tab3:
                 zh = st.slider("Výška zóny", 10, H, int(zh_val), key="roi_zh_slider")
                 ztol = st.slider("Tolerance odchylky AI", 1, 100, int(ztol_val), key="roi_ztol_slider")
                 
+                # Průběžný zápis polohy do RAM paměti za běhu slideru
                 if vybrany_u == "➕ Přidat novou zónu":
                     st.session_state["slider_x"] = zx
                     st.session_state["slider_y"] = zy
@@ -685,7 +703,7 @@ with tab3:
                 draw = ImageDraw.Draw(img_roi)
                 line_w = max(2, int(W * 0.006))
                 
-                # --- 🍏 VRSTVENÉ VYKRESLOVÁNÍ: Všechny hotové zóny drží zeleně na pozadí ---
+                # --- 🍏 HROMADNÉ VRSTVENÉ VYKRESLOVÁNÍ: Všechny hotové zóny drží zeleně na pozadí ---
                 if all_rois:
                     for r in all_rois:
                         r_name_loop = str(r[3])
@@ -699,10 +717,6 @@ with tab3:
                 draw.text((zx + 8, zy + 8), f"-> {zn} (LADENI)", fill="orange")
                 
                 st.image(img_roi, use_container_width=True, caption="Inspekční plátno lisu (Zelená = Uložené v SQL, Oranžová = Laděná oblast)")
-                
-                # --- TRÉNOVÁNÍ AI MODELŮ ---
-                st.divider()
-                st.markdown("### 🧠 Řízení sítě projektu")
 
 # --- TAB 4: I/O ---
 with tab4:
