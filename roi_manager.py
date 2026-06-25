@@ -54,17 +54,20 @@ def render_roi_tab(m_id, m_name, m_path, active_p, current_position):
 
         st.write("---")
 
-        # Rozbalovací selektor
+        # --- ROZBALOVACÍ SELEKTOR ---
         moznosti_selectboxu = ["➕ Přidat nové ROI"] + seznam_roi_v_db
-        index_vyberu = 0
-        if st.session_state["selected_roi_identity"] in moznosti_selectboxu:
-            index_vyberu = moznosti_selectboxu.index(st.session_state["selected_roi_identity"])
+        
+        # Kontrola, aby vybraná identita seděla s možnostmi
+        if st.session_state["selected_roi_identity"] not in moznosti_selectboxu:
+            st.session_state["selected_roi_identity"] = "➕ Přidat nové ROI"
+            
+        index_vyberu = moznosti_selectboxu.index(st.session_state["selected_roi_identity"])
 
         vybrany_u = st.selectbox(
             "🎯 Vyberte ROI k úpravě polohy nebo založte nové:",
             options=moznosti_selectboxu,
             index=index_vyberu,
-            key="mod_selector_active_roi"
+            key="main_roi_selector_component"
         )
         st.session_state["selected_roi_identity"] = vybrany_u
 
@@ -73,7 +76,6 @@ def render_roi_tab(m_id, m_name, m_path, active_p, current_position):
         ztol_val = 20
 
         if vybrany_u == "➕ Přidat nové ROI":
-            # Vygeneruje unikátní výchozí název na základě reálného počtu záznamů v DB
             zn_default = f"p1_{len(all_rois) + 1}"
             zx_val = st.session_state["slider_x"]
             zy_val = st.session_state["slider_y"]
@@ -91,46 +93,50 @@ def render_roi_tab(m_id, m_name, m_path, active_p, current_position):
                 nok_val_idx = int(stajici_roi[8]) - 1
                 ztol_val = stajici_roi[9] if len(stajici_roi) > 9 else 20
 
-        # Formulářové prvky
-        zn = st.text_input("📝 Popis / Název ROI (bez diakritiky):", value=zn_default, key=f"mod_name_field_{vybrany_u}").strip()
-        nok_val = st.selectbox("Přiřazení chyby lisu (NOK 1-8)", range(1, 9), index=max(0, nok_val_idx), key=f"mod_nok_field_{vybrany_u}")
-        
-        # --- CHROMÉ POSUVNÍKY SOUŘADNIC ---
-        zx = st.slider("X poloha", 0, W, int(zx_val), key=f"mod_slide_x_{vybrany_u}")
-        zy = st.slider("Y poloha", 0, H, int(zy_val), key=f"mod_slide_y_{vybrany_u}")
-        zw = st.slider("Šířka", 10, W, int(zw_val), key=f"mod_slide_w_{vybrany_u}")
-        zh = st.slider("Výška", 10, H, int(zh_val), key=f"mod_slide_h_{vybrany_u}")
-        ztol = st.slider("Tolerance odchylky AI", 1, 100, int(ztol_val), key=f"mod_slide_tol_{vybrany_u}")
-        
-        if vybrany_u == "➕ Přidat nové ROI":
-            st.session_state["slider_x"] = zx
-            st.session_state["slider_y"] = zy
-            st.session_state["slider_w"] = zw
-            st.session_state["slider_h"] = zh
+        # --- 🍏 PRŮMYSLOVÝ FORMULÁŘ (ZABRÁNÍ ZAMRZÁNÍ WIDGETŮ) ---
+        with st.form(key="roi_editor_form_v2"):
+            zn = st.text_input("📝 Popis / Název ROI (bez diakritiky):", value=zn_default).strip()
+            nok_val = st.selectbox("Přiřazení chyby lisu (NOK 1-8)", range(1, 9), index=max(0, nok_val_idx))
+            
+            zx = st.slider("X poloha", 0, W, int(zx_val))
+            zy = st.slider("Y poloha", 0, H, int(zy_val))
+            zw = st.slider("Šířka", 10, W, int(zw_val))
+            zh = st.slider("Výška", 10, H, int(zh_val))
+            ztol = st.slider("Tolerance odchylky AI", 1, 100, int(ztol_val))
+            
+            submit_button = st.form_submit_button("💾 ULOŽIT OBLAST ZÁJMU DO SQL", use_container_width=True, type="primary")
 
-        if st.button("💾 ULOŽIT OBLAST ZÁJMU DO SQL", type="primary", use_container_width=True, key="mod_save_roi_btn"):
+        # --- ZPRACOVÁNÍ PO KLIKNUTÍ NA FORMULÁŘOVÉ TLAČÍTKO ---
+        if submit_button:
             if not zn:
                 st.error("❌ Popis ROI nesmí být prázdný!")
             else:
                 try:
-                    # Odstranění duplicity z databáze před přepsáním polohy
+                    # Odstranění staré verze/duplicity z DB před zápisem nové polohy
                     if vybrany_u != "➕ Přidat nové ROI" and roi_id_db is not None:
                         database.delete_roi(roi_id_db)
                     else:
                         duplicitni = next((r for r in all_rois if str(r[3]).strip() == zn), None)
                         if duplicitni: database.delete_roi(duplicitni[0])
                         
-                    # 🍏 OPRAVA: Přidáváme pátý parametr 'current_position' do zápisu SQL lisu
+                    # Bezpečný zápis s předáním pozice sekvence lisu
                     database.save_roi(m_id, active_p, zn, int(zx), int(zy), int(zw), int(zh), int(nok_val), int(ztol), current_position)
                     
-                    # 🍏 Nastavíme stav, aby selectbox po obnovení rovnou vybral tuto novou zónu
+                    # Nastavíme stav, aby se po překreslení rovnou vybrala nově uložená zóna
                     st.session_state["selected_roi_identity"] = zn
                     
-                    st.toast(f"✅ ROI '{zn}' úspěšně zapsáno a aktivováno!", icon="💾")
-                    time.sleep(0.2)
+                    st.toast(f"✅ ROI '{zn}' úspěšně zapsáno do SQL!", icon="💾")
+                    time.sleep(0.1)
                     st.rerun()
                 except Exception as db_error:
                     st.error(f"❌ Chyba při zápisu: {db_error}")
+
+        # Aktualizace pomocného bufferu pro nové výřezy
+        if vybrany_u == "➕ Přidat nové ROI":
+            st.session_state["slider_x"] = zx
+            st.session_state["slider_y"] = zy
+            st.session_state["slider_w"] = zw
+            st.session_state["slider_h"] = zh
 
     with c_viz:
         draw = ImageDraw.Draw(img_roi)
