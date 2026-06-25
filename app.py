@@ -485,10 +485,10 @@ with tab2:
             time.sleep(0.04)
             st.rerun()
 
-# --- TAB 3: ZÓNY ---
+# --- TAB 3: OBLASTI ZÁJMU (ROI) ---
 with tab3:
     active_p = st.session_state.active_project
-    st.info(f"🏗️ Nastavení zón pro projekt: **{active_p}**")
+    st.info(f"🏗️ Nastavení oblastí zájmu pro projekt: **{active_p}**")
     st.write("---")
     st.markdown("### 🗺️ Vyberte pozici pro úpravu (Sekvence lisu)")
     
@@ -524,7 +524,7 @@ with tab3:
             st.rerun()
 
     if pos_count > 1:
-        if st.button(f"🗑️ Smazat Pozici {st.session_state.current_position} ze sekvence", use_container_width=True):
+        if st.button(f"🗑️ Smazat Pozici {st.session_state.current_position} ze sekvence", use_container_width=True, key="del_pos_sequence_btn"):
             curr = st.session_state.current_position
             st.session_state.available_positions.remove(curr)
             st.session_state.current_position = st.session_state.available_positions[0]
@@ -532,7 +532,7 @@ with tab3:
             time.sleep(0.4)
             st.rerun()
             
-    st.info(f"📍 Aktuálně konfigurujete zóny pro: **Pozice {st.session_state.current_position}**")
+    st.info(f"📍 Aktuálně konfigurujete ROI pro: **Pozice {st.session_state.current_position}**")
     st.write("---")
 
     all_masters = database.get_all_masters(active_p) if active_p else []
@@ -543,7 +543,7 @@ with tab3:
         if 'selected_master_id' not in st.session_state or st.session_state.selected_master_id is None:
             st.session_state.selected_master_id = all_masters[0][0]
 
-        st.write("### 🔑 Výber podkladového Masteru / kamery:")
+        st.write("### 🔑 Výběr podkladového Masteru / kamery:")
         m_cols = st.columns(6)
         for idx, m in enumerate(all_masters):
             m_id_loop, m_name_loop, m_path_loop = m[0], m[2], m[3]
@@ -562,104 +562,71 @@ with tab3:
             m_id, m_name, m_path = sel_m[0], sel_m[2], sel_m[3]
             img_roi = Image.open(m_path).convert("RGB")
             W, H = img_roi.size
-            # Načteme aktuální uložené zóny z SQL databáze lisu
-            all_rois = database.get_rois(m_id, active_p)
             
-            # 🍏 PAMĚŤOVÝ ZÁMEK: Inicializace stabilních proměnných v session_state
-            if "elvac_active_roi" not in st.session_state:
-                st.session_state["elvac_active_roi"] = ""
-            if "roi_live_x" not in st.session_state: st.session_state["roi_live_x"] = 100
-            if "roi_live_y" not in st.session_state: st.session_state["roi_live_y"] = 100
-            if "roi_live_w" not in st.session_state: st.session_state["roi_live_w"] = 150
-            if "roi_live_h" not in st.session_state: st.session_state["roi_live_h"] = 150
-
-            # Automatická synchronizace: Pokud v DB něco je a v RAM nic, uzamkneme první zónu
-            seznam_jmen_v_db = [r[3] for r in all_rois] if all_rois else []
-            if seznam_jmen_v_db and (st.session_state["elvac_active_roi"] not in seznam_jmen_v_db):
-                st.session_state["elvac_active_roi"] = seznam_jmen_v_db[0]
-
-            # --- 🍏 ELVAC STANDARD: PAMĚŤOVÝ ENGINE PRO VÍCERO ZÓN ---
-            if "elvac_selected_roi" not in st.session_state:
-                st.session_state["elvac_selected_roi"] = "➕ Přidat novou zónu"
+            # --- INDUSTRIAL MULTI-ROI BUFFER MANAGEMENT ---
+            if "selected_roi_identity" not in st.session_state:
+                st.session_state["selected_roi_identity"] = "➕ Přidat nové ROI"
             if "slider_x" not in st.session_state: st.session_state["slider_x"] = 100
             if "slider_y" not in st.session_state: st.session_state["slider_y"] = 100
             if "slider_w" not in st.session_state: st.session_state["slider_w"] = 150
             if "slider_h" not in st.session_state: st.session_state["slider_h"] = 150
 
-            # Načtení všech uložených zón z SQL pro aktuální master/kameru
+            # Hromadné stažení existujících dat z SQLite
             all_rois = database.get_rois(m_id, active_p)
-            seznam_zon_v_db = [r[3] for r in all_rois] if all_rois else []
+            seznam_roi_v_db = [str(r[3]).strip() for r in all_rois] if all_rois else []
             
-            if st.session_state["elvac_selected_roi"] != "➕ Přidat novou zónu" and st.session_state["elvac_selected_roi"] not in seznam_zon_v_db:
-                st.session_state["elvac_selected_roi"] = "➕ Přidat novou zónu"
-
-            # --- 🍏 ELVAC MULTI-ROI ENGINE SE STABILNÍM PAMĚŤOVÝM ZÁMKEM ---
-            if "elvac_selected_roi" not in st.session_state:
-                st.session_state["elvac_selected_roi"] = "➕ Přidat novou zónu"
-            if "slider_x" not in st.session_state: st.session_state["slider_x"] = 100
-            if "slider_y" not in st.session_state: st.session_state["slider_y"] = 100
-            if "slider_w" not in st.session_state: st.session_state["slider_w"] = 150
-            if "slider_h" not in st.session_state: st.session_state["slider_h"] = 150
-
-            # Načtení všech uložených zón pro tento master z SQL databáze lisu
-            all_rois = database.get_rois(m_id, active_p)
-            seznam_zon_v_db = [str(r[3]).strip() for r in all_rois] if all_rois else []
-            
-            # Bezpečnostní pojistka: Pokud vybraná zóna zmizela z DB, přepneme se na zakládání nové
-            if st.session_state["elvac_selected_roi"] != "➕ Přidat novou zónu" and st.session_state["elvac_selected_roi"] not in seznam_zon_v_db:
-                st.session_state["elvac_selected_roi"] = "➕ Přidat novou zónu"
+            if st.session_state["selected_roi_identity"] != "➕ Přidat nové ROI" and st.session_state["selected_roi_identity"] not in seznam_roi_v_db:
+                st.session_state["selected_roi_identity"] = "➕ Přidat nové ROI"
 
             c_ctrl, c_viz = st.columns([1, 1.8])
             with c_ctrl:
-                st.markdown(f"### 🔧 Nastavení zón formy: {m_name.split('#')[0]}")
+                st.markdown(f"### 🔧 Oblasti zájmu pro Master: {m_name.split('#')[0]}")
                 
-                # --- AKČNÍ LIŠTA TLAČÍTEK (ELVAC STYLE) ---
+                # --- AKČNÍ LIŠTA TLAČÍTEK (MULTI-ZONE FIX) ---
                 btn_col1, btn_col2, btn_col3 = st.columns(3)
                 with btn_col1:
-                    if st.button("➕ + ROI", use_container_width=True, key="elvac_plus_roi_btn_fixed"):
-                        st.session_state["elvac_selected_roi"] = "➕ Přidat novou zónu"
+                    if st.button("➕ + ROI", use_container_width=True, key="roi_append_new_trigger_btn"):
+                        st.session_state["selected_roi_identity"] = "➕ Přidat nové ROI"
                         st.session_state["slider_x"], st.session_state["slider_y"] = 100, 100
                         st.session_state["slider_w"], st.session_state["slider_h"] = 150, 150
                         st.rerun()
                 with btn_col2:
-                    přejmenovat_aktivni = st.toggle("PŘEJMEN.", key="toggle_rename_active_fixed")
+                    přejmenovat_aktivni = st.toggle("PŘEJMEN.", key="toggle_rename_active_isolated")
                 with btn_col3:
-                    if st.button("SMAZAT VŠE", use_container_width=True, type="secondary", key="elvac_delete_all_btn_fixed"):
+                    if st.button("SMAZAT VŠE", use_container_width=True, type="secondary", key="roi_purge_all_elements_btn"):
                         if all_rois:
                             for r in all_rois: database.delete_roi(r[0])
-                            st.session_state["elvac_selected_roi"] = "➕ Přidat novou zónu"
-                            st.toast("💥 Plátno kompletně vyčištěno od všech zón.", icon="🗑️")
+                            st.session_state["selected_roi_identity"] = "➕ Přidat nové ROI"
+                            st.toast("💥 Všechny výřezy z plátna vymazány.", icon="🗑️")
                             time.sleep(0.2)
                             st.rerun()
 
                 st.write("---")
 
-                # Rozbalovací seznam všech dostupných zón na snímku
-                moznosti_selectboxu = ["➕ Přidat novou zónu"] + seznam_zon_v_db
-                
-                # 🍏 FIX SELECTBOXU: Index striktně vyhledáváme v očištěném poli možností
+                # Rozbalovací selektor
+                moznosti_selectboxu = ["➕ Přidat nové ROI"] + seznam_roi_v_db
                 index_vyberu = 0
-                if st.session_state["elvac_selected_roi"] in moznosti_selectboxu:
-                    index_vyberu = moznosti_selectboxu.index(st.session_state["elvac_selected_roi"])
+                if st.session_state["selected_roi_identity"] in moznosti_selectboxu:
+                    index_vyberu = moznosti_selectboxu.index(st.session_state["selected_roi_identity"])
 
                 vybrany_u = st.selectbox(
-                    "🎯 Vyberte zónu k úpravě polohy nebo založte novou:",
+                    "🎯 Vyberte ROI k úpravě polohy nebo založte nové:",
                     options=moznosti_selectboxu,
                     index=index_vyberu,
-                    key="selector_active_roi_elvac_fixed"
+                    key="selector_active_roi_isolated"
                 )
-                st.session_state["elvac_selected_roi"] = vybrany_u
+                st.session_state["selected_roi_identity"] = vybrany_u
 
                 roi_id_db = None
                 nok_val_idx = 0
+                ztol_val = 20
 
-                if vybrany_u == "➕ Přidat novou zónu":
-                    zn_default = f"Zona_{len(all_rois) + 1}"
+                if vybrany_u == "➕ Přidat nové ROI":
+                    zn_default = f"p1_{len(all_rois) + 1}"
                     zx_val = st.session_state["slider_x"]
                     zy_val = st.session_state["slider_y"]
                     zw_val = st.session_state["slider_w"]
                     zh_val = st.session_state["slider_h"]
-                    ztol_val = 20
                 else:
                     stajici_roi = next((r for r in all_rois if str(r[3]).strip() == vybrany_u), None)
                     if stajici_roi:
@@ -672,107 +639,16 @@ with tab3:
                         nok_val_idx = int(stajici_roi[8]) - 1
                         ztol_val = stajici_roi[9] if len(stajici_roi) > 9 else 20
 
-                # Textové pole pro název zóny (Unikátní dynamický klíč zabrání zamrzání textu)
-                zn = st.text_input("📝 Název zóny (bez diakritiky):", value=zn_default, key=f"roi_name_field_instance_{vybrany_u}").strip()
-                nok_val = st.selectbox("Přiřazení chyby lisu (NOK 1-8)", range(1, 9), index=max(0, nok_val_idx), key=f"nok_select_instance_{vybrany_u}")
+                # Formulářové prvky navázané na unikátní instanci výřezu
+                zn = st.text_input("📝 Popis / Název ROI (bez diakritiky):", value=zn_default, key=f"input_field_name_instance_{vybrany_u}").strip()
+                nok_val = st.selectbox("Přiřazení chyby lisu (NOK 1-8)", range(1, 9), index=max(0, nok_val_idx), key=f"selectbox_nok_instance_{vybrany_u}")
                 
-                # --- CHRÁNĚNÉ POSUVNÍKY SOUŘADNIC ---
-                zx = st.slider("X poloha zóny", 0, W, int(zx_val), key=f"roi_slider_x_{vybrany_u}")
-                zy = st.slider("Y poloha zóny", 0, H, int(zy_val), key=f"roi_slider_y_{vybrany_u}")
-                zw = st.slider("Šířka zóny", 10, W, int(zw_val), key=f"roi_slider_w_{vybrany_u}")
-                zh = st.slider("Výška zóny", 10, H, int(zh_val), key=f"roi_slider_h_{vybrany_u}")
-                ztol = st.slider("Tolerance odchylky AI", 1, 100, int(ztol_val), key=f"roi_slider_tol_{vybrany_u}")
-                
-                # Pokud zakládáme novou zónu, ukládáme polohu průběžně do session_state
-                if vybrany_u == "➕ Přidat novou zónu":
-                    st.session_state["slider_x"] = zx
-                    st.session_state["slider_y"] = zy
-                    st.session_state["slider_w"] = zw
-                    st.session_state["slider_h"] = zh
-
-                # --- 🍏 ČISTÁ ELVAC STRUKTURA: JEDEN MASTER = VÍCERO OBLASTÍ ZÁJMU (ROI) ---
-            if "elvac_selected_roi" not in st.session_state:
-                st.session_state["elvac_selected_roi"] = "➕ Přidat nové ROI"
-            if "slider_x" not in st.session_state: st.session_state["slider_x"] = 100
-            if "slider_y" not in st.session_state: st.session_state["slider_y"] = 100
-            if "slider_w" not in st.session_state: st.session_state["slider_w"] = 150
-            if "slider_h" not in st.session_state: st.session_state["slider_h"] = 150
-
-            # Načtení všech uložených ROI z SQL pro aktuální master/kameru
-            all_rois = database.get_rois(m_id, active_p)
-            seznam_roi_v_db = [r[3] for r in all_rois] if all_rois else []
-            
-            # Bezpečnostní pojistka při přepnutí Masteru
-            if st.session_state["elvac_selected_roi"] != "➕ Přidat nové ROI" and st.session_state["elvac_selected_roi"] not in seznam_roi_v_db:
-                st.session_state["elvac_selected_roi"] = "➕ Přidat nové ROI"
-
-            c_ctrl, c_viz = st.columns([1, 1.8])
-            with c_ctrl:
-                st.markdown(f"### 🔧 Oblasti zájmu pro Master: {m_name.split('#')[0]}")
-                
-                # --- AKČNÍ LIŠTA TLAČÍTEK ---
-                btn_col1, btn_col2, btn_col3 = st.columns(3)
-                with btn_col1:
-                    if st.button("➕ + ROI", use_container_width=True, key="elvac_plus_roi_btn_unique_v2"):
-                        st.session_state["elvac_selected_roi"] = "➕ Přidat nové ROI"
-                        st.session_state["slider_x"], st.session_state["slider_y"] = 100, 100
-                        st.session_state["slider_w"], st.session_state["slider_h"] = 150, 150
-                        st.rerun()
-                with btn_col2:
-                    přejmenovat_aktivni = st.toggle("PŘEJMEN.", key="toggle_rename_active_unique_v2")
-                with btn_col3:
-                    if st.button("SMAZAT VŠE", use_container_width=True, type="secondary", key="elvac_delete_all_btn_unique_v2"):
-                        if all_rois:
-                            for r in all_rois: database.delete_roi(r[0])
-                            st.session_state["elvac_selected_roi"] = "➕ Přidat nové ROI"
-                            st.toast("💥 Plátno kompletně vyčištěno.", icon="🗑️")
-                            time.sleep(0.2)
-                            st.rerun()
-
-                st.write("---")
-
-                # Rozbalovací seznam všech ROI na fotce
-                moznosti_selectboxu = ["➕ Přidat nové ROI"] + seznam_roi_v_db
-                vybrany_u = st.selectbox(
-                    "🎯 Vyberte ROI k úpravě polohy nebo založte nové:",
-                    options=moznosti_selectboxu,
-                    index=moznosti_selectboxu.index(st.session_state["elvac_selected_roi"]),
-                    key="selector_active_roi_elvac_fixed"
-                )
-                st.session_state["elvac_selected_roi"] = vybrany_u
-
-                roi_id_db = None
-                nok_val_idx = 0
-
-                if vybrany_u == "➕ Přidat nové ROI":
-                    zn_default = f"p1_{len(all_rois) + 1}"
-                    zx_val = st.session_state["slider_x"]
-                    zy_val = st.session_state["slider_y"]
-                    zw_val = st.session_state["slider_w"]
-                    zh_val = st.session_state["slider_h"]
-                    ztol_val = 20
-                else:
-                    stajici_roi = next((r for r in all_rois if r[3] == vybrany_u), None)
-                    if stajici_roi:
-                        roi_id_db = stajici_roi[0]
-                        zn_default = stajici_roi[3]
-                        zx_val = stajici_roi[4]
-                        zy_val = stajici_roi[5]
-                        zw_val = stajici_roi[6]
-                        zh_val = stajici_roi[7]
-                        nok_val_idx = int(stajici_roi[8]) - 1
-                        ztol_val = stajici_roi[9] if len(stajici_roi) > 9 else 20
-
-                # Popis / Název oblasti zájmu
-                zn = st.text_input("📝 Popis / Název ROI (bez diakritiky):", value=zn_default, key=f"roi_name_input_field_{vybrany_u}").strip()
-                nok_val = st.selectbox("Přiřazení chyby lisu (NOK 1-8)", range(1, 9), index=max(0, nok_val_idx), key=f"nok_select_field_{vybrany_u}")
-                
-                # --- CHRÁNĚNÉ POSUVNÍKY SOUŘADNIC ---
-                zx = st.slider("X poloha", 0, W, int(zx_val), key=f"roi_slider_x_{vybrany_u}")
-                zy = st.slider("Y poloha", 0, H, int(zy_val), key=f"roi_slider_y_{vybrany_u}")
-                zw = st.slider("Šířka", 10, W, int(zw_val), key=f"roi_slider_w_{vybrany_u}")
-                zh = st.slider("Výška", 10, H, int(zh_val), key=f"roi_slider_h_{vybrany_u}")
-                ztol = st.slider("Tolerance odchylky AI", 1, 100, int(ztol_val), key=f"roi_slider_tol_{vybrany_u}")
+                # --- CHROMÉ POSUVNÍKY SOUŘADNIC ---
+                zx = st.slider("X poloha", 0, W, int(zx_val), key=f"slider_axis_x_{vybrany_u}")
+                zy = st.slider("Y poloha", 0, H, int(zy_val), key=f"slider_axis_y_{vybrany_u}")
+                zw = st.slider("Šířka", 10, W, int(zw_val), key=f"slider_axis_w_{vybrany_u}")
+                zh = st.slider("Výška", 10, H, int(zh_val), key=f"slider_axis_h_{vybrany_u}")
+                ztol = st.slider("Tolerance odchylky AI", 1, 100, int(ztol_val), key=f"slider_axis_tol_{vybrany_u}")
                 
                 if vybrany_u == "➕ Přidat nové ROI":
                     st.session_state["slider_x"] = zx
@@ -780,71 +656,179 @@ with tab3:
                     st.session_state["slider_w"] = zw
                     st.session_state["slider_h"] = zh
 
-                if st.button("💾 ULOŽIT OBLAST ZÁJMU DO SQL", type="primary", use_container_width=True, key="save_roi_dynamic_btn_fixed"):
+                if st.button("💾 ULOŽIT OBLAST ZÁJMU DO SQL", type="primary", use_container_width=True, key="save_roi_final_isolated_btn"):
                     if not zn:
                         st.error("❌ Popis ROI nesmí být prázdný!")
                     else:
                         try:
-                            # Pokud upravujeme existující, smažeme starý řádek podle ID
+                            # Vyčištění duplicit podle schématu DB (9 pozičních parametrů)
                             if vybrany_u != "➕ Přidat nové ROI" and roi_id_db is not None:
                                 database.delete_roi(roi_id_db)
                             else:
-                                duplicitni = next((r for r in all_rois if r[3] == zn), None)
+                                duplicitni = next((r for r in all_rois if str(r[3]).strip() == zn), None)
                                 if duplicitni: database.delete_roi(duplicitni[0])
                                 
-                            # Zápis do SQL databáze lisu pod správným Master ID
                             database.save_roi(m_id, active_p, zn, int(zx), int(zy), int(zw), int(zh), int(nok_val), int(ztol))
-                            st.session_state["elvac_selected_roi"] = zn
-                            st.success(f"🎉 ROI '{zn}' úspěšně uloženo do databáze lisu!")
+                            st.session_state["selected_roi_identity"] = zn
+                            st.success(f"🎉 ROI '{zn}' úspěšně zapsáno do SQL databáze!")
                             time.sleep(0.3)
                             st.rerun()
                         except Exception as db_error:
-                            st.error(f"❌ Chyba při ukládání: {db_error}")
+                            st.error(f"❌ Chyba při zápisu: {db_error}")
 
             with c_viz:
                 draw = ImageDraw.Draw(img_roi)
                 line_w = max(2, int(W * 0.006))
                 
-                # --- VYKRESLENÍ VŠECH ROI NA JEDNOM PLÁTNĚ ---
+                # --- 🍏 HROMADNÉ VRSTVENÉ VYKRESLOVÁNÍ VŠECH UKLÁDANÝCH ELEMENTŮ ---
                 if all_rois:
                     for r in all_rois:
                         r_name_loop = str(r[3]).strip()
-                        # Zeleně drží všechny hotové uložené výřezy na pozadí
                         if r_name_loop != zn:
                             rx, ry, rw, rh = int(r[4]), int(r[5]), int(r[6]), int(r[7])
                             draw.rectangle([rx, ry, rx+rw, ry+rh], outline="#00FF00", width=line_w)
                             draw.text((rx + 8, ry + 8), r_name_loop, fill="#00FF00")
                 
-                # Oranžově svítí pouze ten čtverec, se kterým zrovna technolog hýbe
+                # Právě laděný prvek ze sliderů svítí výrazně oranžově
                 draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=line_w + 3)
                 draw.text((zx + 8, zy + 8), f"-> {zn} (LADENI)", fill="orange")
                 
                 st.image(img_roi, use_container_width=True, caption="Plátno Masteru (Zelená = Uložená ROI v SQL, Oranžová = Právě laděný výřez)")
                 
-                # --- SEKCE UČENÍ PRO SÍTĚ ---
+                # --- SEKCE UČENÍ SÍTÍ (AI INTEGRACE) ---
                 st.divider()
                 st.markdown("### 🧠 Řízení sítě projektu")
-                # ... (zbytek kódu s modely nechej dál plynule běžet tak, jak je) ...
+                
+                os.makedirs("models", exist_ok=True)
+                existing_models = [os.path.basename(f) for f in glob.glob("models/*.pth")]
+                model_options = ["✨ Trénovat zcela novou síť"] + existing_models
+                
+                selected_model_option = st.selectbox(
+                    "🔗 Použít stávající neuronovou síť (např. z jiné formy/projektu):",
+                    options=model_options,
+                    key=f"model_reuse_select_instance_{zn}"
+                )
+                
+                if selected_model_option != "✨ Trénovat zcela novou síť":
+                    if "Univerzalni_Sit" in selected_model_option:
+                        st.caption("🔒 *Univerzální síť systému je uzamčena proti smazání.*")
+                    else:
+                        if st.button(f"🗑️ SMAZAT MODEL {selected_model_option} Z DISKU", use_container_width=True, type="secondary", key=f"del_model_btn_{zn}"):
+                            model_to_delete_path = f"models/{selected_model_option}"
+                            if os.path.exists(model_to_delete_path):
+                                os.remove(model_to_delete_path)
+                            
+                            conn_del = sqlite3.connect("vision_system.db")
+                            cur_del = conn_del.cursor()
+                            cur_del.execute("DELETE FROM model_registry WHERE model_name=?", (selected_model_option,))
+                            conn_del.commit()
+                            conn_del.close()
+                            
+                            st.toast(f"Model {selected_model_option} byl trvale smazán", icon="🗑️")
+                            time.sleep(0.5)
+                            st.rerun()
 
-            with c_viz:
-                draw = ImageDraw.Draw(img_roi)
-                line_w = max(2, int(W * 0.006))
+                st.write("") 
+                default_custom_name = f"model_ai_{active_p}_{zn.replace(' ', '_')}"
+                custom_model_name = st.text_input(
+                    "📝 Vlastní název pro ukládanou neuronovou síť (bez přípony .pth):",
+                    value=default_custom_name,
+                    key=f"custom_model_name_input_instance_{zn}"
+                ).strip()
                 
-                # --- 🍏 MULTI-ZONE VISUALIZATION: Vykreslení všech uložených zón z SQL (Zeleně) ---
-                if all_rois:
-                    for r in all_rois:
-                        r_name_loop = str(r[3]).strip()
-                        # Zeleně vykreslíme pouze ty zóny, které momentálně nejsou vybrané k úpravě polohy
-                        if r_name_loop != zn:
-                            rx, ry, rw, rh = int(r[4]), int(r[5]), int(r[6]), int(r[7])
-                            draw.rectangle([rx, ry, rx+rw, ry+rh], outline="#00FF00", width=line_w)
-                            draw.text((rx + 8, ry + 8), r_name_loop, fill="#00FF00")
+                clean_model_filename = "".join([c for c in custom_model_name if c.isalnum() or c in ["_", "-"]]) + ".pth"
+
+                ok_dir_check = os.path.join("C:/Image", "OK", active_p)
+                nok_dir_check = os.path.join("C:/Image", "NOK", active_p)
+                count_ok = len(glob.glob(os.path.join(ok_dir_check, "*"))) if os.path.exists(ok_dir_check) else 0
+                count_nok = len(glob.glob(os.path.join(nok_dir_check, "*"))) if os.path.exists(nok_dir_check) else 0
                 
-                # Aktuálně laděná oblast ze sliderů svítí výrazně oranžově
-                draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=line_w + 3)
-                draw.text((zx + 8, zy + 8), f"-> {zn} (LADENI)", fill="orange")
+                if count_ok < 4 or count_nok < 4:
+                    st.warning(f"⚠️ **Nedostatečné množství dat:** {count_ok}x OK a {count_nok}x NOK vzorků.")
+                else:
+                    st.info(f"📊 **Množství dat:** Pro učení projektu `{active_p}` je k dispozici **{count_ok}x OK** a **{count_nok}x NOK** reálných vzorků.")
+
+                if selected_model_option != "✨ Trénovat zcela novou síť":
+                    if st.button(f"🔗 PROPOJIT ROI SE STÁVAJÍCÍ SÍTÍ: {selected_model_option}", use_container_width=True, type="secondary", key=f"link_model_btn_{zn}"):
+                        import datetime
+                        current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        
+                        conn_reg = sqlite3.connect("vision_system.db")
+                        cur_reg = conn_reg.cursor()
+                        cur_reg.execute("""
+                            INSERT INTO model_registry (project_name, model_name, accuracy, created_at, engineering_notes)
+                            VALUES (?, ?, ?, ?, ?)
+                        """, (active_p, selected_model_option, "Link", current_time, f"Převzatý model. Soubor: {selected_model_option}"))
+                        conn_reg.commit()
+                        conn_reg.close()
+                        
+                        st.success(f"✅ Oblast úspěšně propojena se sítí {selected_model_option}!")
+                        time.sleep(0.5)
+                        st.rerun()
+                else:
+                    if st.button(f"🚀 SPUSTIT UČENÍ S NÁZVEM: {clean_model_filename}", use_container_width=True, type="primary", key=f"start_train_btn_{zn}"):
+                        with st.spinner("Učení neuronové sítě běžží..."):
+                            progress_bar = st.progress(0.0)
+                            status_text = st.empty()
+                            def update_progress(pct, msg):
+                                progress_bar.progress(pct)
+                                status_text.text(msg)
+                            
+                            success, result_msg = ai_engine.train_ai_model(active_p, clean_model_filename, update_progress)
+                            if success: 
+                                st.success(f"🎉 Úspěšně naučeno! {result_msg}")
+                                try:
+                                    import datetime
+                                    current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                    conn_reg = sqlite3.connect("vision_system.db")
+                                    cur_reg = conn_reg.cursor()
+                                    cur_reg.execute("""
+                                        INSERT INTO model_registry (project_name, model_name, accuracy, created_at, engineering_notes)
+                                        VALUES (?, ?, ?, ?, ?)
+                                    """, (active_p, clean_model_filename, "100%", current_time, "Výchozí trénování s vlastním pojmenováním."))
+                                    conn_reg.commit()
+                                    conn_reg.close()
+                                except Exception: pass
+                                time.sleep(0.5)
+                                st.rerun()
+                            else: 
+                                st.error(f"❌ Chyba: {result_msg}")
+
+                st.markdown("---")
+                st.subheader("🧠 Přehled a správa naučených neuronových sítí")
                 
-                st.image(img_roi, use_container_width=True, caption="Inspekční plátno lisu (Zelená = Uložené v SQL, Oranžová = Laděná oblast)")
+                conn_view = sqlite3.connect("vision_system.db")
+                cur_view = conn_view.cursor()
+                cur_view.execute("PRAGMA table_info(model_registry)")
+                cols_m = [c[1] for c in cur_view.fetchall()]
+                c_proj_m = "project_name" if "project_name" in cols_m else "project"
+                
+                cur_view.execute(f"SELECT id, model_name, created_at, accuracy, engineering_notes FROM model_registry WHERE {c_proj_m}=? ORDER BY id DESC", (active_p,))
+                saved_models = cur_view.fetchall()
+                conn_view.close()
+                
+                if not saved_models:
+                    st.caption("ℹ️ V tomto projektu zatím nebyly uloženy žádné verze neuronových sítí.")
+                else:
+                    for m_id, m_name, m_date, m_acc, m_notes in saved_models:
+                        with st.container(border=True):
+                            col_info, col_notes = st.columns([2, 3])
+                            with col_info:
+                                st.markdown(f"🤖 **Název:** `{m_name}`")
+                                st.caption(f"📅 Vytvořeno: {m_date}")
+                                st.markdown(f"🎯 Přesnost: :green[{m_acc}]")
+                            with col_notes:
+                                note_key = f"note_{m_id}_{active_p}"
+                                new_note = st.text_input("Inženýrská poznámka k verzi:", value=m_notes, key=note_key, label_visibility="collapsed" if m_notes else "visible")
+                                if new_note != m_notes:
+                                    conn_up = sqlite3.connect("vision_system.db")
+                                    cur_up = conn_up.cursor()
+                                    cur_up.execute("UPDATE model_registry SET engineering_notes=? WHERE id=?", (new_note, m_id))
+                                    conn_up.commit()
+                                    conn_up.close()
+                                    st.toast("Poznámka k síti aktualizována", icon="💾")
+                                    time.sleep(0.1)
+                                    st.rerun()
 
 # --- TAB 4: I/O ---
 with tab4:
