@@ -719,7 +719,7 @@ with tab3:
                         st.session_state["slider_w"], st.session_state["slider_h"] = 150, 150
                         st.rerun()
                 with btn_col2:
-                    přejmenovat_aktivni = st.toggle("PŘEJMEN.", key="toggle_rename_active_fixed")
+                    přejmenovat_aktivni = st.toggle("PŘEJMEN.", key="toggle_rename_active_unique_v2")
                 with btn_col3:
                     if st.button("SMAZAT VŠE", use_container_width=True, type="secondary", key="elvac_delete_all_btn_fixed"):
                         if all_rois:
