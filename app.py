@@ -541,7 +541,7 @@ with tab3:
         if sel_m and os.path.exists(sel_m[3]):
             m_id, m_name, m_path = sel_m[0], sel_m[2], sel_m[3]
             
-            # 🍏 FINÁLNÍ HLADKÉ VOLÁNÍ ODDĚLENÉHO ROI MANAŽERA
+            # 🍏 FINÁLNÍ SPRÁVNÉ VOLÁNÍ S PŘEDÁNÍM POZICE SEKVENCE
             aktualni_krok = st.session_state.get("current_position", 1)
             roi_manager.render_roi_tab(m_id, m_name, m_path, active_p, int(aktualni_krok))
 

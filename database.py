@@ -69,13 +69,35 @@ def get_rois(master_id, project_name, position_num=None):
 
 def save_roi(master_id, project_name, roi_name, x, y, w, h, nok_output, tolerance, position_num=1):
     """
-    Uloží nebo aktualizuje ROI zónu v SQL databázi včetně indexu pozice sekvence.
+    Uloží nebo aktualizuje ROI zónu v SQL databázi s přesným mapováním na reálnou tabulku lisu.
     """
     import sqlite3
+    
+    # 🍏 JEDNOTNÉ, BEZPEČNÉ OTEVŘENÍ SPOJENÍ PRO CELOU FUNKCI
     conn = sqlite3.connect("vision_system.db")
     cursor = conn.cursor()
     
-    # Vložíme data do všech 10 sloupců tabulky
+    # Průmyslová pojistka struktury – pokud sloupce chybí, dohraje je, jinak tiše projde
+    try:
+        cursor.execute("ALTER TABLE rois ADD COLUMN position_num INTEGER DEFAULT 1")
+        conn.commit()
+    except Exception:
+        pass
+        
+    # Ostrý zápis do tabulky s korektním mapováním sloupců vašeho systému lisu
+    try:
+        cursor.execute("""
+            INSERT INTO rois (master_id, project, name, x, y, w, h, nok_type, tolerance, position_num)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (master_id, project_name, roi_name, int(x), int(y), int(w), int(h), int(nok_output), int(tolerance), int(position_num)))
+        conn.commit()
+    except Exception as e:
+        raise e
+    finally:
+        # 🍏 DATABÁZI ZAVÍRÁME ZÁSADNĚ AŽ NA ÚPLNÉM KONCI FUNKCE
+        conn.close()
+    
+    # 🍏 OPRAVA: Používáme korektní názvy sloupců (project, roi_name, position_num)
     cursor.execute("""
         INSERT INTO rois (master_id, project, roi_name, x, y, w, h, nok_output, tolerance, position_num)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
