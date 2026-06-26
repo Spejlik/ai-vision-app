@@ -69,26 +69,20 @@ def get_rois(master_id, project_name, position_num=None):
 
 def save_roi(master_id, project_name, roi_name, x, y, w, h, nok_output, tolerance, position_num=1):
     """
-    Uloží novou inspekční zónu (ROI) do databáze včetně čísla pozice v sekvenci.
+    Uloží nebo aktualizuje ROI zónu v SQL databázi včetně indexu pozice sekvence.
     """
     import sqlite3
     conn = sqlite3.connect("vision_system.db")
     cursor = conn.cursor()
     
-    # Přidáme position_num do INSERT dotazu (naše pojistka z app.py už sloupec v DB připravila)
-    query = """
-        INSERT INTO rois (master_id, project_name, roi_name, x, y, w, h, nok_output, tolerance, position_num)
+    # Vložíme data do všech 10 sloupců tabulky
+    cursor.execute("""
+        INSERT INTO rois (master_id, project, roi_name, x, y, w, h, nok_output, tolerance, position_num)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """
+    """, (master_id, project_name, roi_name, int(x), int(y), int(w), int(h), int(nok_output), int(tolerance), int(position_num)))
     
-    try:
-        cursor.execute(query, (master_id, project_name, roi_name, x, y, w, h, nok_output, tolerance, position_num))
-        conn.commit()
-        print(f"💾 Zóna '{roi_name}' úspěšně zapsána pod Pozicí {position_num}")
-    except Exception as e:
-        print(f"❌ Chyba při zápisu zóny do DB: {str(e)}")
-    finally:
-        conn.close()
+    conn.commit()
+    conn.close()
     
 def delete_roi(roi_id):
     conn = sqlite3.connect('vision_system.db')
