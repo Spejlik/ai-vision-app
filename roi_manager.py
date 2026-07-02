@@ -77,25 +77,30 @@ def render_roi_tab(m_id, m_name, m_path, active_p, current_position):
         b_col1, b_col2 = st.columns(2)
         with b_col1:
             if st.button("💾 ULOŽIT / UPRAVIT", type="primary", use_container_width=True):
-                if not zn:
-                    st.error("❌ Název nesmí být prázdný!")
-                else:
-                    try:
-                        # Pokud upravujeme vybrané, odstraníme starý záznam
-                        if vybrany_u != "➕ Přidat nové ROI" and roi_id_db is not None:
-                            database.delete_roi(roi_id_db)
-                        else:
-                            # Pojistka proti duplicitnímu jménu při zakládání nového
-                            duplicitni = next((r for r in all_rois if str(r[3]).strip() == zn), None)
-                            if duplicitni: database.delete_roi(duplicitni[0])
-                        
-                        database.save_roi(m_id, active_p, zn, int(zx), int(zy), int(zw), int(zh), int(nok_val), int(ztol), current_position)
-                        st.session_state["last_selected_roi"] = zn
-                        st.toast(f"✅ ROI {zn} uloženo!", icon="💾")
-                        time.sleep(0.2)
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Chyba: {e}")
+            if not zn:
+                st.error("❌ Název nesmí být prázdný!")
+            else:
+                try:
+                    # Pokud upravujeme vybrané, odstraníme starý záznam
+                    if vybrany_u != "➕ Přidat nové ROI" and roi_id_db is not None:
+                        database.delete_roi(roi_id_db)
+                    else:
+                        # Pojistka proti duplicitnímu jménu při zakládání nového
+                        duplicitni = next((r for r in all_rois if str(r[3]).strip() == zn), None)
+                        if duplicitni: database.delete_roi(duplicitni[0])
+                    
+                    # Uložení do SQL
+                    database.save_roi(m_id, active_p, zn, int(zx), int(zy), int(zw), int(zh), int(nok_val), int(ztol), current_position)
+                    
+                    # 🍏 FIX: Natvrdo uzamkneme stav na právě upravené/uložené ROI, aby nevyskočilo nové
+                    st.session_state["last_selected_roi"] = zn
+                    st.session_state["roi_initialized"] = True
+                    
+                    st.toast(f"✅ ROI {zn} úspěšně uloženo a uzamčeno!", icon="💾")
+                    time.sleep(0.1)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Chyba: {e}")
                         
         with b_col2:
             if st.button("🗑️ SMAZAT TOTO ROI", type="secondary", use_container_width=True):
