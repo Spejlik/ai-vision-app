@@ -158,20 +158,27 @@ def render_roi_tab(m_id, m_name, m_path, active_p, current_position):
         draw = ImageDraw.Draw(img_roi)
         line_w = max(2, int(W * 0.006))
         
-        # Vykreslení uložených zelených zón z SQL
+        # 1. Vykreslení uložených zelených zón z SQL
         if all_rois:
             for r in all_rois:
                 r_name_loop = str(r[3]).strip()
-                # Zeleně kreslíme všechna ostatní uložená ROI
+                rx, ry, rw, rh = int(r[4]), int(r[5]), int(r[6]), int(r[7])
+                
+                # Pokud zónu zrovna needitujeme, nakreslíme ji klasicky zeleně
                 if r_name_loop != vybrany_u:
-                    rx, ry, rw, rh = int(r[4]), int(r[5]), int(r[6]), int(r[7])
                     draw.rectangle([rx, ry, rx+rw, ry+rh], outline="#00FF00", width=line_w)
                     draw.text((rx + 8, ry + 8), r_name_loop, fill="#00FF00")
         
-        # Vykreslení aktuálně upravovaného výřezu (oranžově)
-        draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=line_w + 3)
-        draw.text((zx + 8, zy + 8), f"-> {zn} (LADENI)", fill="orange")
+        # 2. 🍏 DYNAMICKÉ SKRÝVÁNÍ LADICÍHO RÁMEČKU
+        # Oranžový rámeček se ukáže POUZE, pokud vyloženě zakládáš nové ROI, aby nepřekážel při prohlížení
+        if vybrany_u == "➕ Přidat nové ROI":
+            draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=line_w + 3)
+            draw.text((zx + 8, zy + 8), f"-> {zn} (LADENI)", fill="orange")
+        else:
+            # Pokud upravuješ stávající, vykreslíme ho silněji a žlutě/oranžově přímo na jeho pozici
+            draw.rectangle([zx, zy, zx+zw, zy+zh], outline="#FFD700", width=line_w + 2)
+            draw.text((zx + 8, zy + 8), f"✏️ {zn} (EDITACE)", fill="#FFD700")
         
-        st.image(img_roi, use_container_width=True, caption="Plátno Masteru (Zelená = Uložená ROI, Oranžová = Právě laděný/editovaný výřez)")
+        st.image(img_roi, use_container_width=True, caption="Plátno Masteru (Zelená = Uložená ROI, Oranžová/Žlutá = Aktivní úprava)")
         
         # --- Zbytek kódu pro sítě (zkráceno pro čistotu příspěvku) ---
