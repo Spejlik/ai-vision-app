@@ -18,12 +18,20 @@ def render_roi_tab(m_id, m_name, m_path, active_p, current_position):
     all_rois = database.get_rois(m_id, active_p, current_position)
     seznam_roi_v_db = [str(r[3]).strip() for r in all_rois] if all_rois else []
 
-    # --- INICIALIZACE STAVU VÝBÊRU ---
+    # --- 🍏 CHYTRÁ INICIALIZACE: PŘEDNOST MÁ EDITACE EXISTUJÍCÍHO ROI ---
     if "selected_roi_identity" not in st.session_state:
-        st.session_state["selected_roi_identity"] = "➕ Přidat nové ROI"
+        if seznam_roi_v_db:
+            # Pokud v DB už něco je, načteme hned první zónu k editaci (neotravujeme s novým)
+            st.session_state["selected_roi_identity"] = seznam_roi_v_db[0]
+        else:
+            st.session_state["selected_roi_identity"] = "➕ Přidat nové ROI"
 
+    # Pojistka pro případ, že by vybrané ROI mezitím někdo smazal
     if st.session_state["selected_roi_identity"] != "➕ Přidat nové ROI" and st.session_state["selected_roi_identity"] not in seznam_roi_v_db:
-        st.session_state["selected_roi_identity"] = "➕ Přidat nové ROI"
+        if seznam_roi_v_db:
+            st.session_state["selected_roi_identity"] = seznam_roi_v_db[0]
+        else:
+            st.session_state["selected_roi_identity"] = "➕ Přidat nové ROI"
 
     c_ctrl, c_viz = st.columns([1, 1.8])
     with c_ctrl:
@@ -32,6 +40,7 @@ def render_roi_tab(m_id, m_name, m_path, active_p, current_position):
         # --- AKČNÍ LIŠTA TLAČÍTEK ---
         btn_col1, btn_col2, btn_col3 = st.columns(3)
         with btn_col1:
+            # Tlačítko teď natvrdo přepne do režimu tvorby nového a vyčistí slidery
             if st.button("➕ + ROI", use_container_width=True, key="mod_append_new_roi_btn"):
                 st.session_state["selected_roi_identity"] = "➕ Přidat nové ROI"
                 st.session_state["st_roi_x"] = 100
@@ -53,8 +62,8 @@ def render_roi_tab(m_id, m_name, m_path, active_p, current_position):
 
         st.write("---")
 
-        # --- ROZBALOVACÍ SELEKTOR ---
-        moznosti_selectboxu = ["➕ Přidat nové ROI"] + seznam_roi_v_db
+        # --- ROZBALOVACÍ SELEKTOR (ZDE VOLÍŠ, CO CHCEŠ EDITOVAT) ---
+        moznosti_selectboxu = seznam_roi_v_db + ["➕ Přidat nové ROI"]
         index_vyberu = moznosti_selectboxu.index(st.session_state["selected_roi_identity"])
 
         def sync_sliders_to_selected():
@@ -87,7 +96,8 @@ def render_roi_tab(m_id, m_name, m_path, active_p, current_position):
             on_change=sync_sliders_to_selected
         )
 
-        if "st_roi_x" not in st.session_state:
+        # Synchronizace stavu při prvním renderu záložky
+        if "st_roi_x" not in st.session_state or st.session_state.get("st_roi_name") not in moznosti_selectboxu:
             if vybrany_u == "➕ Přidat nové ROI":
                 st.session_state["st_roi_name"] = f"p1_{len(all_rois) + 1}"
                 st.session_state["st_roi_x"], st.session_state["st_roi_y"] = 100, 100
@@ -109,7 +119,7 @@ def render_roi_tab(m_id, m_name, m_path, active_p, current_position):
                 roi_id_db = found[0]
                 nok_val_idx = int(found[8]) - 1
 
-        # --- STABILNÍ PRVKY ROZHRANÍ ---
+        # --- FIXNÍ SLIDERY ---
         zn = st.text_input("📝 Popis / Název ROI (bez diakritiky):", key="st_roi_name").strip()
         nok_val = st.selectbox("Přiřazení chyby lisu (NOK 1-8)", range(1, 9), index=max(0, nok_val_idx), key="st_roi_nok")
         
@@ -121,22 +131,20 @@ def render_roi_tab(m_id, m_name, m_path, active_p, current_position):
 
         st.write("")
 
-        # --- OSTRÉ UKLÁDACÍ TLAČÍTKO S PODPOROU EDITACE ---
+        # --- TLAČÍTKO ULOŽIT / UPRAVIT ---
         if st.button("💾 ULOŽIT OBLAST ZÁJMU DO SQL", type="primary", use_container_width=True, key="execute_save_roi_final_btn"):
             if not zn:
                 st.error("❌ Popis ROI nesmí být prázdný!")
             else:
                 try:
-                    # Pokud upravujeme vybrané ROI z menu, smažeme starou verzi podle ID
+                    # Pokud upravujeme stávající, vymažeme jeho starou polohu z DB před přepsáním
                     if vybrany_u != "➕ Přidat nové ROI" and roi_id_db is not None:
                         database.delete_roi(roi_id_db)
+                    else:
+                        duplicitni = next((r for r in all_rois if str(r[3]).strip() == zn), None)
+                        if duplicitni: database.delete_roi(duplicitni[0])
                     
-                    # Pojistka: Pokud technik přepsal název ručně v textovém poli a jméno už v DB existuje, smažeme ho (přepis/editace)
-                    duplicitni = next((r for r in all_rois if str(r[3]).strip() == zn), None)
-                    if duplicitni: 
-                        database.delete_roi(duplicitni[0])
-                    
-                    # Bezpečný zápis s aktualizovanou pozicí
+                    # Zápis upravené polohy
                     database.save_roi(m_id, active_p, zn, int(zx), int(zy), int(zw), int(zh), int(nok_val), int(ztol), current_position)
                     
                     st.session_state["selected_roi_identity"] = zn
@@ -144,20 +152,26 @@ def render_roi_tab(m_id, m_name, m_path, active_p, current_position):
                     time.sleep(0.1)
                     st.rerun()
                 except Exception as db_error:
-                    st.error(f"❌ Chyba zápisu při editaci: {db_error}")
+                    st.error(f"❌ Chyba zápisu: {db_error}")
 
     with c_viz:
         draw = ImageDraw.Draw(img_roi)
         line_w = max(2, int(W * 0.006))
         
+        # Vykreslení uložených zelených zón z SQL
         if all_rois:
             for r in all_rois:
                 r_name_loop = str(r[3]).strip()
-                if r_name_loop != zn:
+                # Zeleně kreslíme všechna ostatní uložená ROI
+                if r_name_loop != vybrany_u:
                     rx, ry, rw, rh = int(r[4]), int(r[5]), int(r[6]), int(r[7])
                     draw.rectangle([rx, ry, rx+rw, ry+rh], outline="#00FF00", width=line_w)
                     draw.text((rx + 8, ry + 8), r_name_loop, fill="#00FF00")
         
+        # Vykreslení aktuálně upravovaného výřezu (oranžově)
         draw.rectangle([zx, zy, zx+zw, zy+zh], outline="orange", width=line_w + 3)
         draw.text((zx + 8, zy + 8), f"-> {zn} (LADENI)", fill="orange")
-        st.image(img_roi, use_container_width=True, caption="Plátno Masteru (Zelená = Uložená ROI, Oranžová = Právě laděný výřez)")
+        
+        st.image(img_roi, use_container_width=True, caption="Plátno Masteru (Zelená = Uložená ROI, Oranžová = Právě laděný/editovaný výřez)")
+        
+        # --- Zbytek kódu pro sítě (zkráceno pro čistotu příspěvku) ---
