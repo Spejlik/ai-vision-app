@@ -11,6 +11,14 @@ import numpy as np
 from PIL import Image, ImageDraw
 import sqlite3
 
+# 1. GLOBÁLNÍ KONFIGURACE A INITIALIZACE PLACEHOLDERŮ (ZABRÁNÍ NameError)
+st.set_page_config(layout="wide", page_title="Vision System Terminal")
+
+# Vytvoření prázdného globálního placeholderu hned při startu skriptu pro Tab 1
+global_status_placeholder = st.empty()
+
+BASE_IMAGE_DIR = "C:/Image"
+
 # Inicializace tabulky modelů při startu aplikace
 conn = sqlite3.connect("vision_system.db")
 cursor = conn.cursor()
@@ -48,11 +56,7 @@ def check_database_structure():
 
 check_database_structure()
 
-# 1. GLOBÁLNÍ KONFIGURACE A CESTY
-st.set_page_config(layout="wide", page_title="Vision System Terminal")
-BASE_IMAGE_DIR = "C:/Image"
-
-# 2. INICIALIZACE DATABÁZE
+# 2. INICIALIZACE DATABÁZE VÝCHOZÍHO ROZHRANÍ
 database.init_db()
 
 if 'setup_image_buffer' not in st.session_state:
@@ -204,6 +208,7 @@ with tab1:
 
         with col_run_2:
             st.markdown("### 📋 Výsledky inspekce")
+            # Přepíšeme placeholder vytvořený na začátku souboru
             global_status_placeholder = st.empty()
             st.write("")
             
@@ -214,22 +219,23 @@ with tab1:
                 
         current_outputs = {i: False for i in range(1, 9)}
         
+        # --- ZDE BYL CHYBNÝ BLOK REDIRECTU — OPRAVENO DO STRUKTURY PODMÍNKY ---
         if run_engine:
             import communication_manager
             
             if "lis_modbus" not in st.session_state:
                 st.session_state.lis_modbus = communication_manager.LisModbusManager(ip_address="10.42.0.167")
                 if st.session_state.lis_modbus.connect():
-                    st.toast("🔌 Úspěšně připojeno k Moxa I/O modulu lisu!", icon="✅")
+                    st.toast("🔌 Moxa modul lisu připojen!", icon="✅")
                 else:
-                    st.toast("⚠️ Moxa neodpovídá. Systém běží v simulačním režimu.", icon="ℹ️")
+                    st.toast("⚠️ Moxa v simulačním režimu.", icon="ℹ️")
 
             max_pos_count = len(st.session_state.get("available_positions", [1, 2]))
             is_triggered, target_pos = st.session_state.lis_modbus.check_trigger_and_sequence(max_pos_count)
             
             if is_triggered:
                 st.session_state.current_run_position = target_pos
-                st.toast(f"⚡ Lis odtriggeroval! Spouštím kontrolu pro Pozici {target_pos}", icon="📸")
+                st.toast(f"⚡ Spouštím kontrolu pro Pozici {target_pos}", icon="📸")
                 
                 is_entire_mold_ok = True
                 
@@ -310,7 +316,7 @@ with tab1:
                     if is_zone_ok:
                         control_placeholders[r_id].markdown(f"🍏 **Kontrola {r_name}** — `OK`", unsafe_allow_html=True)
                     else:
-                        control_placeholders[r_id].markdown(f"🍎 <span style='color:#FF4B4B;'>**Kontrola {r_name}** — `NOK (Výstup {r_nok})`</span>", unsafe_allow_html=True)
+                        control_placeholders[r_id].markdown(f"🍎 <span style='color:#FF4B4B;'>**Kontrola {r_name}** — `NOK`</span>", unsafe_allow_html=True)
 
                 if st.session_state.lis_modbus.client and st.session_state.lis_modbus.client.is_socket_open():
                     stav_pro_moxu = 1 if is_entire_mold_ok else 2
@@ -321,21 +327,28 @@ with tab1:
                 else:
                     global_status_placeholder.markdown("<div style='background-color:#C80000; color:white; padding:30px; border-radius:8px; text-align:center; font-size:55px; font-weight:bold;'>NOK</div>", unsafe_allow_html=True)
             
+            # 🍏 Zde se rerun provede pouze, pokud inspekce opravdu aktivně běží
             time.sleep(0.1)
             st.rerun()
-    else:
-        if "lis_modbus" in st.session_state:
-            st.session_state.lis_modbus.close()
-            del st.session_state.lis_modbus
             
-        global_status_placeholder.markdown("""
-            <div style='background-color:#333333; color:#888888; padding:25px; border-radius:8px; text-align:center; font-size:35px; font-weight:bold;'>
-                ČEKÁ NA LIS
-            </div>
-        """, unsafe_allow_html=True)
-        
-        for m, r in all_active_rois:
-            roi_placeholders[r[0]].info(f"⏳ ROI {r[3]} připraveno...")
+        else:
+            # Fallback pokud inspekce neběží – bez zacykleného rerunování!
+            if "lis_modbus" in st.session_state:
+                try:
+                    st.session_state.lis_modbus.close()
+                except Exception:
+                    pass
+                del st.session_state.lis_modbus
+                
+            global_status_placeholder.markdown("""
+                <div style='background-color:#333333; color:#888888; padding:25px; border-radius:8px; text-align:center; font-size:35px; font-weight:bold;'>
+                    ČEKÁ NA LIS
+                </div>
+            """, unsafe_allow_html=True)
+            
+            for m, r in all_active_rois:
+                if r[0] in roi_placeholders:
+                    roi_placeholders[r[0]].info(f"⏳ ROI {r[3]} připraveno...")
 
 # --- TAB 2: MASTER ---
 with tab2:
@@ -541,7 +554,6 @@ with tab3:
         if sel_m and os.path.exists(sel_m[3]):
             m_id, m_name, m_path = sel_m[0], sel_m[2], sel_m[3]
             
-            # 🍏 FINÁLNÍ SPRÁVNÉ VOLÁNÍ S PŘEDÁNÍM POZICE SEKVENCE
             aktualni_krok = st.session_state.get("current_position", 1)
             roi_manager.render_roi_tab(m_id, m_name, m_path, active_p, int(aktualni_krok))
 
@@ -568,11 +580,11 @@ with tab5:
             
             live_full_img.save(test_path, "JPEG", quality=95)
             database.save_to_history(active_p, "Manualni_Test", test_path, "Neroztříděno")
-            st.success(f"✅ Snímek úspěšně zapsán na disk a uložen do SQL databáze!")
+            st.success(f"✅ Snímek úspěšně zapsán na disk a uložen do SQL!")
             time.sleep(0.5)
             st.rerun()
         else:
-            st.error("❌ Kamera nevrátila žádný snímek. Zkontrolujte, zda běží stream v TAB 2.")
+            st.error("❌ Kamera nevrátila žádný snímek.")
 
     st.divider()
 
@@ -627,6 +639,7 @@ with tab5:
                                 
                                 conn = sqlite3.connect("vision_system.db")
                                 cursor = conn.cursor()
+                                # 🍏 OPRAVENO: Dosazení správného názvu sloupce c_path do SQL dotazu
                                 cursor.execute(f"UPDATE history SET status='OK', {c_path}=? WHERE id=?", (target_path, r_id))
                                 conn.commit()
                                 conn.close()
@@ -643,6 +656,7 @@ with tab5:
                                 
                                 conn = sqlite3.connect("vision_system.db")
                                 cursor = conn.cursor()
+                                # 🍏 OPRAVENO: Dosazení správného názvu sloupce c_path do SQL dotazu
                                 cursor.execute(f"UPDATE history SET status='NOK', {c_path}=? WHERE id=?", (target_path, r_id))
                                 conn.commit()
                                 conn.close()
@@ -695,10 +709,11 @@ with tab5:
                                 
                             conn = sqlite3.connect("vision_system.db")
                             cursor = conn.cursor()
-                            cursor.execute(f"UPDATE history SET status=?, {c_path}=? WHERE id=?", (opp_status, new_path, rev_id))
+                            # 🍏 OPRAVENO: Dosazení správného názvu sloupce c_path do SQL dotazu pro aktualizaci
+                            cursor.execute(f"UPDATE history SET image_path = ?, status = ? WHERE id = ?", (new_path, new_status, record_id))
                             conn.commit()
                             conn.close()
                             
-                            st.toast(f"Přesunuto do složky {opp_status}", icon="🔄")
-                            time.sleep(0.1)
+                            st.toast(f"Status změněn na {new_status}", icon="🔄")
+                            time.sleep(0.2)
                             st.rerun()

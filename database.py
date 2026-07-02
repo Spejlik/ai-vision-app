@@ -2,6 +2,9 @@ import sqlite3
 import os
 
 def init_db():
+    """
+    Inicializace databáze a tabulek při startu aplikace.
+    """
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS projects (id INTEGER PRIMARY KEY, name TEXT UNIQUE)''')
@@ -15,11 +18,18 @@ def init_db():
                     x INTEGER, y INTEGER, w INTEGER, h INTEGER, nok_type INTEGER, 
                     tolerance INTEGER DEFAULT 20)''')
                     
-    # NOVÁ TABULKA PRO HISTORII SNÍMKŮ
     c.execute('''CREATE TABLE IF NOT EXISTS history (
                     id INTEGER PRIMARY KEY, project TEXT, roi_name TEXT, 
                     image_path TEXT, timestamp TEXT, status TEXT)''')
     conn.commit()
+    
+    # Pojistka: Rozšíření tabulky o position_num hned při inicializaci
+    try:
+        c.execute("ALTER TABLE rois ADD COLUMN position_num INTEGER DEFAULT 1")
+        conn.commit()
+    except Exception:
+        pass
+        
     conn.close()
 
 def add_project(name):
@@ -35,10 +45,9 @@ def get_projects():
     c.execute("SELECT name FROM projects")
     return [row[0] for row in c.fetchall()]
 
-def add_master(project_name, name, path, x, y, w, h): # <-- Přidán project_name
+def add_master(project_name, name, path, x, y, w, h):
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    # Zapisujeme název projektu do nového sloupce
     c.execute("INSERT INTO masters (project, name, image_path, x, y, w, h) VALUES (?, ?, ?, ?, ?, ?, ?)", 
               (project_name, name, path, x, y, w, h))
     conn.commit()
@@ -47,7 +56,6 @@ def add_master(project_name, name, path, x, y, w, h): # <-- Přidán project_nam
 def get_all_masters(project_name):
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
-    # ZMĚNA: Taháme všechny sloupce (*), abychom měli ID, Projekt, Název, Cestu i Rozměry výřezu ax, ay, aw, ah
     c.execute("SELECT * FROM masters WHERE project = ?", (project_name,))
     data = c.fetchall()
     conn.close()
@@ -57,7 +65,6 @@ def get_rois(master_id, project_name, position_num=None):
     conn = sqlite3.connect("vision_system.db")
     cursor = conn.cursor()
     
-    # Pojistka: Pokud position_num neexistuje, stáhni vše, ať nezhodíš aplikaci
     if position_num is not None:
         cursor.execute("SELECT * FROM rois WHERE master_id=? AND project=? AND position_num=?", (master_id, project_name, int(position_num)))
     else:
@@ -69,43 +76,22 @@ def get_rois(master_id, project_name, position_num=None):
 
 def save_roi(master_id, project_name, roi_name, x, y, w, h, nok_output, tolerance, position_num=1):
     """
-    Uloží nebo aktualizuje ROI zónu v SQL databázi s přesným mapováním na reálnou tabulku lisu.
+    Uloží nebo aktualizuje ROI zónu v SQL databázi s čistým životním cyklem spojení.
     """
-    import sqlite3
+    conn_save = sqlite3.connect("vision_system.db")
+    cursor_save = conn_save.cursor()
     
-    # 🍏 JEDNOTNÉ, BEZPEČNÉ OTEVŘENÍ SPOJENÍ PRO CELOU FUNKCI
-    conn = sqlite3.connect("vision_system.db")
-    cursor = conn.cursor()
-    
-    # Průmyslová pojistka struktury – pokud sloupce chybí, dohraje je, jinak tiše projde
     try:
-        cursor.execute("ALTER TABLE rois ADD COLUMN position_num INTEGER DEFAULT 1")
-        conn.commit()
-    except Exception:
-        pass
-        
-    # Ostrý zápis do tabulky s korektním mapováním sloupců vašeho systému lisu
-    try:
-        cursor.execute("""
+        cursor_save.execute("""
             INSERT INTO rois (master_id, project, name, x, y, w, h, nok_type, tolerance, position_num)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (master_id, project_name, roi_name, int(x), int(y), int(w), int(h), int(nok_output), int(tolerance), int(position_num)))
-        conn.commit()
-    except Exception as e:
-        raise e
+        conn_save.commit()
+    except Exception as db_err:
+        raise db_err
     finally:
-        # 🍏 DATABÁZI ZAVÍRÁME ZÁSADNĚ AŽ NA ÚPLNÉM KONCI FUNKCE
-        conn.close()
-    
-    # 🍏 OPRAVA: Používáme korektní názvy sloupců (project, roi_name, position_num)
-    cursor.execute("""
-        INSERT INTO rois (master_id, project, roi_name, x, y, w, h, nok_output, tolerance, position_num)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (master_id, project_name, roi_name, int(x), int(y), int(w), int(h), int(nok_output), int(tolerance), int(position_num)))
-    
-    conn.commit()
-    conn.close()
-    
+        conn_save.close()
+
 def delete_roi(roi_id):
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
@@ -117,24 +103,21 @@ def delete_master(master_id):
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
     
-    # 1. Nejdřív zjistíme cestu k souboru, abychom ho smazali i z disku
     c.execute("SELECT image_path FROM masters WHERE id = ?", (master_id,))
     row = c.fetchone()
     if row and os.path.exists(row[0]):
         try:
-            os.remove(row[0]) # Smaže fyzický .png soubor ze složky masters/
+            os.remove(row[0])
         except:
             pass
             
-    # 2. Smažeme master z tabulky masters
     c.execute("DELETE FROM masters WHERE id = ?", (master_id,))
-    # 3. Smažeme i všechny zóny, které k tomuto masteru patřily (úklid)
     c.execute("DELETE FROM rois WHERE master_id = ?", (master_id,))
     
     conn.commit()
     conn.close()
 
-def update_roi(roi_id, name, x, y, w, h, nok_type, tolerance): # <-- Přidán parametr
+def update_roi(roi_id, name, x, y, w, h, nok_type, tolerance):
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
     c.execute("""
@@ -145,6 +128,8 @@ def update_roi(roi_id, name, x, y, w, h, nok_type, tolerance): # <-- Přidán pa
     conn.commit()
     conn.close()
     
+    # Odstraněna redundantní duplicitní funkce save_roi a fragmenty kódu z rozhraní
+
 def save_to_history(project, roi_name, image_path, status):
     import datetime
     conn = sqlite3.connect('vision_system.db')
@@ -188,7 +173,6 @@ def get_unique_projects_from_history():
     c.execute("SELECT DISTINCT project FROM history ORDER BY project ASC")
     rows = c.fetchall()
     conn.close()
-    # Převedeme seznam ntic [('MQB',), ('A0',)] na čistý seznam řetězců ['MQB', 'A0']
     return [r[0] for r in rows]
 
 def get_unique_rois_from_history(project_filter="Vše"):
@@ -208,7 +192,6 @@ def update_image_status(record_id, new_status):
     conn = sqlite3.connect('vision_system.db')
     c = conn.cursor()
     
-    # 1. Načteme současnou cestu k souboru, projekt a zónu
     c.execute("SELECT image_path, project, roi_name FROM history WHERE id = ?", (record_id,))
     row = c.fetchone()
     
@@ -217,7 +200,6 @@ def update_image_status(record_id, new_status):
         project = row[1]
         
         if os.path.exists(old_path):
-            # Určíme novou složku (C:/Image/OK/Projekt/ nebo C:/Image/NOK/Projekt/)
             base_drive = "D:/" if os.path.exists("D:/") else "C:/"
             new_dir = os.path.join(base_drive, "Image", new_status, project)
             
@@ -225,12 +207,9 @@ def update_image_status(record_id, new_status):
                 os.makedirs(new_dir)
                 
             new_path = os.path.join(new_dir, os.path.basename(old_path))
-            
-            # Fyzicky přesuneme soubor na disku
             shutil.move(old_path, new_path)
             
-            # 2. Aktualizujeme cestu a stav v databázi
             c.execute("UPDATE history SET image_path = ?, status = ? WHERE id = ?", (new_path, new_status, record_id))
             conn.commit()
             
-    conn.close()    
+    conn.close()

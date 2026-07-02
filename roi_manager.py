@@ -121,27 +121,30 @@ def render_roi_tab(m_id, m_name, m_path, active_p, current_position):
 
         st.write("")
 
-        # --- OSTRÉ UKLÁDACÍ TLAČÍTKO ---
+        # --- OSTRÉ UKLÁDACÍ TLAČÍTKO S PODPOROU EDITACE ---
         if st.button("💾 ULOŽIT OBLAST ZÁJMU DO SQL", type="primary", use_container_width=True, key="execute_save_roi_final_btn"):
             if not zn:
                 st.error("❌ Popis ROI nesmí být prázdný!")
             else:
                 try:
+                    # Pokud upravujeme vybrané ROI z menu, smažeme starou verzi podle ID
                     if vybrany_u != "➕ Přidat nové ROI" and roi_id_db is not None:
                         database.delete_roi(roi_id_db)
-                    else:
-                        duplicitni = next((r for r in all_rois if str(r[3]).strip() == zn), None)
-                        if duplicitni: database.delete_roi(duplicitni[0])
                     
-                    # Bezpečný zápis s pozicí sekvence do odrzlé databáze
+                    # Pojistka: Pokud technik přepsal název ručně v textovém poli a jméno už v DB existuje, smažeme ho (přepis/editace)
+                    duplicitni = next((r for r in all_rois if str(r[3]).strip() == zn), None)
+                    if duplicitni: 
+                        database.delete_roi(duplicitni[0])
+                    
+                    # Bezpečný zápis s aktualizovanou pozicí
                     database.save_roi(m_id, active_p, zn, int(zx), int(zy), int(zw), int(zh), int(nok_val), int(ztol), current_position)
                     
                     st.session_state["selected_roi_identity"] = zn
-                    st.toast(f"💾 ROI '{zn}' úspěšně zapsáno!", icon="✅")
+                    st.toast(f"💾 ROI '{zn}' úspěšně uloženo/upraveno!", icon="✅")
                     time.sleep(0.1)
                     st.rerun()
                 except Exception as db_error:
-                    st.error(f"❌ Chyba zápisu: {db_error}")
+                    st.error(f"❌ Chyba zápisu při editaci: {db_error}")
 
     with c_viz:
         draw = ImageDraw.Draw(img_roi)
