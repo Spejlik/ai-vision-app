@@ -142,12 +142,11 @@ with st.sidebar:
         st.warning("⚠️ Nejdříve vytvořte projekt")
         st.session_state.active_project = None
         
-# 🍏 NOVÉ: Potvrzovací dialog proti nechtěnému smazání Masteru a jeho ROI zón
-@st.dialog("⚠️ POZOR: Smazat podkladový Master?")
-def confirm_delete_master_dialog(master_id, master_name):
-    st.warning(f"Chystáte se kompletně vymazat Master: **{master_name.split('#')[0]}**.")
-    st.error("🚨 Tímto krokem dojde k TRVALÉMU smazání tohoto podkladu z disku a VŠECH ROI zón, které k němu patří!")
-    st.write("Opravdu chcete pokračovat?")
+# 2. Tlačítko teď pouze bezpečně zapíše požadavek do paměti
+                    if st.button("🗑️ SMAZAT MASTER", key=f"btn_del_m_{m_id_loop}", use_container_width=True, type="secondary"):
+                        st.session_state["master_to_delete_id"] = m_id_loop
+                        st.session_state["master_to_delete_name"] = m_name_loop
+                        st.rerun()
     
     col_dial1, col_dial2 = st.columns(2)
     with col_dial1:
@@ -592,6 +591,42 @@ with tab3:
             
             aktualni_krok = st.session_state.get("current_position", 1)
             roi_manager.render_roi_tab(m_id, m_name, m_path, active_p, int(aktualni_krok))
+            
+# 🍏 BEZPEČNÉ VYVOLÁNÍ DIALOGU MIMO CYKLY (Zabrání bliknutí a zavření)
+    @st.dialog("⚠️ POZOR: Smazat podkladový Master?")
+    def confirm_delete_master_dialog():
+        m_id = st.session_state.get("master_to_delete_id")
+        m_name = st.session_state.get("master_to_delete_name", "")
+        
+        st.warning(f"Chystáte se kompletně vymazat Master: **{m_name.split('#')[0]}**.")
+        st.error("🚨 Týmto krokem dojde k TRVALÉMU smazání podkladu z disku a VŠECH ROI zón, které k němu patří!")
+        st.write("Opravdu chcete pokračovat?")
+        
+        col_dial1, col_dial2 = st.columns(2)
+        with col_dial1:
+            if st.button("❌ ZRUŠIT", use_container_width=True, key="cancel_delete_master_core_btn"):
+                # Vyčistíme paměť a zavřeme dialog
+                del st.session_state["master_to_delete_id"]
+                del st.session_state["master_to_delete_name"]
+                st.rerun()
+        with col_dial2:
+            if st.button("💥 🔥 ANO, SMAZAT", type="primary", use_container_width=True, key="execute_delete_master_core_btn"):
+                # Ostré smazání z SQL i disku
+                database.delete_master(m_id)
+                if st.session_state.get("selected_master_id") == m_id:
+                    st.session_state.selected_master_id = None
+                
+                # Vyčistíme paměť
+                del st.session_state["master_to_delete_id"]
+                del st.session_state["master_to_delete_name"]
+                
+                st.toast("💥 Master i s ROI zónami byl úspěšně smazán.", icon="🗑️")
+                time.sleep(0.2)
+                st.rerun()
+
+    # Pokud je v paměti požadavek na smazání, otevřeme dialog
+    if "master_to_delete_id" in st.session_state:
+        confirm_delete_master_dialog()            
 
 # --- TAB 4: I/O ---
 with tab4:
