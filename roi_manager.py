@@ -5,7 +5,8 @@ from PIL import Image, ImageDraw
 
 def render_roi_tab(m_id, m_name, m_path, active_p, current_position):
     """
-    Průmyslový ROI modul s fixovanou pamětí stavů proti samovolnému generování nových zón.
+    Stabilní průmyslový ROI modul.
+    Zajišťuje bezpečné ukládání, editaci a mazání bez kolizí v session_state.
     """
     img_roi = Image.open(m_path).convert("RGB")
     W, H = img_roi.size
@@ -15,34 +16,25 @@ def render_roi_tab(m_id, m_name, m_path, active_p, current_position):
     seznam_roi_v_db = [str(r[3]).strip() for r in all_rois] if all_rois else []
     moznosti_selectboxu = seznam_roi_v_db + ["➕ Přidat nové ROI"]
 
-    # 2. Bezpečná inicializace výchozího stavu v mezipaměti (spustí se jen jednou při startu projektu)
+    # 2. Inicializace výchozího stavu volby
     if "last_selected_roi" not in st.session_state:
-        st.session_state["last_selected_roi"] = moznosti_selectboxu[0]
-        
-    if "val_roi_name" not in st.session_state:
-        if st.session_state["last_selected_roi"] == "➕ Přidat nové ROI":
-            st.session_state["val_roi_name"] = f"p1_{len(all_rois) + 1}"
-            st.session_state["val_roi_x"], st.session_state["val_roi_y"] = 100, 100
-            st.session_state["val_roi_w"], st.session_state["val_roi_h"] = 150, 150
-            st.session_state["val_roi_tol"] = 20
-            st.session_state["val_roi_nok"] = 1
+        if seznam_roi_v_db:
+            st.session_state["last_selected_roi"] = seznam_roi_v_db[0]
         else:
-            found = next((r for r in all_rois if str(r[3]).strip() == st.session_state["last_selected_roi"]), None)
-            if found:
-                st.session_state["val_roi_name"] = found[3]
-                st.session_state["val_roi_x"] = int(found[4])
-                st.session_state["val_roi_y"] = int(found[5])
-                st.session_state["val_roi_w"] = int(found[6])
-                st.session_state["val_roi_h"] = int(found[7])
-                st.session_state["val_roi_nok"] = int(found[8])
-                st.session_state["val_roi_tol"] = int(found[9]) if len(found) > 9 else 20
+            st.session_state["last_selected_roi"] = "➕ Přidat nové ROI"
 
-    # 3. 🍏 CALLBACK: Spustí se výhradně a pouze tehdy, když technik fyzicky změní volbu v Selectboxu
-    def on_roi_selection_change():
-        novy_vyber = st.session_state["roi_selector_core"]
-        st.session_state["last_selected_roi"] = novy_vyber
-        
-        if novy_vyber == "➕ Přidat nové ROI":
+    if st.session_state["last_selected_roi"] not in moznosti_selectboxu:
+        if seznam_roi_v_db:
+            st.session_state["last_selected_roi"] = seznam_roi_v_db[0]
+        else:
+            st.session_state["last_selected_roi"] = "➕ Přidat nové ROI"
+
+    # 3. Bezpečné naplnění hodnot do session_state PŘED vykreslením widgetů
+    vybrany_u = st.session_state["last_selected_roi"]
+    
+    if "val_roi_name" not in st.session_state or st.session_state.get("roi_refresh_trigger", False):
+        st.session_state["roi_refresh_trigger"] = False
+        if vybrany_u == "➕ Přidat nové ROI":
             st.session_state["val_roi_name"] = f"p1_{len(all_rois) + 1}"
             st.session_state["val_roi_x"] = 100
             st.session_state["val_roi_y"] = 100
@@ -51,8 +43,7 @@ def render_roi_tab(m_id, m_name, m_path, active_p, current_position):
             st.session_state["val_roi_tol"] = 20
             st.session_state["val_roi_nok"] = 1
         else:
-            # Načteme čistá data z databáze do sliderů pro editaci
-            found = next((r for r in all_rois if str(r[3]).strip() == novy_vyber), None)
+            found = next((r for r in all_rois if str(r[3]).strip() == vybrany_u), None)
             if found:
                 st.session_state["val_roi_name"] = found[3]
                 st.session_state["val_roi_x"] = int(found[4])
@@ -62,21 +53,21 @@ def render_roi_tab(m_id, m_name, m_path, active_p, current_position):
                 st.session_state["val_roi_nok"] = int(found[8])
                 st.session_state["val_roi_tol"] = int(found[9]) if len(found) > 9 else 20
 
-    # Ošetření indexu pro bezpečné zobrazení
-    if st.session_state["last_selected_roi"] not in moznosti_selectboxu:
-        st.session_state["last_selected_roi"] = moznosti_selectboxu[0]
-    idx_selectboxu = moznosti_selectboxu.index(st.session_state["last_selected_roi"])
+    # 4. CALLBACK: Spustí se pouze tehdy, když operátor ručně změní volbu v Selectboxu
+    def on_roi_selection_change():
+        st.session_state["last_selected_roi"] = st.session_state["roi_selector_core"]
+        st.session_state["roi_refresh_trigger"] = True
 
-    # Samotný selektor s navázaným callbackem
-    vybrany_u = st.selectbox(
+    # Rozbalovací selektor
+    st.selectbox(
         "🎯 Vyberte ROI k úpravě polohy nebo založte nové:",
         options=moznosti_selectboxu,
-        index=idx_selectboxu,
+        index=moznosti_selectboxu.index(st.session_state["last_selected_roi"]),
         key="roi_selector_core",
         on_change=on_roi_selection_change
     )
 
-    # Získání reálného ID z DB
+    # Načtení ID z databáze pro vybranou zónu
     roi_id_db = None
     if vybrany_u != "➕ Přidat nové ROI":
         found = next((r for r in all_rois if str(r[3]).strip() == vybrany_u), None)
@@ -88,7 +79,7 @@ def render_roi_tab(m_id, m_name, m_path, active_p, current_position):
     with c_ctrl:
         st.markdown(f"### 🔧 Správa: {m_name.split('#')[0]}")
         
-        # Prvky pevně svázané se stabilním vnitřním stavem v RAM
+        # Pevné navázání prvků na předpřipravený session_state
         zn = st.text_input("📝 Název ROI:", key="val_roi_name").strip()
         nok_val = st.selectbox("Přiřazení chyby lisu (NOK 1-8)", range(1, 9), index=int(st.session_state.get("val_roi_nok", 1)) - 1, key="val_roi_nok_select")
         
@@ -107,20 +98,21 @@ def render_roi_tab(m_id, m_name, m_path, active_p, current_position):
                     st.error("❌ Název nesmí být prázdný!")
                 else:
                     try:
-                        # Pokud šlo o editaci existujícího, odmažeme předchozí souřadnice z DB
+                        # Odmazání staré verze z DB při editaci
                         if vybrany_u != "➕ Přidat nové ROI" and roi_id_db is not None:
                             database.delete_roi(roi_id_db)
                         else:
                             duplicitni = next((r for r in all_rois if str(r[3]).strip() == zn), None)
                             if duplicitni: database.delete_roi(duplicitni[0])
                         
-                        # Ostrý zápis do SQL
+                        # Zápis do SQLite
                         database.save_roi(m_id, active_p, zn, int(zx), int(zy), int(zw), int(zh), int(nok_val), int(ztol), current_position)
                         
-                        # 🍏 KLÍČOVÝ FIX: Uzamkneme volbu natvrdo na uložený název a zamezíme samovolné inicializaci nového
+                        # Zafixujeme stav na uložené zóně a vynutíme bezpečné přeladění hodnot
                         st.session_state["last_selected_roi"] = zn
+                        st.session_state["roi_refresh_trigger"] = True
                         
-                        st.toast(f"✅ ROI {zn} úspěšně zafixováno v SQL!", icon="💾")
+                        st.toast(f"✅ ROI {zn} úspěšně uloženo!", icon="💾")
                         time.sleep(0.1)
                         st.rerun()
                     except Exception as e:
@@ -130,13 +122,16 @@ def render_roi_tab(m_id, m_name, m_path, active_p, current_position):
             if st.button("🗑️ SMAZAT TOTO ROI", type="secondary", use_container_width=True, key="delete_roi_btn_final_fix"):
                 if vybrany_u != "➕ Přidat nové ROI" and roi_id_db is not None:
                     try:
+                        # Smazání z databáze
                         database.delete_roi(roi_id_db)
+                        
+                        # 🍏 BEZPEČNÝ RESET: Vyčistíme staré klíče z paměti dřív, než Streamlit stihne protestovat
+                        for k in ["val_roi_name", "val_roi_x", "val_roi_y", "val_roi_w", "val_roi_h", "val_roi_nok", "val_roi_tol"]:
+                            if k in st.session_state: del st.session_state[k]
+                        
+                        # Přepneme zobrazení na výchozí bod
                         st.session_state["last_selected_roi"] = "➕ Přidat nové ROI"
-                        # Reset hodnot sliderů na default po smazání zóny
-                        st.session_state["val_roi_name"] = f"p1_{len(all_rois)}"
-                        st.session_state["val_roi_x"], st.session_state["val_roi_y"] = 100, 100
-                        st.session_state["val_roi_w"], st.session_state["val_roi_h"] = 150, 150
-                        st.session_state["val_roi_tol"] = 20
+                        st.session_state["roi_refresh_trigger"] = True
                         
                         st.toast("🗑️ ROI vymazáno z databáze!", icon="🗑️")
                         time.sleep(0.1)
@@ -148,7 +143,7 @@ def render_roi_tab(m_id, m_name, m_path, active_p, current_position):
         draw = ImageDraw.Draw(img_roi)
         line_w = max(2, int(W * 0.005))
         
-        # Vykreslení všech ostaních uložených zón z SQL zeleně
+        # Vykreslení všech uložených zón z SQL zeleně
         if all_rois:
             for r in all_rois:
                 r_name = str(r[3]).strip()
