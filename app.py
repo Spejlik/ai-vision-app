@@ -141,25 +141,6 @@ with st.sidebar:
     else:
         st.warning("⚠️ Nejdříve vytvořte projekt")
         st.session_state.active_project = None
-        
-# 2. Tlačítko teď pouze bezpečně zapíše požadavek do paměti
-                    if st.button("🗑️ SMAZAT MASTER", key=f"btn_del_m_{m_id_loop}", use_container_width=True, type="secondary"):
-                        st.session_state["master_to_delete_id"] = m_id_loop
-                        st.session_state["master_to_delete_name"] = m_name_loop
-                        st.rerun()
-    
-    col_dial1, col_dial2 = st.columns(2)
-    with col_dial1:
-        if st.button("❌ ZRUŠIT", use_container_width=True):
-            st.rerun()
-    with col_dial2:
-        if st.button("💥 🔥 ANO, SMAZAT", type="primary", use_container_width=True, key=f"confirm_delete_master_btn_{master_id}"):
-            database.delete_master(master_id)
-            if st.session_state.selected_master_id == master_id:
-                st.session_state.selected_master_id = None
-            st.toast("💥 Master i s ROI zónami byl kompletně vymazán.", icon="🗑️")
-            time.sleep(0.2)
-            st.rerun()        
 
 # --- DEFINICE TABŮ ---
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["🚀 BĚH", "🎯 MASTER", "🔍 ROI SPRÁVCE", "🔌 I/O", "📜 HISTORIE"])
@@ -227,7 +208,6 @@ with tab1:
 
         with col_run_2:
             st.markdown("### 📋 Výsledky inspekce")
-            # Přepíšeme placeholder vytvořený na začátku souboru
             global_status_placeholder = st.empty()
             st.write("")
             
@@ -238,7 +218,6 @@ with tab1:
                 
         current_outputs = {i: False for i in range(1, 9)}
         
-        # --- ZDE BYL CHYBNÝ BLOK REDIRECTU — OPRAVENO DO STRUKTURY PODMÍNKY ---
         if run_engine:
             import communication_manager
             
@@ -346,12 +325,10 @@ with tab1:
                 else:
                     global_status_placeholder.markdown("<div style='background-color:#C80000; color:white; padding:30px; border-radius:8px; text-align:center; font-size:55px; font-weight:bold;'>NOK</div>", unsafe_allow_html=True)
             
-            # 🍏 Zde se rerun provede pouze, pokud inspekce opravdu aktivně běží
             time.sleep(0.1)
             st.rerun()
             
         else:
-            # Fallback pokud inspekce neběží – bez zacykleného rerunování!
             if "lis_modbus" in st.session_state:
                 try:
                     st.session_state.lis_modbus.close()
@@ -549,15 +526,39 @@ with tab3:
 
     all_masters = database.get_all_masters(active_p) if active_p else []
     
-    if not all_masters:
-        st.warning("⚠️ Knihovna Masterů je prázdná. Nejdříve vytvořte Master v Tabu 2.")
+    # 🍏 NOVÉ: Inteligentní filtrace referenčních Masterů podle aktivní pozice lisu
+    aktualni_cislo_pozice = st.session_state.get("current_position", 1)
+    vsechny_dostupne_pozice = st.session_state.get("available_positions", [1, 2])
+    
+    filtered_masters = []
+    for m in all_masters:
+        pustit_dostupny_master = True
+        nazev_masteru_malym = str(m[2]).split('#')[0].lower()
+        
+        # Projdeme ostatní pozice - pokud Master explicitně patří k jiné pozici, schováme ho
+        for jina_pos in vsechny_dostupne_pozice:
+            if jina_pos != aktualni_cislo_pozice:
+                # Kontrola na formáty jako "p1", "pozice 1", "_1" atd.
+                if f"p{jina_pos}" in nazev_masteru_malym or f"pozice {jina_pos}" in nazev_masteru_malym or f"_{jina_pos}" in nazev_masteru_malym:
+                    pustit_dostupny_master = False
+                    
+        # Pokud Master neodpovídá jiné pozici, nebo obsahuje naši aktuální, pustíme ho dál
+        if f"p{aktualni_cislo_pozice}" in nazev_masteru_malym or f"pozice {aktualni_cislo_pozice}" in nazev_masteru_malym or f"_{aktualni_cislo_pozice}" in nazev_masteru_malym:
+            pustit_dostupny_master = True
+            
+        if pustit_dostupny_master:
+            filtered_masters.append(m)
+
+    if not filtered_masters:
+        st.warning(f"⚠️ Pro Pozici {aktualni_cislo_pozice} nemáte vytvořený žádný podkladový Master. Založte jej v záložce 🎯 MASTER a v názvu uveďte 'P{aktualni_cislo_pozice}' nebo 'Pozice {aktualni_cislo_pozice}'.")
     else:
-        if 'selected_master_id' not in st.session_state or st.session_state.selected_master_id is None:
-            st.session_state.selected_master_id = all_masters[0][0]
+        # Pokud vybraný master nepatří do vyfiltrovaného seznamu, skočíme na první dostupný pro tuto pozici
+        if 'selected_master_id' not in st.session_state or st.session_state.selected_master_id not in [m[0] for m in filtered_masters]:
+            st.session_state.selected_master_id = filtered_masters[0][0]
 
         st.write("### 🔑 Výběr podkladového Masteru / kamery:")
         m_cols = st.columns(6)
-        for idx, m in enumerate(all_masters):
+        for idx, m in enumerate(filtered_masters):  # 🍏 Změněno all_masters -> filtered_masters
             m_id_loop, m_name_loop, m_path_loop = m[0], m[2], m[3]
             with m_cols[idx % 6]:
                 with st.container(border=True):
@@ -571,16 +572,10 @@ with tab3:
                         st.session_state.selected_master_id = m_id_loop
                         st.rerun()
                     
-                    # 2. 🍏 NOVÉ: Malé tlačítko pro vymazání nechtěného Masteru z disku i SQL
+                    # 2. 🍏 BEZPEČNÉ MAZÁNÍ S POJISTKOU DO MEMORY
                     if st.button("🗑️ SMAZAT MASTER", key=f"btn_del_m_{m_id_loop}", use_container_width=True, type="secondary"):
-                        confirm_delete_master_dialog(m_id_loop, m_name_loop)
-                        
-                        # Pokud jsme smazali zrovna ten aktivní, resetujeme výběr na první volný
-                        if st.session_state.selected_master_id == m_id_loop:
-                            st.session_state.selected_master_id = None
-                            
-                        st.toast(f"💥 Master {m_name_loop.split('#')[0]} i s ROI zónami kompletně vymazán.", icon="🗑️")
-                        time.sleep(0.2)
+                        st.session_state["master_to_delete_id"] = m_id_loop
+                        st.session_state["master_to_delete_name"] = m_name_loop
                         st.rerun()
 
         st.divider()
@@ -591,32 +586,29 @@ with tab3:
             
             aktualni_krok = st.session_state.get("current_position", 1)
             roi_manager.render_roi_tab(m_id, m_name, m_path, active_p, int(aktualni_krok))
-            
-# 🍏 BEZPEČNÉ VYVOLÁNÍ DIALOGU MIMO CYKLY (Zabrání bliknutí a zavření)
+
+    # 🍏 POTVRZOVACÍ DIALOG (Vykresluje se na neutrální půdě na konci Tab 3, což brání mžikovému zavření)
     @st.dialog("⚠️ POZOR: Smazat podkladový Master?")
     def confirm_delete_master_dialog():
         m_id = st.session_state.get("master_to_delete_id")
         m_name = st.session_state.get("master_to_delete_name", "")
         
         st.warning(f"Chystáte se kompletně vymazat Master: **{m_name.split('#')[0]}**.")
-        st.error("🚨 Týmto krokem dojde k TRVALÉMU smazání podkladu z disku a VŠECH ROI zón, které k němu patří!")
+        st.error("🚨 Tímto krokem dojde k TRVALÉMU smazání podkladu z disku a VŠECH ROI zón, které k němu patří!")
         st.write("Opravdu chcete pokračovat?")
         
         col_dial1, col_dial2 = st.columns(2)
         with col_dial1:
             if st.button("❌ ZRUŠIT", use_container_width=True, key="cancel_delete_master_core_btn"):
-                # Vyčistíme paměť a zavřeme dialog
                 del st.session_state["master_to_delete_id"]
                 del st.session_state["master_to_delete_name"]
                 st.rerun()
         with col_dial2:
             if st.button("💥 🔥 ANO, SMAZAT", type="primary", use_container_width=True, key="execute_delete_master_core_btn"):
-                # Ostré smazání z SQL i disku
                 database.delete_master(m_id)
                 if st.session_state.get("selected_master_id") == m_id:
                     st.session_state.selected_master_id = None
                 
-                # Vyčistíme paměť
                 del st.session_state["master_to_delete_id"]
                 del st.session_state["master_to_delete_name"]
                 
@@ -624,9 +616,8 @@ with tab3:
                 time.sleep(0.2)
                 st.rerun()
 
-    # Pokud je v paměti požadavek na smazání, otevřeme dialog
     if "master_to_delete_id" in st.session_state:
-        confirm_delete_master_dialog()            
+        confirm_delete_master_dialog()
 
 # --- TAB 4: I/O ---
 with tab4:
@@ -710,7 +701,6 @@ with tab5:
                                 
                                 conn = sqlite3.connect("vision_system.db")
                                 cursor = conn.cursor()
-                                # 🍏 OPRAVENO: Dosazení správného názvu sloupce c_path do SQL dotazu
                                 cursor.execute(f"UPDATE history SET status='OK', {c_path}=? WHERE id=?", (target_path, r_id))
                                 conn.commit()
                                 conn.close()
@@ -727,7 +717,6 @@ with tab5:
                                 
                                 conn = sqlite3.connect("vision_system.db")
                                 cursor = conn.cursor()
-                                # 🍏 OPRAVENO: Dosazení správného názvu sloupce c_path do SQL dotazu
                                 cursor.execute(f"UPDATE history SET status='NOK', {c_path}=? WHERE id=?", (target_path, r_id))
                                 conn.commit()
                                 conn.close()
@@ -780,11 +769,10 @@ with tab5:
                                 
                             conn = sqlite3.connect("vision_system.db")
                             cursor = conn.cursor()
-                            # 🍏 OPRAVENO: Dosazení správného názvu sloupce c_path do SQL dotazu pro aktualizaci
-                            cursor.execute(f"UPDATE history SET image_path = ?, status = ? WHERE id = ?", (new_path, new_status, record_id))
+                            cursor.execute(f"UPDATE history SET status=?, {c_path}=? WHERE id=?", (opp_status, new_path, rev_id))
                             conn.commit()
                             conn.close()
                             
-                            st.toast(f"Status změněn na {new_status}", icon="🔄")
+                            st.toast(f"Status změněn na {opp_status}", icon="🔄")
                             time.sleep(0.2)
                             st.rerun()
