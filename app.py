@@ -1,4 +1,5 @@
 import os
+import json
 import streamlit as st
 import cv2
 import database
@@ -11,19 +12,23 @@ import numpy as np
 from PIL import Image, ImageDraw
 import sqlite3
 
-# 1. GLOBÁLNÍ KONFIGURACE A INITIALIZACE PLACEHOLDERŮ
-st.set_page_config(layout="wide", page_title="Vision System Terminal")
+# 🍏 INICIALIZACE POZIC A KAMER (NAČÍTÁNÍ Z JSON KONFIGURACE)
+active_p = st.session_state.get("active_project", "Default_Project")
+config_filename = f"project_config_{active_p}.json"
 
-# 🍏 INICIALIZACE POZIC A KAMER (ELVAC ARCHITEKTURA V SESSION STATE)
 if "project_config" not in st.session_state:
-    st.session_state.project_config = {
-        "positions": {
-            1: {"nazev": "Pozice 1 (Založení)", "cameras": ["Kamera1", "Kamera2"]},
-            2: {"nazev": "Pozice 2 (Zalisování)", "cameras": ["Kamera1"]}
+    if os.path.exists(config_filename):
+        with open(config_filename, "r", encoding="utf-8") as f:
+            st.session_state.project_config = json.load(f)
+    else:
+        st.session_state.project_config = {
+            "positions": {
+                "1": {"nazev": "Pozice 1", "cameras": ["Kamera1", "Kamera2"]},
+                "2": {"nazev": "Pozice 2", "cameras": ["Kamera1"]}
+            }
         }
-    }
 if "current_position" not in st.session_state:
-    st.session_state.current_position = 1
+    st.session_state.current_position = "1"
 
 # Vytvoření prázdného globálního placeholderu hned při startu skriptu pro Tab 1
 global_status_placeholder = st.empty()
@@ -85,7 +90,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR: SPRÁVA PROJEKTŮ A ELVAC POZIC ---
+# --- SIDEBAR: SPRÁVA PROJEKTŮ A POZIC ---
 with st.sidebar:
     st.title("⚙️ Konfigurace")
     
@@ -154,33 +159,57 @@ with st.sidebar:
 
     st.divider()
     
-    # 🍏 MODULÁRNÍ KONFIGURÁTOR POZIC A KAMER (ELVAC REŽIM)
-    with st.expander("⚙️ ELVAC CONFIG - SEKVENCE A HARDWARE", expanded=False):
-        st.markdown("**Stávající kroky sekvence lisu:**")
-        for pos_id, pos_data in list(st.session_state.project_config["positions"].items()):
-            st.markdown(f"• **{pos_data['nazev']}** (ID: {pos_id})")
-            st.caption(f"Kamery: {', '.join(pos_data['cameras'])}")
+    # 🍏 MODULÁRNÍ KONFIGURÁTOR POZIC A KAMER
+    with st.expander("⚙️ KONFIGURACE SEKVENCE A HARDWARE", expanded=False):
+        active_p = st.session_state.get("active_project", "Default_Project")
+        config_filename = f"project_config_{active_p}.json"
         
-        st.write("---")
-        st.markdown("**➕ Přidat nový krok sekvence:**")
-        nova_pos_nazev = st.text_input("Název kroku (např. Pozice 3)", key="elvac_new_pos_title_input")
-        dostupne_hw_kamery = ["Kamera1", "Kamera2", "Kamera3", "Kamera4"]
-        vybrane_kamery = st.multiselect("Přiřazené kamery na lisu:", dostupne_hw_kamery, default=["Kamera1"], key="elvac_new_pos_cams_input")
+        nova_pos_id = st.number_input("Číslo nové pozice:", min_value=1, max_value=20, step=1, key="new_pos_id_input")
+        nova_pos_nazev = f"Pozice {nova_pos_id}"
         
-        if st.button("💾 ZAPISAT KROK DO KONFIGURACE", use_container_width=True, key="elvac_save_pos_btn"):
-            if nova_pos_nazev.strip():
-                vsechna_id = st.session_state.project_config["positions"].keys()
-                nove_id = max(vsechna_id) + 1 if vsechna_id else 1
+        st.markdown("**Výběr aktivních kamer pro tuto pozici:**")
+        vybrane_kamery = []
+        for cam_id in ["Kamera1", "Kamera2", "Kamera3", "Kamera4"]:
+            if st.checkbox(cam_id, key=f"chk_new_pos_{cam_id}"):
+                vybrane_kamery.append(cam_id)
                 
-                st.session_state.project_config["positions"][nove_id] = {
-                    "nazev": nova_pos_nazev.strip(),
+        if st.button("💾 ZAPSAT KROK DO KONFIGURACE", use_container_width=True, key="save_pos_btn"):
+            if not vybrane_kamery:
+                st.error("Vyberte alespoň jednu kameru!")
+            else:
+                st.session_state.project_config["positions"][str(nova_pos_id)] = {
+                    "nazev": nova_pos_nazev,
                     "cameras": vybrane_kamery
                 }
-                st.success(f"Krok {nove_id} integrován do linky!")
-                time.sleep(0.4)
+                st.session_state.project_config["positions"] = dict(
+                    sorted(st.session_state.project_config["positions"].items(), key=lambda item: int(item[0]))
+                )
+                
+                # 🍏 BEZPEČNÝ ZÁPIS DO SOUBORU NA DISK
+                with open(config_filename, "w", encoding="utf-8") as f:
+                    json.dump(st.session_state.project_config, f, indent=4, ensure_ascii=False)
+                    
+                st.success(f"Pozice {nova_pos_id} úspěšně přidána do sekvence lisu!")
+                time.sleep(0.5)
                 st.rerun()
-            else:
-                st.error("Název kroku nesmí být prázdný!")
+
+        st.write("---")
+        st.markdown("**Stávající kroky sekvence lisu:**")
+        
+        for pos_id, pos_data in list(st.session_state.project_config["positions"].items()):
+            st.markdown(f"• **Pozice {pos_id}**")
+            st.caption(f"Kamery: {', '.join(pos_data['cameras'])}")
+            
+            if st.button(f"🗑️ Smazat Pozici {pos_id}", key=f"btn_del_pos_cfg_{pos_id}", type="secondary", use_container_width=True):
+                del st.session_state.project_config["positions"][str(pos_id)]
+                
+                # 🍏 BEZPEČNÝ ZÁPIS PO SMAZÁNÍ
+                with open(config_filename, "w", encoding="utf-8") as f:
+                    json.dump(st.session_state.project_config, f, indent=4, ensure_ascii=False)
+                    
+                st.toast(f"Pozice {pos_id} odstraněna.", icon="🗑️")
+                time.sleep(0.2)
+                st.rerun()
 
 # --- DEFINICE TABŮ ---
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["🚀 BĚH", "🎯 MASTER", "🔍 ROI SPRÁVCE", "🔌 I/O", "📜 HISTORIE"])
@@ -191,31 +220,30 @@ with tab1:
         active_p = st.session_state.active_project
         
         if "current_run_position" not in st.session_state:
-            st.session_state.current_run_position = 1
+            st.session_state.current_run_position = "1"
             
         avail_pos = list(st.session_state.project_config["positions"].keys())
         
-        run_pos_cols = st.columns(len(avail_pos) + 2)
-        with run_pos_cols[0]:
-            st.markdown("<p style='padding-top:25px; font-weight:bold; margin:0;'>📍 Krok sekvence:</p>", unsafe_allow_html=True)
-            
-        for idx, pos in enumerate(avail_pos):
-            with run_pos_cols[idx + 1]:
-                st.write("") 
-                is_active = (st.session_state.current_run_position == pos)
-                nazev_tlačitka = st.session_state.project_config["positions"][pos]["nazev"].split(' (')[0]
+        if avail_pos:
+            run_pos_cols = st.columns(len(avail_pos) + 2)
+            with run_pos_cols[0]:
+                st.markdown("<p style='padding-top:25px; font-weight:bold; margin:0;'>📍 Krok sekvence:</p>", unsafe_allow_html=True)
                 
-                if st.button(nazev_tlačitka, key=f"run_tab_pos_{pos}", type="primary" if is_active else "secondary", use_container_width=True):
-                    st.session_state.current_run_position = pos
-                    proj_name = st.session_state.get("active_project", "Default_Project")
+            for idx, pos in enumerate(avail_pos):
+                with run_pos_cols[idx + 1]:
+                    st.write("") 
+                    is_active = (str(st.session_state.current_run_position) == str(pos))
+                    cisty_nazev_pozice = f"Pozice {pos}"
                     
-                    success, msg = camera_manager.load_camera_features_from_pfs(proj_name, pos)
-                    if not success:
-                        st.toast(f"ℹ️ {msg}", icon="ℹ️")
-                    else:
-                        st.toast(f"⚙️ Kamera hardwarově přenastavena pro {nazev_tlačitka}!", icon="✅")
-                    st.rerun()
-                    
+                    if st.button(cisty_nazev_pozice, key=f"run_tab_pos_{pos}", type="primary" if is_active else "secondary", use_container_width=True):
+                        st.session_state.current_run_position = str(pos)
+                        success, msg = camera_manager.load_camera_features_from_pfs(active_p, int(pos))
+                        if not success:
+                            st.toast(f"ℹ️ {msg}", icon="ℹ️")
+                        else:
+                            st.toast(f"⚙️ Kamera hardwarově přenastavena pro Pozici {pos}!", icon="✅")
+                        st.rerun()
+                        
         st.divider()
 
         all_masters = database.get_all_masters(active_p)
@@ -225,8 +253,8 @@ with tab1:
             for m in all_masters:
                 rois = database.get_rois(m[0], active_p)
                 for r in rois:
-                    r_pos = r[10] if len(r) > 10 else 1
-                    if r_pos == st.session_state.current_run_position:
+                    r_pos = str(r[10]) if len(r) > 10 else "1"
+                    if r_pos == str(st.session_state.current_run_position):
                         all_active_rois.append((m, r))
 
         col_run_1, col_run_2 = st.columns([2.2, 1])
@@ -273,7 +301,7 @@ with tab1:
             is_triggered, target_pos = st.session_state.lis_modbus.check_trigger_and_sequence(max_pos_count)
             
             if is_triggered:
-                st.session_state.current_run_position = target_pos
+                st.session_state.current_run_position = str(target_pos)
                 st.toast(f"⚡ Spouštím kontrolu pro Pozici {target_pos}", icon="📸")
                 
                 is_entire_mold_ok = True
@@ -282,7 +310,8 @@ with tab1:
                     plny_nazev_masteru = str(m[2]).strip()
                     
                     if "#" in plny_nazev_masteru:
-                        lidsky_popis, camera_target_name = plny_nazev_masteru.split("#", 1)
+                        parts = plny_nazev_masteru.split("#")
+                        camera_target_name = parts[1] if len(parts) > 1 else "Kamera1"
                     else:
                         camera_target_name = plny_nazev_masteru 
                     
@@ -387,132 +416,159 @@ with tab1:
                 if r[0] in roi_placeholders:
                     roi_placeholders[r[0]].info(f"⏳ ROI {r[3]} připraveno...")
 
-# --- TAB 2: MASTER ---
+# --- TAB 2: MASTER SNÍMKY ---
 with tab2:
     st.subheader("📸 Nastavení Master Snímků lisu")
     if not st.session_state.active_project:
         st.warning("⚠️ Vyberte aktivní projekt v levém panelu.")
     else:
         active_p = st.session_state.active_project
+        pozice_dict = st.session_state.project_config.get("positions", {})
+        config_filename = f"project_config_{active_p}.json"
         
-        # 🍏 Načtení kamer dedikovaných pro aktuální pozici podle Elvac architektury
-        akt_pos_id = st.session_state.get("current_position", 1)
-        online_devices = st.session_state.project_config["positions"][akt_pos_id]["cameras"]
-        if not online_devices:
-            online_devices = ["Kamera1"]
-
-        col_ctrl, col_img = st.columns([1, 2])
-        
-        with col_ctrl:
-            st.markdown("### 🔌 Zdroj obrázku")
-            source_type = st.radio(
-                "Vyberte, jak chcete nahrát podkladový snímek:",
-                ["📷 Simulovat z kamery lisu (Složka OK)", "📁 Nahrát soubor z disku (Příprava dopředu)"],
-                key="master_src_radio_unique"
+        if not pozice_dict:
+            st.warning("⚠️ Definujte kroky sekvence lisu v bočním panelu!")
+        else:
+            # 1. Výběr cílové pozice sekvence
+            seznam_ids = list(pozice_dict.keys())
+            st.session_state.current_position = st.selectbox(
+                "🎯 Vyberte pozici sekvence lisu pro seřízení:",
+                options=seznam_ids,
+                format_func=lambda x: f"Pozice {x}",
+                key="master_setup_pos_select"
             )
             
-            st.divider()
-            st.write("### ✂️ Definice výřezu")
-            m_id_name = st.text_input("Název Masteru (např. Levá strana)", key="master_name_field_unique")
+            akt_pos_id = st.session_state.current_position
             
-            ax = st.slider("X začátek", 0, 2000, 0, key="slider_ax_u")
-            ay = st.slider("Y začátek", 0, 2000, 0, key="slider_ay_u")
-            aw = st.slider("Šířka výřezu", 10, 2000, 500, key="slider_aw_u")
-            ah = st.slider("Výška výřezu", 10, 2000, 500, key="slider_ah_u")
+            # 🍏 ZMĚNA: Nabídneme VŠECHNY dostupné hardwarové kamery pro volný náhled a přepínání
+            vsechny_systemove_kamery = ["Kamera1", "Kamera2", "Kamera3", "Kamera4"]
 
-            if st.button("💾 ULOŽIT MASTER", type="primary", use_container_width=True, key="btn_save_master_final"):
-                if m_id_name and st.session_state.setup_image_buffer:
-                    if not os.path.exists("masters"):
-                        os.makedirs("masters")
-                    
-                    # Čistý uživatelský název bez omezujících prefixů (Režim Elvac knihovny)
-                    cisty_nazev = m_id_name.strip()
-                    filename = f"masters/master_{active_p}_{int(time.time())}.png"
-                    img = st.session_state.setup_image_buffer
-                    
-                    cropped_img = img.crop((ax, ay, ax + aw, ay + ah))
-                    max_side = max(aw, ah)
-                    square_img = Image.new('RGB', (max_side, max_side), color=(50, 50, 50))
-                    square_img.paste(cropped_img, ((max_side - aw) // 2, (max_side - ah) // 2))
-                    
-                    square_img = square_img.resize((500, 500), Image.Resampling.LANCZOS)
-                    square_img.save(filename)
-                    
-                    hw_target = st.session_state.get("current_hardware_target", "Kamera1")
-                    kombinovany_nazev = f"{cisty_nazev}#{hw_target}"
-                    
-                    database.add_master(active_p, kombinovany_nazev, filename, ax, ay, aw, ah)
-                    st.success(f"Snímek '{cisty_nazev}' byl úspěšně přidán do globální knihovny Masterů!")
-                    time.sleep(0.4)
-                    st.rerun()
-                else:
-                    st.error("❌ Pro uložení musíte zadat název a mít načtený obrázek!")
+            col_ctrl, col_img = st.columns([1, 2])
+            
+            with col_ctrl:
+                st.markdown("### 🔌 Zdroj obrázku")
+                source_type = st.radio(
+                    "Vyberte, jak chcete nahrát podkladový snímek:",
+                    ["📷 Simulovat z kamery lisu (Složka OK)", "📁 Nahrát soubor z disku (Příprava dopředu)"],
+                    key="master_src_radio_unique"
+                )
+                
+                st.divider()
+                st.write("### ✂️ Definice výřezu")
+                m_id_name = st.text_input("Název Masteru (např. Levá strana)", key="master_name_field_unique")
+                
+                ax = st.slider("X začátek", 0, 2000, 0, key="slider_ax_u")
+                ay = st.slider("Y začátek", 0, 2000, 0, key="slider_ay_u")
+                aw = st.slider("Šířka výřezu", 10, 2000, 500, key="slider_aw_u")
+                ah = st.slider("Výška výřezu", 10, 2000, 500, key="slider_ah_u")
 
-        with col_img:
-            st.markdown("### 📷 Výběr aktivního hardwaru")
-            selected_cam_device = st.selectbox(
-                f"Zvolte kameru přiřazenou k Pozici {akt_pos_id}:",
-                options=sorted(online_devices),
-                key="master_camera_hardware_select"
-            )
-            st.session_state["current_hardware_target"] = selected_cam_device
-            st.write("") 
-            
-            live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")
-            
-            if live_stream_active:
-                live_full_img, error_msg = camera_manager.capture_live_frame(device_name=st.session_state["current_hardware_target"])
-                if live_full_img:
-                    st.session_state.setup_image_buffer = live_full_img
-                    camera_manager.set_hardware_parameters(
-                        st.session_state.get("exp_slider_val", 40005),
-                        st.session_state.get("gain_slider_val", 3),
-                        device_name=st.session_state["current_hardware_target"]
-                    )
-                else:
-                    st.error(f"❌ {error_msg}")
-            else:
-                sim_dir = os.path.join(BASE_IMAGE_DIR, "OK", active_p)
-                if "Složka OK" in source_type:
-                    images = []
-                    if os.path.exists(sim_dir):
-                        for ext in ["*.jpg", "*.jpeg", "*.png", "*.JPG", "*.PNG"]:
-                            images.extend(glob.glob(os.path.join(sim_dir, ext)))
-                    if images:
-                        st.session_state.setup_image_buffer = Image.open(images[0]).convert("RGB")
+                if st.button("💾 ULOŽIT A PŘIŘADIT MASTER", type="primary", use_container_width=True, key="btn_save_master_final"):
+                    if m_id_name and st.session_state.setup_image_buffer:
+                        if not os.path.exists("masters"):
+                            os.makedirs("masters")
+                        
+                        cisty_nazev = m_id_name.strip()
+                        filename = f"masters/master_pos{akt_pos_id}_{int(time.time())}.png"
+                        img = st.session_state.setup_image_buffer
+                        
+                        cropped_img = img.crop((ax, ay, ax + aw, ay + ah))
+                        max_side = max(aw, ah)
+                        square_img = Image.new('RGB', (max_side, max_side), color=(50, 50, 50))
+                        square_img.paste(cropped_img, ((max_side - aw) // 2, (max_side - ah) // 2))
+                        
+                        square_img = square_img.resize((500, 500), Image.Resampling.LANCZOS)
+                        square_img.save(filename)
+                        
+                        hw_target = st.session_state.get("current_hardware_target", "Kamera1")
+                        
+                        # 🍏 INTELIGENTNÍ AUTOMATICKÉ PŘIŘAZENÍ: 
+                        # Pokud seřizovač vybral pro náhled kameru, která na této pozici ještě nebyla zapsaná,
+                        # automaticky ji přidáme do konfigurace pozice a uložíme JSON.
+                        aktualni_kamery_pozice = st.session_state.project_config["positions"][str(akt_pos_id)].get("cameras", [])
+                        if hw_target not in aktualni_kamery_pozice:
+                            aktualni_kamery_pozice.append(hw_target)
+                            st.session_state.project_config["positions"][str(akt_pos_id)]["cameras"] = sorted(aktualni_kamery_pozice)
+                            
+                            # Uložíme aktualizovaný JSON na disk
+                            with open(config_filename, "w", encoding="utf-8") as f:
+                                json.dump(st.session_state.project_config, f, indent=4, ensure_ascii=False)
+                        
+                        # Provázaný string do DB: Název#Kamera#POS[X]
+                        kombinovany_nazev = f"{cisty_nazev}#{hw_target}#POS{akt_pos_id}"
+                        
+                        database.add_master(active_p, kombinovany_nazev, filename, ax, ay, aw, ah)
+                        st.success(f"Master '{cisty_nazev}' přiřazen pod Pozici {akt_pos_id} na {hw_target} (Konfigurace automaticky aktualizována)!")
+                        time.sleep(0.4)
+                        st.rerun()
                     else:
-                        if st.session_state.setup_image_buffer is None:
-                            st.session_state.setup_image_buffer = Image.new('RGB', (1920, 1080), color=(75, 105, 130))
+                        st.error("❌ Pro uložení musíte zadat název a mít načtený obrázek!")
 
-            if st.session_state.setup_image_buffer is not None:
-                preview_img = st.session_state.setup_image_buffer.copy()
-                img_w, img_h = preview_img.size
+            with col_img:
+                st.markdown("### 📷 Výběr aktivního hardwaru")
+                # 🍏 V roletce jsou teď k dispozici všechny systémové kamery pro volné přepínání náhledu
+                selected_cam_device = st.selectbox(
+                    f"Přepnout náhled kamery pro zobrazení výlisku:",
+                    options=vsechny_systemove_kamery,
+                    key="master_camera_hardware_select"
+                )
+                st.session_state["current_hardware_target"] = selected_cam_device
+                st.write("") 
                 
-                safe_ax = min(ax, img_w - 10)
-                safe_ay = min(ay, img_h - 10)
-                safe_aw = min(aw, img_w - safe_ax)
-                safe_ah = min(ah, img_h - safe_ay)
+                live_stream_active = st.toggle("🎥 SPUSTIT ŽIVÝ STREAM", key="master_live_stream_toggle")
                 
-                draw = ImageDraw.Draw(preview_img)
-                draw.rectangle([safe_ax, safe_ay, safe_ax + safe_aw, safe_ay + safe_ah], outline="red", width=5)
-                st.image(preview_img, use_container_width=True, caption=f"Aktuální podklad ({img_w}x{img_h} px)")
-
-            st.slider("Elektronická uzávěrka", min_value=19985, max_value=159985, value=40005, step=19985, key="exp_slider_val")
-            st.slider("Zesílení obrazu", 0, 18, 3, step=1, key="gain_slider_val")
-            st.text_input("📝 Označení konfigurace:", value="281_P1", key="pfs_custom_description")
-
-            if st.button(f"💾 ULOŽIT CONFIG JAKO PFS PRO POZICI {akt_pos_id}", type="primary", use_container_width=True, key="btn_save_pfs_final"):
-                proj_name = st.session_state.get("active_project", "Default_Project")
-                success, path_or_err = camera_manager.save_camera_features_to_pfs(proj_name, akt_pos_id, device_name=st.session_state["current_hardware_target"])
-                if success:
-                    st.success(f"🎉 PFS profil pro Pozici {akt_pos_id} úspěšně vytvořen!")
-                    st.rerun()
+                if live_stream_active:
+                    live_full_img, error_msg = camera_manager.capture_live_frame(device_name=st.session_state["current_hardware_target"])
+                    if live_full_img:
+                        st.session_state.setup_image_buffer = live_full_img
+                        camera_manager.set_hardware_parameters(
+                            st.session_state.get("exp_slider_val", 40005),
+                            st.session_state.get("gain_slider_val", 3),
+                            device_name=st.session_state["current_hardware_target"]
+                        )
+                    else:
+                        st.error(f"❌ {error_msg}")
                 else:
-                    st.error(f"❌ Selhalo vytvoření PFS souboru: {path_or_err}")
+                    sim_dir = os.path.join(BASE_IMAGE_DIR, "OK", active_p)
+                    if "Složka OK" in source_type:
+                        images = []
+                        if os.path.exists(sim_dir):
+                            for ext in ["*.jpg", "*.jpeg", "*.png", "*.JPG", "*.PNG"]:
+                                images.extend(glob.glob(os.path.join(sim_dir, ext)))
+                        if images:
+                            st.session_state.setup_image_buffer = Image.open(images[0]).convert("RGB")
+                        else:
+                            if st.session_state.setup_image_buffer is None:
+                                st.session_state.setup_image_buffer = Image.new('RGB', (1920, 1080), color=(75, 105, 130))
 
-        if st.session_state.get("master_live_stream_toggle", False):
-            time.sleep(0.04)
-            st.rerun()
+                if st.session_state.setup_image_buffer is not None:
+                    preview_img = st.session_state.setup_image_buffer.copy()
+                    img_w, img_h = preview_img.size
+                    
+                    safe_ax = min(ax, img_w - 10)
+                    safe_ay = min(ay, img_h - 10)
+                    safe_aw = min(aw, img_w - safe_ax)
+                    safe_ah = min(ah, img_h - safe_ay)
+                    
+                    draw = ImageDraw.Draw(preview_img)
+                    draw.rectangle([safe_ax, safe_ay, safe_ax + safe_aw, safe_ay + safe_ah], outline="red", width=5)
+                    st.image(preview_img, use_container_width=True, caption=f"Aktuální podklad ({img_w}x{img_h} px)")
+
+                st.slider("Elektronická uzávěrka", min_value=19985, max_value=159985, value=40005, step=19985, key="exp_slider_val")
+                st.slider("Zesílení obrazu", 0, 18, 3, step=1, key="gain_slider_val")
+                st.text_input("📝 Označení konfigurace:", value="281_P1", key="pfs_custom_description")
+
+                if st.button(f"💾 ULOŽIT CONFIG JAKO PFS PRO POZICI {akt_pos_id}", type="primary", use_container_width=True, key="btn_save_pfs_final"):
+                    proj_name = st.session_state.get("active_project", "Default_Project")
+                    success, path_or_err = camera_manager.save_camera_features_to_pfs(proj_name, int(akt_pos_id), device_name=st.session_state["current_hardware_target"])
+                    if success:
+                        st.success(f"🎉 PFS profil pro Pozici {akt_pos_id} úspěšně vytvořen!")
+                        st.rerun()
+                    else:
+                        st.error(f"❌ Selhalo vytvoření PFS souboru: {path_or_err}")
+
+            if st.session_state.get("master_live_stream_toggle", False):
+                time.sleep(0.04)
+                st.rerun()
 
 # --- TAB 3: OBLASTI ZÁJMU (ROI) ---
 with tab3:
@@ -521,7 +577,6 @@ with tab3:
     st.write("---")
     st.markdown("### 🗺️ Vyberte pozici pro úpravu (Sekvence lisu)")
     
-    # 🍏 DYNAMICKÉ SEZNAMY POZIC Z ELVAC ARCHITEKTURY
     pozice_dict = st.session_state.project_config["positions"]
     seznam_pozic_ids = list(pozice_dict.keys())
     format_funkce = lambda x: pozice_dict[x]["nazev"]
@@ -529,12 +584,14 @@ with tab3:
     cols = st.columns(len(seznam_pozic_ids))
     for i, pos in enumerate(seznam_pozic_ids):
         with cols[i]:
-            is_active = (st.session_state.current_position == pos)
-            if st.button(pozice_dict[pos]["nazev"], key=f"zone_tab_pos_{pos}", type="primary" if is_active else "secondary", use_container_width=True):
-                st.session_state.current_position = pos
+            is_active = (str(st.session_state.current_position) == str(pos))
+            cisty_nazev_tlacitka = f"Pozice {pos}"
+            
+            if st.button(cisty_nazev_tlacitka, key=f"zone_tab_pos_{pos}", type="primary" if is_active else "secondary", use_container_width=True):
+                st.session_state.current_position = str(pos)
                 proj_name = st.session_state.get("active_project", "Default_Project")
                 
-                success, msg = camera_manager.load_camera_features_from_pfs(proj_name, pos)
+                success, msg = camera_manager.load_camera_features_from_pfs(proj_name, int(pos))
                 if not success:
                     st.toast(f"ℹ️ {msg}", icon="ℹ️")
                 else:
@@ -542,29 +599,29 @@ with tab3:
                 st.rerun()
                 
     st.write("")
-    st.info(f"📍 Aktuálně konfigurujete ROI pro: **{pozice_dict[st.session_state.current_position]['nazev']}**")
+    st.info(f"📍 Aktuálně konfigurujete ROI pro: **Pozice {st.session_state.current_position}**")
     st.write("---")
 
     all_masters = database.get_all_masters(active_p) if active_p else []
-    akt_pos_id = st.session_state.get("current_position", 1)
+    akt_pos_id = str(st.session_state.get("current_position", "1"))
 
     if not all_masters:
         st.warning(f"⚠️ Knihovna Masterů je prázdná. Přejděte do záložky 🎯 MASTER a pořiďte referenční snímky.")
     else:
-        # Pokud není nic vybráno, nebo vybraný Master zmizel, vezmeme první z knihovny
         if 'selected_master_id' not in st.session_state or st.session_state.selected_master_id not in [m[0] for m in all_masters]:
             st.session_state.selected_master_id = all_masters[0][0]
 
         st.write("### 🔑 Knihovna referenčních snímků (Kliknutím přiřadíte k aktuální pozici):")
         
-        # Vykreslení gridu o 6 sloupcích (jako v Elvacu)
         m_cols = st.columns(6)
         for idx, m in enumerate(all_masters):
             m_id_loop, m_name_loop, m_path_loop = m[0], m[2], m[3]
             
-            # Vyčištění názvů pro operátora na lince
-            popis_snimku = m_name_loop.split('#')[0].replace(f"POS{akt_pos_id}_", "").replace("_", " ")
-            tag_kamery = m_name_loop.split('#')[1] if '#' in m_name_loop else "Kamera"
+            # 🍏 DEKÓDOVÁNÍ Z DB: Název#Kamera#POS[X]
+            casti = m_name_loop.split('#')
+            popis_snimku = casti[0]
+            tag_kamery = casti[1] if len(casti) > 1 else "Kamera"
+            patri_k_pozici = casti[2].replace("POS", "") if len(casti) > 2 else "1"
             
             with m_cols[idx % 6]:
                 with st.container(border=True):
@@ -573,14 +630,15 @@ with tab3:
                     
                     is_active = (m_id_loop == st.session_state.selected_master_id)
                     
-                    # 1. Hlavní přiřazovací tlačítko snímku k pozici
-                    if st.button(f"🖼️ {popis_snimku} ({tag_kamery})", key=f"btn_m_{m_id_loop}", use_container_width=True, type="primary" if is_active else "secondary"):
+                    # Tlačítko přehledně zobrazí kompletní vazbu
+                    stav_text = f"🖼️ {popis_snimku}\n({tag_kamery} / Pozice {patri_k_pozici})"
+                    
+                    if st.button(stav_text, key=f"btn_m_{m_id_loop}", use_container_width=True, type="primary" if is_active else "secondary"):
                         st.session_state.selected_master_id = m_id_loop
-                        st.toast(f"✅ Snímek '{popis_snimku}' aktivován pro aktuální krok seřízení!", icon="🎯")
+                        st.toast(f"✅ Snímek '{popis_snimku}' vybrán!", icon="🎯")
                         time.sleep(0.1)
                         st.rerun()
                     
-                    # 2. Bezpečné smazání
                     if st.button("🗑️ SMAZAT", key=f"btn_del_m_{m_id_loop}", use_container_width=True, type="secondary"):
                         st.session_state["master_to_delete_id"] = m_id_loop
                         st.session_state["master_to_delete_name"] = m_name_loop
@@ -591,23 +649,10 @@ with tab3:
         
         if sel_m and os.path.exists(sel_m[3]):
             m_id, m_name, m_path = sel_m[0], sel_m[2], sel_m[3]
-            # Předáme vybraný Master do manažeru, který k němu začne kreslit zóny pod vybranou pozicí
-            roi_manager.render_roi_tab(m_id, m_name, m_path, active_p, int(akt_pos_id))
-
-        st.divider()
-sel_m = next((m for m in all_masters if m[0] == st.session_state.selected_master_id), None)
-
-if sel_m and os.path.exists(sel_m[3]):
-            m_id, m_name, m_path = sel_m[0], sel_m[2], sel_m[3]
             
-            # 🍏 POJISTKA PROTI DUPLICITNÍM KLÍČŮM: Obalíme celý manažer do st.container s dynamickým ID.
-            # Jakmile se změní projekt, pozice nebo master, Streamlit staré komponenty natvrdo zahodí a NameError/DuplicateKey nenastane.
             with st.container(key=f"roi_container_wrapper_{active_p}_pos{akt_pos_id}_m{m_id}"):
                 roi_manager.render_roi_tab(m_id, m_name, m_path, active_p, int(akt_pos_id))
 
-    # 🍏 POTVRZOVACÍ DIALOG (Vykresluje se na neutrální půdě na konci Tab 3)
-    @st.dialog("⚠️ POZOR: Smazat podkladový Master?")
-    # 🍏 OPRAVENO ODSLAZENÍ DIALOGU (Musí začínat přesně na 4 mezerách zleva)
     @st.dialog("⚠️ POZOR: Smazat podkladový Master?")
     def confirm_delete_master_dialog():
         m_id = st.session_state.get("master_to_delete_id")
@@ -636,7 +681,6 @@ if sel_m and os.path.exists(sel_m[3]):
                 time.sleep(0.2)
                 st.rerun()
 
-    # Volání dialogu (Také na 4 mezerách zleva)
     if "master_to_delete_id" in st.session_state:
         confirm_delete_master_dialog()
 

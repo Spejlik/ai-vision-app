@@ -1,0 +1,10 @@
+{
+    "positions": {
+        "1": {
+            "nazev": "Pozice 1",
+            "cameras": [
+                "Kamera1"
+            ]
+        }
+    }
+}
