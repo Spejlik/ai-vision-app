@@ -425,10 +425,8 @@ with tab2:
                     if not os.path.exists("masters"):
                         os.makedirs("masters")
                     
-                    # 🍏 ELVAC STRUKTURA: Formátování systémového názvu pro jednoznačné přiřazení k pozici
-                    akt_kamera = st.session_state.get("current_hardware_target", "Kamera1")
-                    systemovy_nazev_masteru = f"POS{akt_pos_id}_{akt_kamera}_{m_id_name.strip()}"
-                    
+                    # Čistý uživatelský název bez omezujících prefixů (Režim Elvac knihovny)
+                    cisty_nazev = m_id_name.strip()
                     filename = f"masters/master_{active_p}_{int(time.time())}.png"
                     img = st.session_state.setup_image_buffer
                     
@@ -441,10 +439,10 @@ with tab2:
                     square_img.save(filename)
                     
                     hw_target = st.session_state.get("current_hardware_target", "Kamera1")
-                    kombinovany_nazev = f"{systemovy_nazev_masteru}#{hw_target}"
+                    kombinovany_nazev = f"{cisty_nazev}#{hw_target}"
                     
                     database.add_master(active_p, kombinovany_nazev, filename, ax, ay, aw, ah)
-                    st.success(f"Master svázán pod Elvac strukturou: Pozice {akt_pos_id}, {akt_kamera}!")
+                    st.success(f"Snímek '{cisty_nazev}' byl úspěšně přidán do globální knihovny Masterů!")
                     time.sleep(0.4)
                     st.rerun()
                 else:
@@ -549,28 +547,24 @@ with tab3:
 
     all_masters = database.get_all_masters(active_p) if active_p else []
     akt_pos_id = st.session_state.get("current_position", 1)
-    
-    # 🍏 ELVAC FILTR: Pustíme striktně pouze Mastery začínající aktuálním ID pozice lisu
-    filtered_masters = []
-    for m in all_masters:
-        db_nazev = str(m[2]).split('#')[0]
-        if db_nazev.startswith(f"POS{akt_pos_id}_"):
-            filtered_masters.append(m)
 
-    if not filtered_masters:
-        st.warning(f"⚠️ Pro tuto pozici nemáte vytvořený žádný podkladový Master. Přejděte do záložky 🎯 MASTER a uložte podklad pro vybranou pozici.")
+    if not all_masters:
+        st.warning(f"⚠️ Knihovna Masterů je prázdná. Přejděte do záložky 🎯 MASTER a pořiďte referenční snímky.")
     else:
-        if 'selected_master_id' not in st.session_state or st.session_state.selected_master_id not in [m[0] for m in filtered_masters]:
-            st.session_state.selected_master_id = filtered_masters[0][0]
+        # Pokud není nic vybráno, nebo vybraný Master zmizel, vezmeme první z knihovny
+        if 'selected_master_id' not in st.session_state or st.session_state.selected_master_id not in [m[0] for m in all_masters]:
+            st.session_state.selected_master_id = all_masters[0][0]
 
-        st.write("### 🔑 Výběr přiřazeného snímku / kamery:")
+        st.write("### 🔑 Knihovna referenčních snímků (Kliknutím přiřadíte k aktuální pozici):")
+        
+        # Vykreslení gridu o 6 sloupcích (jako v Elvacu)
         m_cols = st.columns(6)
-        for idx, m in enumerate(filtered_masters):
+        for idx, m in enumerate(all_masters):
             m_id_loop, m_name_loop, m_path_loop = m[0], m[2], m[3]
             
-            # 🍏 Z lidského popisu odstraníme systémový prefix POSx_, aby bylo UI dokonale čisté
-            cisty_nazev_kamery = m_name_loop.split('#')[0].replace(f"POS{akt_pos_id}_", "").replace("_", " ")
-            plna_kamera_tag = m_name_loop.split('#')[1] if '#' in m_name_loop else "Kamera"
+            # Vyčištění názvů pro operátora na lince
+            popis_snimku = m_name_loop.split('#')[0].replace(f"POS{akt_pos_id}_", "").replace("_", " ")
+            tag_kamery = m_name_loop.split('#')[1] if '#' in m_name_loop else "Kamera"
             
             with m_cols[idx % 6]:
                 with st.container(border=True):
@@ -579,16 +573,26 @@ with tab3:
                     
                     is_active = (m_id_loop == st.session_state.selected_master_id)
                     
-                    # 1. Hlavní aktivační tlačítko kamery
-                    if st.button(f"📷 {cisty_nazev_kamery} ({plna_kamera_tag})", key=f"btn_m_{m_id_loop}", use_container_width=True, type="primary" if is_active else "secondary"):
+                    # 1. Hlavní přiřazovací tlačítko snímku k pozici
+                    if st.button(f"🖼️ {popis_snimku} ({tag_kamery})", key=f"btn_m_{m_id_loop}", use_container_width=True, type="primary" if is_active else "secondary"):
                         st.session_state.selected_master_id = m_id_loop
+                        st.toast(f"✅ Snímek '{popis_snimku}' aktivován pro aktuální krok seřízení!", icon="🎯")
+                        time.sleep(0.1)
                         st.rerun()
                     
                     # 2. Bezpečné smazání
-                    if st.button("🗑️ SMAZAT MASTER", key=f"btn_del_m_{m_id_loop}", use_container_width=True, type="secondary"):
+                    if st.button("🗑️ SMAZAT", key=f"btn_del_m_{m_id_loop}", use_container_width=True, type="secondary"):
                         st.session_state["master_to_delete_id"] = m_id_loop
                         st.session_state["master_to_delete_name"] = m_name_loop
                         st.rerun()
+
+        st.divider()
+        sel_m = next((m for m in all_masters if m[0] == st.session_state.selected_master_id), None)
+        
+        if sel_m and os.path.exists(sel_m[3]):
+            m_id, m_name, m_path = sel_m[0], sel_m[2], sel_m[3]
+            # Předáme vybraný Master do manažeru, který k němu začne kreslit zóny pod vybranou pozicí
+            roi_manager.render_roi_tab(m_id, m_name, m_path, active_p, int(akt_pos_id))
 
         st.divider()
         sel_m = next((m for m in filtered_masters if m[0] == st.session_state.selected_master_id), None)
