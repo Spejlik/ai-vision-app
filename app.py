@@ -595,11 +595,11 @@ with tab3:
             roi_manager.render_roi_tab(m_id, m_name, m_path, active_p, int(akt_pos_id))
 
         st.divider()
-        sel_m = next((m for m in filtered_masters if m[0] == st.session_state.selected_master_id), None)
-        
-        if sel_m and os.path.exists(sel_m[3]):
-            m_id, m_name, m_path = sel_m[0], sel_m[2], sel_m[3]
-            roi_manager.render_roi_tab(m_id, m_name, m_path, active_p, int(akt_pos_id))
+sel_m = next((m for m in all_masters if m[0] == st.session_state.selected_master_id), None)
+
+if sel_m and os.path.exists(sel_m[3]):
+    m_id, m_name, m_path = sel_m[0], sel_m[2], sel_m[3]
+    roi_manager.render_roi_tab(m_id, m_name, m_path, active_p, int(akt_pos_id))
 
     # 🍏 POTVRZOVACÍ DIALOG (Vykresluje se na neutrální půdě na konci Tab 3)
     @st.dialog("⚠️ POZOR: Smazat podkladový Master?")
