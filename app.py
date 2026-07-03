@@ -598,8 +598,12 @@ with tab3:
 sel_m = next((m for m in all_masters if m[0] == st.session_state.selected_master_id), None)
 
 if sel_m and os.path.exists(sel_m[3]):
-    m_id, m_name, m_path = sel_m[0], sel_m[2], sel_m[3]
-    roi_manager.render_roi_tab(m_id, m_name, m_path, active_p, int(akt_pos_id))
+            m_id, m_name, m_path = sel_m[0], sel_m[2], sel_m[3]
+            
+            # 🍏 POJISTKA PROTI DUPLICITNÍM KLÍČŮM: Obalíme celý manažer do st.container s dynamickým ID.
+            # Jakmile se změní projekt, pozice nebo master, Streamlit staré komponenty natvrdo zahodí a NameError/DuplicateKey nenastane.
+            with st.container(key=f"roi_container_wrapper_{active_p}_pos{akt_pos_id}_m{m_id}"):
+                roi_manager.render_roi_tab(m_id, m_name, m_path, active_p, int(akt_pos_id))
 
     # 🍏 POTVRZOVACÍ DIALOG (Vykresluje se na neutrální půdě na konci Tab 3)
     @st.dialog("⚠️ POZOR: Smazat podkladový Master?")
