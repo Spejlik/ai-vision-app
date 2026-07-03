@@ -141,6 +141,26 @@ with st.sidebar:
     else:
         st.warning("⚠️ Nejdříve vytvořte projekt")
         st.session_state.active_project = None
+        
+# 🍏 NOVÉ: Potvrzovací dialog proti nechtěnému smazání Masteru a jeho ROI zón
+@st.dialog("⚠️ POZOR: Smazat podkladový Master?")
+def confirm_delete_master_dialog(master_id, master_name):
+    st.warning(f"Chystáte se kompletně vymazat Master: **{master_name.split('#')[0]}**.")
+    st.error("🚨 Tímto krokem dojde k TRVALÉMU smazání tohoto podkladu z disku a VŠECH ROI zón, které k němu patří!")
+    st.write("Opravdu chcete pokračovat?")
+    
+    col_dial1, col_dial2 = st.columns(2)
+    with col_dial1:
+        if st.button("❌ ZRUŠIT", use_container_width=True):
+            st.rerun()
+    with col_dial2:
+        if st.button("💥 🔥 ANO, SMAZAT", type="primary", use_container_width=True, key=f"confirm_delete_master_btn_{master_id}"):
+            database.delete_master(master_id)
+            if st.session_state.selected_master_id == master_id:
+                st.session_state.selected_master_id = None
+            st.toast("💥 Master i s ROI zónami byl kompletně vymazán.", icon="🗑️")
+            time.sleep(0.2)
+            st.rerun()        
 
 # --- DEFINICE TABŮ ---
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["🚀 BĚH", "🎯 MASTER", "🔍 ROI SPRÁVCE", "🔌 I/O", "📜 HISTORIE"])
@@ -554,7 +574,7 @@ with tab3:
                     
                     # 2. 🍏 NOVÉ: Malé tlačítko pro vymazání nechtěného Masteru z disku i SQL
                     if st.button("🗑️ SMAZAT MASTER", key=f"btn_del_m_{m_id_loop}", use_container_width=True, type="secondary"):
-                        database.delete_master(m_id_loop)
+                        confirm_delete_master_dialog(m_id_loop, m_name_loop)
                         
                         # Pokud jsme smazali zrovna ten aktivní, resetujeme výběr na první volný
                         if st.session_state.selected_master_id == m_id_loop:
