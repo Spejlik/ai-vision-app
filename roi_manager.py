@@ -55,15 +55,15 @@ def render_roi_tab(m_id, m_name, m_path, active_p, current_position):
 
     # 4. CALLBACK: Spustí se pouze tehdy, když operátor ručně změní volbu v Selectboxu
     def on_roi_selection_change():
-        st.session_state["last_selected_roi"] = st.session_state["roi_selector_core"]
+        st.session_state["last_selected_roi"] = st.session_state[f"roi_selector_core_{m_id}"]
         st.session_state["roi_refresh_trigger"] = True
 
     # Rozbalovací selektor
     st.selectbox(
         "🎯 Vyberte ROI k úpravě polohy nebo založte nové:",
         options=moznosti_selectboxu,
-        index=moznosti_selectboxu.index(st.session_state["last_selected_roi"]),
-        key="roi_selector_core",
+        index=idx_selectboxu,
+        key=f"roi_selector_core_{m_id}",  # 🍏 FIX: Unikátní klíč pro každý Master
         on_change=on_roi_selection_change
     )
 
