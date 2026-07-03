@@ -607,6 +607,8 @@ if sel_m and os.path.exists(sel_m[3]):
 
     # 🍏 POTVRZOVACÍ DIALOG (Vykresluje se na neutrální půdě na konci Tab 3)
     @st.dialog("⚠️ POZOR: Smazat podkladový Master?")
+    # 🍏 OPRAVENO ODSLAZENÍ DIALOGU (Musí začínat přesně na 4 mezerách zleva)
+    @st.dialog("⚠️ POZOR: Smazat podkladový Master?")
     def confirm_delete_master_dialog():
         m_id = st.session_state.get("master_to_delete_id")
         m_name = st.session_state.get("master_to_delete_name", "")
@@ -634,6 +636,7 @@ if sel_m and os.path.exists(sel_m[3]):
                 time.sleep(0.2)
                 st.rerun()
 
+    # Volání dialogu (Také na 4 mezerách zleva)
     if "master_to_delete_id" in st.session_state:
         confirm_delete_master_dialog()
 
