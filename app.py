@@ -542,10 +542,26 @@ with tab3:
             m_id_loop, m_name_loop, m_path_loop = m[0], m[2], m[3]
             with m_cols[idx % 6]:
                 with st.container(border=True):
-                    if os.path.exists(m_path_loop): st.image(m_path_loop, use_container_width=True)
+                    if os.path.exists(m_path_loop): 
+                        st.image(m_path_loop, use_container_width=True)
+                    
                     is_active = (m_id_loop == st.session_state.selected_master_id)
-                    if st.button(f"📷 {m_name_loop}", key=f"btn_m_{m_id_loop}", use_container_width=True, type="primary" if is_active else "secondary"):
+                    
+                    # 1. Hlavní aktivační tlačítko kamery
+                    if st.button(f"📷 {m_name_loop.split('#')[0]}", key=f"btn_m_{m_id_loop}", use_container_width=True, type="primary" if is_active else "secondary"):
                         st.session_state.selected_master_id = m_id_loop
+                        st.rerun()
+                    
+                    # 2. 🍏 NOVÉ: Malé tlačítko pro vymazání nechtěného Masteru z disku i SQL
+                    if st.button("🗑️ SMAZAT MASTER", key=f"btn_del_m_{m_id_loop}", use_container_width=True, type="secondary"):
+                        database.delete_master(m_id_loop)
+                        
+                        # Pokud jsme smazali zrovna ten aktivní, resetujeme výběr na první volný
+                        if st.session_state.selected_master_id == m_id_loop:
+                            st.session_state.selected_master_id = None
+                            
+                        st.toast(f"💥 Master {m_name_loop.split('#')[0]} i s ROI zónami kompletně vymazán.", icon="🗑️")
+                        time.sleep(0.2)
                         st.rerun()
 
         st.divider()
